@@ -1,0 +1,12 @@
+services:
+  nexa:
+    build: .
+    ports: ["4000:4000"]
+    environment:
+      NEXA_ACCESS_SECRET: ${NEXA_ACCESS_SECRET:?set NEXA_ACCESS_SECRET}
+      NEXA_REFRESH_SECRET: ${NEXA_REFRESH_SECRET:?set NEXA_REFRESH_SECRET}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    volumes: ["nexa-data:/data"]
+    restart: unless-stopped
+volumes:
+  nexa-data:
