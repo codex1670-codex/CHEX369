@@ -1,0 +1,21 @@
+# Render Blueprint. Accounts + uploads are kept in MongoDB (MONGODB_URI), so the free plan works:
+# a restart, sleep or redeploy no longer erases anything.
+services:
+  - type: web
+    name: chex
+    runtime: docker
+    plan: free
+    healthCheckPath: /api/ready
+    envVars:
+      - key: NEXA_ACCESS_SECRET
+        generateValue: true
+      - key: NEXA_REFRESH_SECRET
+        generateValue: true
+      - key: MONGODB_URI          # paste your MongoDB Atlas connection string in the Render dashboard
+        sync: false
+      - key: MONGODB_DB
+        value: chex
+      - key: MAX_VIDEO_MB
+        value: "100"
+      - key: ANTHROPIC_API_KEY    # optional (enables the AI features)
+        sync: false

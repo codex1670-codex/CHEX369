@@ -1,0 +1,142 @@
+import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { api } from '../api.js';
+import PostCard from '../components/PostCard.jsx';
+import Avatar from '../components/Avatar.jsx';
+import { useAuth } from '../AuthContext.jsx';
+import StoriesBar from '../components/StoriesBar.jsx';
+import MediaPicker from '../components/MediaPicker.jsx';
+import CameraCapture, { cameraSupported } from '../components/CameraCapture.jsx';
+import { defaultEdits, fileKind, MAX_IMAGE_BYTES, MAX_VIDEO_BYTES } from '../editSettings.js';
+
+export default function Feed({ onOpenProfile }) {
+  const { user } = useAuth();
+  const [tab, setTab] = useState('following');
+  const [posts, setPosts] = useState(null);
+  const [cursor, setCursor] = useState(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [caption, setCaption] = useState('');
+  const [posting, setPosting] = useState(false);
+  const [error, setError] = useState('');
+  const [media, setMedia] = useState(null);       // { file, kind, edits, … } from MediaPicker
+  const [showMedia, setShowMedia] = useState(false);
+  const [audience, setAudience] = useState('public'); // 'public' | 'followers'
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const camInputRef = useRef(null);
+
+  // Live camera: take a photo or record a video, then it's attached to the post like any picked file.
+  const useCapturedFile = (file) => {
+    setCameraOpen(false);
+    const kind = file && fileKind(file);
+    if (!kind) return;
+    if (kind === 'image' && file.size > MAX_IMAGE_BYTES) { setError(`That photo is too large — photos must be under ${MAX_IMAGE_BYTES / 1048576}MB.`); return; }
+    if (kind === 'video' && file.size > MAX_VIDEO_BYTES) { setError(`That video is too large — videos must be under ${Math.round(MAX_VIDEO_BYTES / 1048576)}MB.`); return; }
+    setError(''); setShowMedia(true);
+    setMedia({ file, originalFile: file, kind, edits: kind === 'video' ? defaultEdits() : null, duration: 0 });
+  };
+  const openCamera = () => { if (cameraSupported()) setCameraOpen(true); else camInputRef.current?.click(); };
+
+  const load = async (reset = true) => {
+    const fetcher = tab === 'following' ? api.feedFollowing : api.feedForYou;
+    const res = await fetcher(reset ? null : cursor);
+    setPosts(reset ? res.posts : [...(posts || []), ...res.posts]);
+    setCursor(res.nextCursor);
+  };
+
+  useEffect(() => { setPosts(null); load(true); /* eslint-disable-next-line */ }, [tab]);
+
+  const submitPost = async (e) => {
+    e.preventDefault();
+    if (!caption.trim() && !media) return;
+    setPosting(true);
+    setError('');
+    try {
+      const res = media
+        ? await api.uploadPost(media.file, caption.trim(), media.kind === 'video' ? media.edits : undefined, audience)
+        : await api.createPost({ caption: caption.trim(), audience });
+      setCaption('');
+      setMedia(null);
+      setShowMedia(false);
+      if (tab === 'following') setPosts(p => [res.post, ...(p || [])]);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setPosting(false);
+    }
+  };
+
+  return (
+    <div>
+      <StoriesBar />
+      <div className="feed-tabs">
+        <button className={tab === 'following' ? 'active' : ''} onClick={() => setTab('following')}>Following</button>
+        <button className={tab === 'foryou' ? 'active' : ''} onClick={() => setTab('foryou')}>For You</button>
+      </div>
+
+      <form className="glass-card composer" onSubmit={submitPost}>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <Avatar user={user} size={38} />
+          <textarea
+            placeholder="What's happening?"
+            value={caption}
+            onChange={e => setCaption(e.target.value)}
+            maxLength={2200}
+          />
+        </div>
+        {showMedia && (
+          <div style={{ marginTop: 10 }}>
+            <MediaPicker value={media} onChange={setMedia} disabled={posting} />
+          </div>
+        )}
+        {error && <div className="error-banner" style={{ marginTop: 10 }}>{error}</div>}
+        <div className="audience-picker" role="radiogroup" aria-label="Who can see this post">
+          <span className="audience-label">Who can see this?</span>
+          <button type="button" role="radio" aria-checked={audience === 'public'} className={audience === 'public' ? 'on' : ''} onClick={() => setAudience('public')}>
+            <span aria-hidden="true">🌐</span> Public
+          </button>
+          <button type="button" role="radio" aria-checked={audience === 'followers'} className={audience === 'followers' ? 'on' : ''} onClick={() => setAudience('followers')}>
+            <span aria-hidden="true">👥</span> Followers
+          </button>
+        </div>
+        <div className="audience-hint">
+          {audience === 'public' ? 'Anyone on CHEX can see this post.' : 'Only people who follow you can see this post.'}
+        </div>
+        <div className="composer-footer">
+          {!media && <button type="button" className="btn-ghost" disabled={posting} onClick={openCamera} aria-label="Open camera to take a photo or video">📷 Camera</button>}
+          {!showMedia && <button type="button" className="btn-ghost" onClick={() => setShowMedia(true)}>🖼️ Photo / video</button>}
+          {showMedia && !media && <button type="button" className="btn-ghost" onClick={() => setShowMedia(false)}>Cancel media</button>}
+          <button className="btn-primary" style={{ width: 'auto', padding: '9px 20px' }} disabled={posting || (!caption.trim() && !media)}>
+            {posting ? (media ? 'Uploading…' : 'Posting…') : 'Post'}
+          </button>
+        </div>
+        {cameraOpen && createPortal(
+          <CameraCapture onCapture={useCapturedFile} onClose={() => setCameraOpen(false)} onFallback={() => { setCameraOpen(false); camInputRef.current?.click(); }} />,
+          document.body)}
+        <input ref={camInputRef} type="file" accept="image/*,video/*" capture="environment" hidden onChange={e => { useCapturedFile(e.target.files?.[0]); e.target.value = ''; }} />
+      </form>
+
+      {posts === null && <div className="empty-state"><span className="loading-dot" /> Loading feed…</div>}
+
+      {posts !== null && posts.length === 0 && (
+        <div className="empty-state">
+          <div className="glyph">✨</div>
+          {tab === 'following' ? 'Follow people to see their posts here.' : 'Nothing to show yet.'}
+        </div>
+      )}
+
+      {posts?.map(p => <PostCard key={p.id} post={p} onOpenProfile={onOpenProfile} />)}
+
+      {cursor && posts?.length > 0 && (
+        <div style={{ textAlign: 'center' }}>
+          <button className="btn-ghost" disabled={loadingMore} onClick={async () => {
+            setLoadingMore(true);
+            await load(false);
+            setLoadingMore(false);
+          }}>
+            {loadingMore ? 'Loading…' : 'Load more'}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
