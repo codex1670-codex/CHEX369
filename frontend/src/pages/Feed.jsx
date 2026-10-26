@@ -124,7 +124,7 @@ export default function Feed({ onOpenProfile }) {
         </div>
       )}
 
-      {posts?.map(p => <PostCard key={p.id} post={p} onOpenProfile={onOpenProfile} />)}
+      {posts?.map(p => <PostCard key={p.id} post={p} onOpenProfile={onOpenProfile} onDeleted={(id) => setPosts(list => (list || []).filter(x => x.id !== id))} />)}
 
       {cursor && posts?.length > 0 && (
         <div style={{ textAlign: 'center' }}>

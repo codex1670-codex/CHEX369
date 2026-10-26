@@ -564,7 +564,7 @@ export default function Games({ initialTab, onConsumeInitialTab, initialJoinCode
             <div style={{ fontSize: 13.5, marginBottom: 10, color: 'var(--text-mid)' }}>Have a room code?</div>
             <div style={{ display: 'flex', gap: 8 }}>
               <input value={joinCode} onChange={e => setJoinCode(e.target.value)} placeholder="e.g. XYZ123"
-                style={{ flex: 1, background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border-soft)', borderRadius: 10, padding: '9px 12px', color: 'var(--text-hi)', outline: 'none', fontSize: 14, textTransform: 'uppercase' }} />
+                style={{ flex: 1, minWidth: 0, background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border-soft)', borderRadius: 10, padding: '9px 12px', color: 'var(--text-hi)', outline: 'none', fontSize: 14, textTransform: 'uppercase' }} />
               <button className="btn-primary" style={{ width: 'auto', padding: '9px 18px' }} type="submit">Join</button>
             </div>
             {error && <div className="error-banner" style={{ marginTop: 10 }}>{error}</div>}

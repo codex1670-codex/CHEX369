@@ -100,11 +100,19 @@ router.get('/:id', optionalAuth, (req, res) => {
   res.json({ post: postDTO(row, req.userId) });
 });
 
+// Delete my own post: it disappears everywhere (feed, profile, saved lists, shared cards) and its
+// photo/video file is removed from the server. Deleting twice is a clean "not found".
 router.delete('/:id', requireAuth, (req, res) => {
-  const row = db.prepare('SELECT * FROM posts WHERE id = ?').get(req.params.id);
+  const row = db.prepare('SELECT * FROM posts WHERE id = ? AND deleted_at IS NULL').get(req.params.id);
   if (!row) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Post not found.' } });
   if (row.user_id !== req.userId) return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'You can only delete your own posts.' } });
-  db.prepare("UPDATE posts SET deleted_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?").run(row.id);
+  const tx = db.transaction(() => {
+    db.prepare("UPDATE posts SET deleted_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?").run(row.id);
+    db.prepare('DELETE FROM saved_posts WHERE post_id = ?').run(row.id);
+    db.prepare("DELETE FROM notifications WHERE target_id = ? AND type IN ('like','comment','mention')").run(row.id);
+  });
+  tx();
+  removeLocalUpload(row.image_url);
   res.json({ ok: true });
 });
 

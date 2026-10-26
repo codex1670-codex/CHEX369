@@ -1,3 +1,31 @@
+# Changes in v57
+
+## Added
+- **Delete a post.** Your own posts now have a ⋯ menu (Edit · Save · Share · Delete). Delete asks first, then removes the
+  post for everyone — feed, profile, saved lists, shared cards — and deletes its photo/video file. Others see Report instead.
+- **Long-press a chat in Messages** (right-click on desktop, ⋯ on hover): **Delete chat · Mute · Block · Restrict**.
+  - *Delete chat* clears it for you only; the other person keeps theirs and it returns if either of you writes again.
+  - *Mute* silences alerts for that chat only (messages still arrive). *Restrict* silences that person's chat alerts.
+  - *Block* now also closes the existing chat for both people (before, a blocked person could keep messaging an old chat).
+    The chat shows "You blocked …" with an Unblock button.
+- **Message menu.** Long-press (or right-click) any message: react, Copy, Pin, Edit (yours), **Delete for me**, **Unsend** (yours).
+  Unsend and edits now also update live for the other person.
+- **Group chats.** "New group" in Messages (pick 2+ people, optional name). Group rows show stacked avatars; messages show who
+  sent them. Group info: rename, add people, remove people (admins), mute, leave. If the last admin leaves, the next member is
+  promoted. Groups hold up to 50 people. Delete chat in a group means leave.
+
+## Changed — phone layout
+- Posts are edge-to-edge like Instagram with one ⋯ button; Save moved next to like/comment/share.
+- Buttons no longer break into one letter per line; the composer, tabs and rows wrap cleanly; no sideways scrolling on any page
+  from 320px to 430px wide. Buttons are flat and borders thin on phones. Profile header is compact.
+- Chat opens full screen; the floating Ask bar is hidden inside a chat and no longer covers the end of long pages.
+
+## Fixed
+- After a long-press, the next normal tap on the same item was swallowed.
+
+## Database
+- Upgrades itself on first start (adds `muted` / `cleared_at` to chat members and a `message_hidden` table). Nothing is lost.
+
 # Changes in v56
 
 ## Changed

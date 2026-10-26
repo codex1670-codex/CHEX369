@@ -68,7 +68,7 @@ export default function Search({ onOpenProfile, onOpenReel, initialQuery, onCons
             </>
           )}
           {tagPosts?.length === 0 && tagReels.length === 0 && <div className="empty-state">Nothing with this hashtag yet.</div>}
-          {tagPosts?.map(p => <PostCard key={p.id} post={p} onOpenProfile={onOpenProfile} />)}
+          {tagPosts?.map(p => <PostCard key={p.id} post={p} onOpenProfile={onOpenProfile} onDeleted={(id) => setTagPosts(list => (list || []).filter(x => x.id !== id))} />)}
         </div>
       ) : (
         <>

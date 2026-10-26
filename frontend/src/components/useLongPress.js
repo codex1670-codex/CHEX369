@@ -16,6 +16,7 @@ export function useLongPress(onLongPress, { ms = 450, disabled = false } = {}) {
     onPointerDown: (e) => {
       if (disabled || (e.button !== undefined && e.button > 0)) return;
       cancel();
+      fired.current = false; // a fresh press: forget any earlier long press whose click never came
       const timer = setTimeout(() => { fired.current = true; press.current = null; navigator.vibrate?.(15); cb.current?.(); }, ms);
       press.current = { timer, x: e.clientX, y: e.clientY };
     },

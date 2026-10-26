@@ -365,7 +365,8 @@ export default function Profile({ username, initialView, onConsumeInitialView, o
           ))}
         </div>
       )}
-      {openPost && <PostModal post={openPost} onClose={() => setOpenPost(null)} onOpenProfile={onOpenProfile} />}
+      {openPost && <PostModal post={openPost} onClose={() => setOpenPost(null)} onOpenProfile={onOpenProfile}
+        onDeleted={(id) => { setUserPosts(ps => (ps || []).filter(x => x.id !== id)); setSavedPosts(ps => (ps ? ps.filter(x => x.id !== id) : ps)); }} />}
       {fsVideo && <FullscreenMediaViewer mediaType="video" url={fsVideo.videoUrl} name={fsVideo.caption} onClose={() => setFsVideo(null)} />}
     </div>
   );

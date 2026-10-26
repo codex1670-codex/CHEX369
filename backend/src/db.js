@@ -95,6 +95,18 @@ addColumnIfMissing('messages', 'media_bytes', 'INTEGER');
 // Shared post / reel inside a chat: the message keeps a short text and points at the item here.
 addColumnIfMissing('messages', 'shared_kind', 'TEXT');
 addColumnIfMissing('messages', 'shared_id', 'TEXT');
+// Chat controls (per person, never visible to the others in the chat):
+//  muted      = no alerts for new messages in this chat
+//  cleared_at = "Delete chat": messages up to this moment are hidden for me only
+addColumnIfMissing('conversation_participants', 'muted', 'INTEGER NOT NULL DEFAULT 0');
+addColumnIfMissing('conversation_participants', 'cleared_at', 'TEXT');
+// "Delete for me" on a single message: hidden for that person, still visible to everyone else.
+db.exec(`CREATE TABLE IF NOT EXISTS message_hidden (
+  message_id TEXT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+  user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  PRIMARY KEY (message_id, user_id)
+)`);
 // Profile Studio: theme / background / dim / blur chosen in the studio, stored as JSON so
 // every viewer of a profile sees the same look.
 addColumnIfMissing('users', 'profile_studio', 'TEXT');

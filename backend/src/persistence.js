@@ -144,14 +144,18 @@ export function createPersistence({ uri = process.env.MONGODB_URI, storeFactory 
       const count = await store.count(DB_FILE);
       result = 'empty';
       for (let i = 0; i < count && result !== 'restored'; i++) {
-        const tmp = dbPath + '.restore';
+        const tmp = `${dbPath}.${process.pid}.${Date.now()}.restore`;
         try {
           const rs = await store.get(DB_FILE, i);
           await pipeline(rs, zlib.createGunzip(), fs.createWriteStream(tmp));
           const { default: Database } = await import('better-sqlite3');
           const t = new Database(tmp, { readonly: true });
-          const ok = t.pragma('quick_check', { simple: true }) === 'ok';
-          t.close();
+          let ok = false;
+          try {
+            ok = t.pragma('quick_check', { simple: true }) === 'ok';
+          } finally {
+            t.close();
+          }
           if (!ok) throw new Error('quick_check failed');
           for (const ext of ['-wal', '-shm']) fs.rmSync(dbPath + ext, { force: true });
           fs.renameSync(tmp, dbPath);

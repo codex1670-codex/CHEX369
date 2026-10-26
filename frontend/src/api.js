@@ -148,6 +148,7 @@ export const api = {
 
   createPost: (payload) => request('/posts', { method: 'POST', body: payload }),
   // `edits` is only sent when given, so a caption-only edit never touches video settings.
+  deletePost: (id) => request(`/posts/${id}`, { method: 'DELETE' }),
   editPost: (id, caption, edits, audience) => request(`/posts/${id}`, { method: 'PATCH', body: { ...(caption !== undefined ? { caption } : {}), ...(edits ? { edits } : {}), ...(audience ? { audience } : {}) } }),
   setShowOnline: (showOnline) => request('/users/me/presence', { method: 'PATCH', body: { showOnline } }),
   // Post with a photo or video from the device (gallery, camera, downloaded file).
@@ -198,7 +199,8 @@ export const api = {
 
   notesFeed: () => request('/notes/feed'),
   noteMoods: () => request('/notes/moods'),
-  noteSongs: () => request('/notes/songs'),
+  // Empty term => trending chart; otherwise search by song name, lyrics line, artist or movie.
+  noteSongs: (term, language) => request(`/notes/songs?term=${encodeURIComponent(term || '')}&language=${encodeURIComponent(language || 'tamil')}`),
   createNote: (payload) => request('/notes', { method: 'POST', body: payload }),
   editNote: (payload) => request('/notes/mine', { method: 'PATCH', body: payload }),
   deleteMyNote: () => request('/notes/mine', { method: 'DELETE' }),
@@ -296,6 +298,13 @@ export const api = {
   unpinMessage: (id) => request(`/messages/${id}/pin`, { method: 'DELETE' }),
   pinnedMessages: (conversationId) => request(`/messages/conversations/${conversationId}/pinned`),
   forwardMessage: (id, payload) => request(`/messages/${id}/forward`, { method: 'POST', body: payload }),
+  hideMessage: (id) => request(`/messages/${id}/hide`, { method: 'POST' }),
+  muteChat: (id) => request(`/messages/conversations/${id}/mute`, { method: 'POST' }),
+  unmuteChat: (id) => request(`/messages/conversations/${id}/mute`, { method: 'DELETE' }),
+  deleteChat: (id) => request(`/messages/conversations/${id}/delete`, { method: 'POST' }),
+  renameGroup: (id, name) => request(`/messages/conversations/${id}`, { method: 'PATCH', body: { name } }),
+  addGroupMembers: (id, usernames) => request(`/messages/conversations/${id}/members`, { method: 'POST', body: { usernames } }),
+  removeGroupMember: (id, username) => request(`/messages/conversations/${id}/members/${encodeURIComponent(username)}`, { method: 'DELETE' }),
   createGroup: (name, usernames) => request('/messages/conversations/group', { method: 'POST', body: { name, usernames } }),
   getChatTheme: () => request('/messages/theme'),
   setChatTheme: (theme) => request('/messages/theme', { method: 'POST', body: { theme } }),

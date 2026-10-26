@@ -13,6 +13,7 @@ import ReactionPicker from './ReactionPicker.jsx';
 import { loadQuickReactions } from '../quickReactions.js';
 import { useLongPress } from './useLongPress.js';
 import ShareSheet from './ShareSheet.jsx';
+import ActionSheet, { ConfirmSheet } from './ActionSheet.jsx';
 
 function timeAgo(iso) {
   const diff = (Date.now() - new Date(iso).getTime()) / 1000;
@@ -76,7 +77,7 @@ function CommentRow({ comment, postId, postAuthorId, onChanged, onReply, depth =
   );
 }
 
-export default function PostCard({ post, onOpenProfile }) {
+export default function PostCard({ post, onOpenProfile, onDeleted }) {
   const { user } = useAuth();
   const [p, setP] = useState(post);
   const containerRef = useRef(null);
@@ -127,6 +128,11 @@ export default function PostCard({ post, onOpenProfile }) {
   const [mediaEditor, setMediaEditor] = useState(false);   // photo/video editor modal open
   const [mediaError, setMediaError] = useState('');
   const [mediaBusy, setMediaBusy] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);          // the ⋯ menu
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
+  const [gone, setGone] = useState(false);                  // deleted — card disappears right away
   const videoRef = useRef(null);
   const replaceInputRef = useRef(null);
 
@@ -249,9 +255,26 @@ export default function PostCard({ post, onOpenProfile }) {
     setEditingPost(false);
   };
 
+  // Delete my own post (after a confirmation). The server removes it for everyone; the page's list
+  // is told through onDeleted so the post vanishes without a reload.
+  const deleteMyPost = async () => {
+    setDeleting(true); setDeleteError('');
+    try {
+      await api.deletePost(p.id);
+      setConfirmDelete(false);
+      setGone(true);
+      onDeleted?.(p.id);
+    } catch (err) {
+      setDeleteError(err.message || 'Could not delete the post.');
+      setConfirmDelete(false);
+    } finally { setDeleting(false); }
+  };
+
   // Top-level comments first, then their replies grouped underneath.
   const topLevel = (comments || []).filter(c => !c.parentCommentId);
   const repliesOf = (id) => (comments || []).filter(c => c.parentCommentId === id);
+
+  if (gone) return null;
 
   return (
     <div className="glass-card post-card" ref={containerRef}>
@@ -261,13 +284,23 @@ export default function PostCard({ post, onOpenProfile }) {
           <div className="name">{p.author.displayName}</div>
           <div className="time">@{p.author.username} · {timeAgo(p.createdAt)}{p.editedAt && ' · edited'} · <span className={`audience-chip ${p.audience === 'followers' ? 'followers' : 'public'}`} title={p.audience === 'followers' ? 'Only followers can see this' : 'Everyone can see this'}>{p.audience === 'followers' ? '👥 Followers' : '🌐 Public'}</span></div>
         </div>
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }} onClick={e => e.stopPropagation()}>
-          {isMine && <button className="btn-ghost" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => setEditingPost(e => !e)}>Edit</button>}
-          <button className="btn-ghost" style={{ padding: '4px 10px', fontSize: 12 }} onClick={toggleSave}>{p.savedByMe ? '🔖 Saved' : '🔖 Save'}</button>
-          {!isMine && <button className="btn-ghost" style={{ padding: '4px 10px', fontSize: 12 }} onClick={reportPost}>Report</button>}
-        </div>
+        <button type="button" className="post-more" aria-label="More options" aria-haspopup="menu" onClick={e => { e.stopPropagation(); setMenuOpen(true); }}>⋯</button>
       </div>
       {reportStatus && <div className="request-banner" style={{ marginBottom: 10 }}>{reportStatus}</div>}
+      {deleteError && <div className="error-banner" style={{ marginBottom: 10 }}>{deleteError}</div>}
+      {menuOpen && (
+        <ActionSheet title="Post" onClose={() => setMenuOpen(false)} actions={[
+          isMine && { key: 'edit', label: 'Edit', icon: '✏️', onClick: () => setEditingPost(true) },
+          { key: 'save', label: p.savedByMe ? 'Remove from saved' : 'Save', icon: '🔖', onClick: toggleSave },
+          { key: 'share', label: 'Share', icon: '↗', onClick: () => setSharing(true) },
+          isMine && { key: 'delete', label: 'Delete', icon: '🗑️', danger: true, onClick: () => setConfirmDelete(true) },
+          !isMine && { key: 'report', label: 'Report', icon: '🚩', danger: true, onClick: reportPost },
+        ]} />
+      )}
+      {confirmDelete && (
+        <ConfirmSheet title="Delete post?" message="This removes the post for everyone, including its likes and comments. You can't undo this."
+          confirmLabel="Delete" danger busy={deleting} onConfirm={deleteMyPost} onClose={() => setConfirmDelete(false)} />
+      )}
 
       {editingPost ? (
         <div style={{ marginBottom: 12 }}>
@@ -324,8 +357,9 @@ export default function PostCard({ post, onOpenProfile }) {
           <span className="heart-icon">{p.likedByMe ? '♥' : '♡'}</span> {p.likeCount}
         </button>
         <button onClick={openComments}>💬 {p.commentCount}</button>
-        <button onClick={openPicker} aria-label="React with an emoji" aria-haspopup="dialog">{myReaction || '😊'} React</button>
-        <button onClick={() => setSharing(true)} aria-label="Share this post" aria-haspopup="dialog">↗ Share</button>
+        <button onClick={openPicker} aria-label="React with an emoji" aria-haspopup="dialog">{myReaction || '😊'} <span className="lbl">React</span></button>
+        <button onClick={() => setSharing(true)} aria-label="Share this post" aria-haspopup="dialog">↗ <span className="lbl">Share</span></button>
+        <button type="button" className={`post-save${p.savedByMe ? ' on' : ''}`} onClick={toggleSave} aria-pressed={!!p.savedByMe} aria-label={p.savedByMe ? 'Remove from saved' : 'Save post'}>🔖</button>
       </div>
       {sharing && <ShareSheet kind="post" id={p.id} onClose={() => setSharing(false)} />}
       {(p.reactions || []).length > 0 && (
