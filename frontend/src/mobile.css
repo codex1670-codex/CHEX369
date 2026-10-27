@@ -205,3 +205,21 @@ button.chat-id { cursor: pointer; }
   .nav-bar-mobile button { font-size: 9.5px; }
   .nav-bar-mobile { gap: 0; padding-left: 2px; padding-right: 2px; }
 }
+
+/* ---- Phone keyboard open (html.kb-open is set by src/keyboard.js) ----
+   The fixed bottom menu bar, AI button and banners used to ride up on top of the keyboard and
+   cover almost the whole visible page. Hide them while typing and give the page the full
+   visible height; they come back when the keyboard closes. */
+@media (max-width: 800px) {
+  html.kb-open .nav-bar-mobile,
+  html.kb-open .codex-fab,
+  html.kb-open .pwa-banner,
+  html.kb-open .chat-toast { display: none !important; }
+  html.kb-open .app-shell { padding-bottom: 0 !important; }
+  html.kb-open .main-col:not(.fixed-page) { padding-bottom: 24px !important; }
+  html.kb-open .main-col.fixed-page { height: var(--vvh, 100dvh) !important; padding-bottom: 0 !important; }
+  html.kb-open:not(.codex-split) .reels-page { height: var(--vvh, 100dvh); }
+  /* bottom sheets / dialogs stay inside the visible area instead of being cut off by the keyboard */
+  html.kb-open .as-sheet, html.kb-open .ps-sp, html.kb-open .perm-sheet { max-height: calc(var(--vvh, 100dvh) - 12px); }
+  html.kb-open .gs-box { height: var(--vvh, 100dvh); }
+}
