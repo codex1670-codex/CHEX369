@@ -9,6 +9,8 @@ import { sendDirectMessage } from './messages.js';
 import { isBlocked } from './users.js';
 import { createRoom, joinRoomByCode, roomDTO } from './games.js';
 import { REEL_URL_RE } from './reels.js';
+import { findReels } from './search.js';
+import { findApp, launchInfo } from '../appCatalog.js';
 import { processMentionsAndHashtags } from '../content.js';
 import {
   saveProfileNickname, updateProfileNickname, deleteProfileNickname,
@@ -43,7 +45,9 @@ const TOOLS = [
     input_schema: { type: 'object', properties: { text: { type: 'string' }, emoji: { type: 'string' } }, required: ['text'] } },
   { name: 'create_story', description: 'Post a text Story that expires in 24h.',
     input_schema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] } },
-  { name: 'search', description: 'Search NEXA for a user or hashtag.',
+  { name: 'search', description: 'Search NEXA. An exact username ("search rahul") opens that person\'s profile; a #hashtag or any other words open the Search screen. With scope "reels" ("search reel cats") the best matching reel is played.',
+    input_schema: { type: 'object', properties: { query: { type: 'string' }, scope: { type: 'string', enum: ['reels'], description: 'Only when the user asked to search reels.' } }, required: ['query'] } },
+  { name: 'ask_google', description: "Open a Google search for a question or a 'what is / how / why / enna / kya / open ...' request that is NOT about NEXA itself, in whatever language the user wrote it. Put the question in `query` exactly as the user asked it.",
     input_schema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } },
   { name: 'invite_to_game', description: 'Create a new game room and send the invite to a friend by username.',
     input_schema: { type: 'object', properties: { gameId: { type: 'string', enum: ['tic-tac-toe', 'connect-four', 'checkers', 'chess'] }, username: { type: 'string', description: 'The username, display name, or the caller\'s private nickname for this person, exactly as the user typed it.' } }, required: ['gameId', 'username'] } },
@@ -263,7 +267,8 @@ function describeStep(name, input) {
     case 'open_app': return `🔗 Open ${input.appName}${input.searchFor ? ` and search "${input.searchFor}"` : ''}`;
     case 'create_note': return `📝 Post a note: "${input.text}"`;
     case 'create_story': return `📸 Post a story: "${input.text}"`;
-    case 'search': return `🔍 Search "${input.query}"`;
+    case 'search': return `🔍 Search ${input.scope === 'reels' ? 'reels for ' : ''}"${input.query}"`;
+    case 'ask_google': return `🌐 Google: "${(input.query || '').slice(0, 80)}"`;
     case 'invite_to_game': return `🎮 Create a ${input.gameId} room and invite ${at(input.username)}`;
     case 'join_game': return `🎮 Join game room ${input.inviteCode}`;
     case 'create_post': return `📰 Post: "${(input.caption || '').slice(0, 60)}"`;
@@ -425,7 +430,7 @@ router.post('/act', requireAuth, async (req, res) => {
   }
 
   const messages = [];
-  let lastNavigate, lastOpenUrl, lastStartCall, lastSetTheme;
+  let lastNavigate, lastOpenUrl, lastOpenApp, lastStartCall, lastSetTheme;
   // Everything the browser must do, in the order the user asked for it. Only sent when a UI step
   // is involved (the browser then runs its observe→act loop); otherwise the legacy fields below suffice.
   const sequence = [];
@@ -449,7 +454,7 @@ router.post('/act', requireAuth, async (req, res) => {
       const result = executeAction(name, input, { req, io, context });
       if (result.message) messages.push(result.message);
       if (result.navigate) { lastNavigate = result.navigate; sequence.push({ kind: 'navigate', ...result.navigate }); }
-      if (result.openUrl) { lastOpenUrl = result.openUrl; sequence.push({ kind: 'openUrl', url: result.openUrl }); }
+      if (result.openUrl) { lastOpenUrl = result.openUrl; lastOpenApp = result.openApp || null; sequence.push(result.openApp ? { kind: 'openApp', app: result.openApp, url: result.openUrl } : { kind: 'openUrl', url: result.openUrl }); }
       if (result.startCall) { lastStartCall = result.startCall; sequence.push({ kind: 'startCall', ...result.startCall }); }
       if (result.setTheme) { lastSetTheme = result.setTheme; sequence.push({ kind: 'theme', theme: result.setTheme }); }
       if (result.uiStep) { hasUiStep = true; sequence.push({ kind: 'ui', step: result.uiStep }); }
@@ -475,7 +480,7 @@ router.post('/act', requireAuth, async (req, res) => {
     }
   }
 
-  return res.json({ handled: true, message: messages.filter(Boolean).join(' '), navigate: lastNavigate, openUrl: lastOpenUrl, startCall: lastStartCall, setTheme: lastSetTheme, sequence: hasUiStep ? sequence : undefined });
+  return res.json({ handled: true, message: messages.filter(Boolean).join(' '), navigate: lastNavigate, openUrl: lastOpenUrl, openApp: lastOpenApp, startCall: lastStartCall, setTheme: lastSetTheme, sequence: hasUiStep ? sequence : undefined });
 });
 
 // ───────────────────────── live-screen control resolution ─────────────────────────
@@ -587,19 +592,12 @@ function executeAction(name, input, { req, io, context }) {
       return { message: `Starting a ${input.video ? 'video' : 'voice'} call with @${input.username}…`, navigate: { screen: 'messages', username: input.username }, startCall: { conversationId: convo.id, type: input.video ? 'video' : 'voice' } };
     }
     case 'open_app': {
-      const normalized = input.appName.toLowerCase();
-      let app = db.prepare(`
-        SELECT ar.* FROM app_registry ar LEFT JOIN app_aliases aa ON aa.app_id = ar.id
-        WHERE LOWER(ar.display_name) = ? OR aa.alias = ? LIMIT 1
-      `).get(normalized, normalized);
-      if (!app) app = db.prepare(`
-        SELECT ar.* FROM app_registry ar LEFT JOIN app_aliases aa ON aa.app_id = ar.id
-        WHERE LOWER(ar.display_name) LIKE ? OR aa.alias LIKE ? LIMIT 1
-      `).get(`%${normalized}%`, `%${normalized}%`);
-      if (!app) throw new Error(`I don't have "${input.appName}" in the app catalog for this build.`);
-      if (app.native_only) throw new Error(`${app.display_name} doesn't have a web version I can open from a browser — this build can't launch native OS apps.`);
-      const url = (input.searchFor && app.search_url_template) ? app.search_url_template.replace('{q}', encodeURIComponent(input.searchFor)) : app.launch_url_web;
-      return { message: `Opening ${app.display_name}${input.searchFor ? ` and searching "${input.searchFor}"` : ''}…`, openUrl: url };
+      // Opens the installed phone app; if it isn't installed the phone lands on Google instead.
+      const app = findApp(db, input.appName);
+      const name = app ? app.display_name : String(input.appName).trim().slice(0, 80);
+      const launch = app ? launchInfo(app, input.searchFor)
+        : { id: null, name, android: null, ios: null, webUrl: null, searchUrl: null, fallbackUrl: `https://www.google.com/search?q=${encodeURIComponent(input.searchFor ? `${name} ${input.searchFor}` : `${name} app`)}` };
+      return { message: app ? `Opening ${name}${input.searchFor ? ` and searching "${input.searchFor}"` : ''}…` : `${name} isn't in my app list, so I'm searching Google for it…`, openUrl: launch.webUrl || launch.fallbackUrl, openApp: launch };
     }
     case 'create_note': {
       const id = uuid();
@@ -618,7 +616,28 @@ function executeAction(name, input, { req, io, context }) {
       return { message: 'Posted your story.', navigate: { screen: 'feed' } };
     }
     case 'search': {
-      return { message: `Searching for "${input.query}".`, navigate: { screen: 'search', query: input.query } };
+      const q = String(input.query || '').trim().replace(/^@/, '').slice(0, 120);
+      if (!q) throw new Error('What should I search for?');
+      // "search reel cats": play the best matching reel; if nothing matches, show the Search screen (reels only).
+      if (input.scope === 'reels') {
+        const hit = findReels(q, req.userId, 1)[0];
+        if (hit) return { message: `Opening a reel for "${q}".`, navigate: { screen: 'reels', reelId: hit.id } };
+        return { message: `No reels match "${q}" yet.`, navigate: { screen: 'search', query: q, scope: 'reels' } };
+      }
+      // "search rahul": an exact username or your own nickname for someone opens their profile directly.
+      if (!q.startsWith('#')) {
+        const exact = db.prepare("SELECT username FROM users WHERE LOWER(username) = LOWER(?) AND account_status = 'active'").get(q);
+        if (exact) return { message: `Opening @${exact.username}'s profile.`, navigate: { screen: 'profile', username: exact.username } };
+        const nick = resolveProfileNickname(req.userId, q);
+        if (nick.status === 'found') return { message: `Opening @${nick.profile.username}'s profile.`, navigate: { screen: 'profile', username: nick.profile.username } };
+      }
+      return { message: `Searching for "${q}".`, navigate: { screen: 'search', query: q } };
+    }
+    case 'ask_google': {
+      // Questions ("what is...", "enna...", "kya...", any language) are answered by Google in a new tab.
+      const q = String(input.query || '').replace(/\s+/g, ' ').trim().slice(0, 300);
+      if (!q) throw new Error('What would you like to know?');
+      return { message: `Opening Google for "${q}"…`, openUrl: `https://www.google.com/search?q=${encodeURIComponent(q)}` };
     }
     case 'invite_to_game': {
       const created = createRoom(input.gameId, req.userId);

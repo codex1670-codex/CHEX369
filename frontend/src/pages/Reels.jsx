@@ -6,7 +6,10 @@ import { updateCodexContext } from '../codexContext.js';
 import EditedMedia from '../components/EditedMedia.jsx';
 import MediaPicker from '../components/MediaPicker.jsx';
 import VideoEditor from '../components/VideoEditor.jsx';
+import { useHeartBurst, useTapHandlers } from '../components/HeartBurst.jsx';
 import { fileKind, MAX_REEL_BYTES as MAX_VIDEO_BYTES } from '../editSettings.js';
+import ShareSheet from '../components/ShareSheet.jsx';
+import { useLongPress } from '../components/useLongPress.js';
 
 
 // Reel format: 1080x1920 (9:16 vertical), min 720px, 30 FPS, cover 420x654 (1:1.55).
@@ -81,6 +84,7 @@ function ReelCard({ reel, onDeleted, muted, onToggleMute, onSoundBlocked }) {
   const { user } = useAuth();
   const [r, setR] = useState(reel);
   const [showComments, setShowComments] = useState(false);
+  const [sharing, setSharing] = useState(false);
   const [comments, setComments] = useState(null);
   const [commentText, setCommentText] = useState('');
   const [videoFailed, setVideoFailed] = useState(false);
@@ -160,6 +164,17 @@ function ReelCard({ reel, onDeleted, muted, onToggleMute, onSoundBlocked }) {
     } catch { setR(r); }
   };
 
+  // Tap = mute/unmute (as before); double tap = like + 3D heart (never un-likes).
+  const stageRef = useRef(null);
+  const { trigger: burstHeart, layer: heartLayer } = useHeartBurst();
+  const reelTap = useTapHandlers({
+    onSingle: () => toggleMute(),
+    onDouble: (e) => {
+      burstHeart(e.clientX, e.clientY, stageRef.current);
+      if (!r.likedByMe) toggleLike();
+    },
+  });
+
   const toggleSave = async () => {
     const wasSaved = r.savedByMe;
     setR({ ...r, savedByMe: !wasSaved });
@@ -197,6 +212,19 @@ function ReelCard({ reel, onDeleted, muted, onToggleMute, onSoundBlocked }) {
     if (!comments) setComments((await api.reelComments(r.id)).comments);
   };
 
+  // Press and hold on the reel (about half a second) opens the comments. Buttons, the caption editor
+  // and the comments panel itself are left alone, and a finger that moves is a swipe, not a hold.
+  const holdProps = useLongPress(async () => {
+    setShowComments(true);
+    if (!comments) { try { setComments((await api.reelComments(r.id)).comments); } catch { setComments([]); } }
+  }, { disabled: editing || videoEditor });
+  const ignoreHold = (e) => !!e.target.closest?.('button, input, textarea, a, .reel-comments-sheet, .reel-overlay-top');
+  const hold = {
+    ...holdProps,
+    onPointerDown: (e) => { if (!ignoreHold(e)) holdProps.onPointerDown(e); },
+    onContextMenu: (e) => { if (ignoreHold(e)) return; holdProps.onContextMenu(e); },
+  };
+
   const submitComment = async (e) => {
     e.preventDefault();
     if (!commentText.trim()) return;
@@ -208,17 +236,18 @@ function ReelCard({ reel, onDeleted, muted, onToggleMute, onSoundBlocked }) {
 
   return (
     <div className={`reel-slide${showMuteHint ? ' show-mute-hint' : ''}`} ref={containerRef}>
-     <div className="reel-stage">
+     <div className="reel-stage" ref={stageRef} {...hold}>
       {!videoFailed ? (
         <EditedMedia
           src={r.videoUrl} type="video" edits={r.edits} videoRef={videoRef} muted={muted} fit="reel" smartFit
-          className="reel-video" onClick={toggleMute} onError={() => setVideoFailed(true)}
+          className="reel-video" onClick={reelTap.onClick} onError={() => setVideoFailed(true)}
         />
       ) : (
         <div className="reel-slide-state" style={{ padding: 30, textAlign: 'center', fontSize: 13 }}>
           Couldn't load this video URL — it may not be a directly playable file.
         </div>
       )}
+      {heartLayer}
       <div className="reel-mute-hint">{muted ? '🔇' : '🔊'}</div>
       <button type="button" className="reel-mute-btn" aria-label={muted ? 'Unmute all reels' : 'Mute all reels'}
         onClick={(e) => { e.stopPropagation(); toggleMute(); }}>
@@ -276,6 +305,9 @@ function ReelCard({ reel, onDeleted, muted, onToggleMute, onSoundBlocked }) {
         <button onClick={openComments}>
           <span>💬</span><span className="count">{r.commentCount}</span>
         </button>
+        <button onClick={() => setSharing(true)} aria-label="Share this reel" aria-haspopup="dialog">
+          <span>↗</span><span className="count">Share</span>
+        </button>
         <button onClick={toggleSave}>
           <span>{r.savedByMe ? '🔖' : '🏷️'}</span>
         </button>
@@ -300,11 +332,12 @@ function ReelCard({ reel, onDeleted, muted, onToggleMute, onSoundBlocked }) {
         </div>
       )}
      </div>
+     {sharing && <ShareSheet kind="reel" id={r.id} onClose={() => setSharing(false)} />}
     </div>
   );
 }
 
-export default function Reels() {
+export default function Reels({ startReelId, onConsumeStart }) {
   const [reels, setReels] = useState(null);
   const [cursor, setCursor] = useState(null);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -343,7 +376,16 @@ export default function Reels() {
 
   const load = async () => {
     const res = await api.reelsFeed();
-    setReels(res.reels);
+    let list = res.reels;
+    // Opened from Search: put that reel first, then the normal feed after it.
+    if (startReelId) {
+      try {
+        const { reel } = await api.reel(startReelId);
+        list = [reel, ...list.filter(x => x.id !== reel.id)];
+      } catch { /* reel gone — just show the feed */ }
+      onConsumeStart?.();
+    }
+    setReels(list);
     setCursor(res.nextCursor);
   };
   useEffect(() => { load(); }, []);
@@ -358,7 +400,7 @@ export default function Reels() {
       if (entries[0].isIntersecting && !loadingMore) {
         setLoadingMore(true);
         api.reelsFeed(cursor).then(res => {
-          setReels(rs => [...rs, ...res.reels]);
+          setReels(rs => [...rs, ...res.reels.filter(n => !rs.some(x => x.id === n.id))]);
           setCursor(res.nextCursor);
         }).finally(() => setLoadingMore(false));
       }

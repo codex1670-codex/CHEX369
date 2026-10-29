@@ -43,35 +43,35 @@ export default function Auth() {
           {needs2FA && (
             <div className="field">
               <label>6-digit authenticator code</label>
-              <input value={form.totpCode} onChange={update('totpCode')} placeholder="123456" inputMode="numeric" maxLength={6} autoFocus required />
+              <input value={form.totpCode} onChange={update('totpCode')} placeholder="6-digit code" inputMode="numeric" maxLength={6} autoFocus required />
             </div>
           )}
           {!needs2FA && mode === 'signup' && (
             <>
               <div className="field">
                 <label>Username</label>
-                <input value={form.username} onChange={update('username')} placeholder="rahul" autoComplete="username" required />
+                <input value={form.username} onChange={update('username')} placeholder="Username" autoComplete="username" required />
               </div>
               <div className="field">
                 <label>Display name</label>
-                <input value={form.displayName} onChange={update('displayName')} placeholder="Rahul" />
+                <input value={form.displayName} onChange={update('displayName')} placeholder="Display name" />
               </div>
               <div className="field">
                 <label>Email</label>
-                <input type="email" value={form.email} onChange={update('email')} placeholder="you@example.com" required />
+                <input type="email" value={form.email} onChange={update('email')} placeholder="Email" required />
               </div>
             </>
           )}
           {mode === 'login' && !needs2FA && (
             <div className="field">
               <label>Username or email</label>
-              <input value={form.identifier} onChange={update('identifier')} placeholder="rahul" autoComplete="username" required />
+              <input value={form.identifier} onChange={update('identifier')} placeholder="Username or email" autoComplete="username" required />
             </div>
           )}
           {!needs2FA && (
             <div className="field">
               <label>Password</label>
-              <input type="password" value={form.password} onChange={update('password')} placeholder="••••••••" autoComplete="current-password" required />
+              <input type="password" value={form.password} onChange={update('password')} placeholder="Password" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} required />
             </div>
           )}
           <button className="btn-primary" disabled={busy} type="submit">
@@ -84,9 +84,6 @@ export default function Auth() {
           ) : (
             <>Already have an account? <button onClick={() => { setMode('login'); setError(''); }}>Log in</button></>
           )}
-        </div>
-        <div className="switch-line" style={{ marginTop: 10, opacity: 1 }}>
-          Demo accounts: rahul / priya / arjun — password: password123
         </div>
       </div>
     </div>

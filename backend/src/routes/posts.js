@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { v4 as uuid } from 'uuid';
 import db, { toPublicUser, USER_MEDIA_COLUMNS_SQL } from '../db.js';
 import { requireAuth, optionalAuth } from '../middleware/auth.js';
-import { isRestricted } from './users.js';
+import { isRestricted, canViewAccountContent, PRIVATE_OK_SQL } from './users.js';
 import { processMentionsAndHashtags } from '../content.js';
 import { mediaMiddleware, removeLocalUpload, editsToJson, parseEdits } from '../uploads.js';
 
@@ -12,14 +12,29 @@ const router = Router();
 const AUDIENCES = ['public', 'followers'];
 const cleanAudience = (v) => (AUDIENCES.includes(v) ? v : 'public');
 function canViewPost(row, viewerId) {
+  if (row && !canViewAccountContent(row.user_id, viewerId)) return false; // private account
   if (!row || (row.audience || 'public') === 'public') return true;
   if (!viewerId) return false;
   if (row.user_id === viewerId) return true;
   return !!db.prepare('SELECT 1 FROM follows WHERE follower_id = ? AND followed_id = ?').get(viewerId, row.user_id);
 }
 // SQL fragment (for queries aliased `p`) that hides followers-only posts from non-followers.
-const VISIBLE_SQL = "(p.audience = 'public' OR p.user_id = ? OR p.user_id IN (SELECT followed_id FROM follows WHERE follower_id = ?))";
+// Also hides posts of private accounts from people the owner doesn't follow. Binds 4 values: use visibleParams(viewerId).
+const VISIBLE_SQL = `((p.audience = 'public' OR p.user_id = ? OR p.user_id IN (SELECT followed_id FROM follows WHERE follower_id = ?)) AND ${PRIVATE_OK_SQL('p.user_id')})`;
+const visibleParams = (viewerId) => [viewerId ?? null, viewerId ?? null, viewerId ?? null, viewerId ?? null];
 const notFound = (res) => res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Post not found.' } });
+
+// Emoji reactions on a post, grouped: [{ emoji, count, mine }] (most used first) — never exposes who reacted.
+function reactionsFor(postId, viewerId) {
+  const rows = db.prepare('SELECT user_id, emoji FROM post_reactions WHERE post_id = ? ORDER BY created_at').all(postId);
+  const by = new Map();
+  for (const r of rows) {
+    const g = by.get(r.emoji) || { emoji: r.emoji, count: 0, mine: false };
+    g.count += 1; if (viewerId && r.user_id === viewerId) g.mine = true;
+    by.set(r.emoji, g);
+  }
+  return [...by.values()].sort((a, b) => b.count - a.count);
+}
 
 function postDTO(row, viewerId) {
   const likeCount = db.prepare('SELECT COUNT(*) c FROM likes WHERE post_id = ?').get(row.id).c;
@@ -40,6 +55,7 @@ function postDTO(row, viewerId) {
     createdAt: row.created_at,
     editedAt: row.edited_at,
     likeCount, commentCount, likedByMe, savedByMe,
+    reactions: reactionsFor(row.id, viewerId),
     author: toPublicUser(author),
   };
 }
@@ -84,11 +100,19 @@ router.get('/:id', optionalAuth, (req, res) => {
   res.json({ post: postDTO(row, req.userId) });
 });
 
+// Delete my own post: it disappears everywhere (feed, profile, saved lists, shared cards) and its
+// photo/video file is removed from the server. Deleting twice is a clean "not found".
 router.delete('/:id', requireAuth, (req, res) => {
-  const row = db.prepare('SELECT * FROM posts WHERE id = ?').get(req.params.id);
+  const row = db.prepare('SELECT * FROM posts WHERE id = ? AND deleted_at IS NULL').get(req.params.id);
   if (!row) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Post not found.' } });
   if (row.user_id !== req.userId) return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'You can only delete your own posts.' } });
-  db.prepare("UPDATE posts SET deleted_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?").run(row.id);
+  const tx = db.transaction(() => {
+    db.prepare("UPDATE posts SET deleted_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?").run(row.id);
+    db.prepare('DELETE FROM saved_posts WHERE post_id = ?').run(row.id);
+    db.prepare("DELETE FROM notifications WHERE target_id = ? AND type IN ('like','comment','mention')").run(row.id);
+  });
+  tx();
+  removeLocalUpload(row.image_url);
   res.json({ ok: true });
 });
 
@@ -145,6 +169,34 @@ router.delete('/:id/like', requireAuth, (req, res) => {
   const row = db.prepare('SELECT * FROM posts WHERE id = ? AND deleted_at IS NULL').get(req.params.id);
   if (!row) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Post not found.' } });
   db.prepare('DELETE FROM likes WHERE user_id = ? AND post_id = ?').run(req.userId, row.id);
+  res.json({ post: postDTO(row, req.userId) });
+});
+
+// React to a post with any emoji (long-press picker). One reaction each: reacting again swaps it.
+router.post('/:id/react', requireAuth, (req, res) => {
+  const row = db.prepare('SELECT * FROM posts WHERE id = ? AND deleted_at IS NULL').get(req.params.id);
+  if (!row || !canViewPost(row, req.userId)) return notFound(res);
+  const emoji = typeof req.body?.emoji === 'string' ? req.body.emoji.trim().slice(0, 16) : '';
+  if (!emoji || !/\p{Extended_Pictographic}/u.test(emoji)) {
+    return res.status(400).json({ error: { code: 'INVALID_INPUT', message: 'Provide an emoji to react with.' } });
+  }
+  db.prepare(`
+    INSERT INTO post_reactions (post_id, user_id, emoji) VALUES (?, ?, ?)
+    ON CONFLICT(post_id, user_id) DO UPDATE SET emoji = excluded.emoji, created_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+  `).run(row.id, req.userId, emoji);
+  // Tell the author once per person per post (re-reacting doesn't spam). Uses the existing "like" notification.
+  if (row.user_id !== req.userId && !db.prepare("SELECT 1 FROM notifications WHERE recipient_id = ? AND actor_id = ? AND type = 'like' AND target_id = ?").get(row.user_id, req.userId, row.id)) {
+    db.prepare('INSERT INTO notifications (id, recipient_id, actor_id, type, target_id) VALUES (?, ?, ?, ?, ?)')
+      .run(uuid(), row.user_id, req.userId, 'like', row.id);
+    req.app.get('io')?.to(`user:${row.user_id}`).emit('notification:new', { type: 'like' });
+  }
+  res.json({ post: postDTO(row, req.userId) });
+});
+
+router.delete('/:id/react', requireAuth, (req, res) => {
+  const row = db.prepare('SELECT * FROM posts WHERE id = ? AND deleted_at IS NULL').get(req.params.id);
+  if (!row || !canViewPost(row, req.userId)) return notFound(res);
+  db.prepare('DELETE FROM post_reactions WHERE post_id = ? AND user_id = ?').run(row.id, req.userId);
   res.json({ post: postDTO(row, req.userId) });
 });
 
@@ -259,5 +311,5 @@ router.get('/saved/mine', requireAuth, (req, res) => {
   res.json({ posts: rows.filter(r => canViewPost(r, req.userId)).map(r => postDTO(r, req.userId)) });
 });
 
-export { postDTO, processMentionsAndHashtags, canViewPost, VISIBLE_SQL };
+export { postDTO, processMentionsAndHashtags, canViewPost, VISIBLE_SQL, visibleParams };
 export default router;

@@ -12,6 +12,12 @@ function isBlockedPair(a, b) {
 export function registerCallHandlers(io, socket) {
   const userId = socket.userId;
 
+  // Tell everyone in the conversation (every device they are signed in on), not only people who already
+  // joined the call room — so a caller cancelling or a missed call also closes the other side's ring screen.
+  const tellParticipants = (conversationId, event, payload) => {
+    conversationParticipants(conversationId).forEach(id => io.to(`user:${id}`).emit(event, payload));
+  };
+
   // Caller starts a call inside a conversation they're already a participant of.
   // Calling is only possible within an existing (accepted) conversation — this is what
   // ties call permission to the same relationship/message-permission rules as messaging.
@@ -21,6 +27,9 @@ export function registerCallHandlers(io, socket) {
       return socket.emit('call:error', { message: "You're not part of this conversation." });
     }
     const others = participants.filter(p => p !== userId);
+    if (others.length === 0) {
+      return socket.emit('call:error', { message: 'Open a chat with someone else to call them.' });
+    }
     for (const other of others) {
       if (isBlockedPair(userId, other)) {
         return socket.emit('call:error', { message: "You can't call this conversation." });
@@ -39,14 +48,15 @@ export function registerCallHandlers(io, socket) {
         caller: toPublicUser(caller),
       });
     });
-    socket.emit('call:ringing', { callId });
+    const peers = others.map(id => toPublicUser(db.prepare(`SELECT id, username, display_name, avatar_color, ${USER_MEDIA_COLUMNS_SQL} FROM users WHERE id = ?`).get(id)));
+    socket.emit('call:ringing', { callId, type: callType, peers });
 
     // Auto-mark missed if nobody answers within 45s and it's still ringing.
     setTimeout(() => {
       const call = db.prepare('SELECT * FROM calls WHERE id = ?').get(callId);
       if (call && call.status === 'ringing') {
         db.prepare("UPDATE calls SET status = 'missed', ended_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?").run(callId);
-        io.to(`call:${callId}`).emit('call:missed', { callId });
+        tellParticipants(conversationId, 'call:missed', { callId });
         others.forEach(otherId => {
           db.prepare("INSERT INTO notifications (id, recipient_id, actor_id, type, target_id) VALUES (?, ?, ?, 'missed_call', ?)")
             .run(uuid(), otherId, userId, callId);
@@ -60,6 +70,7 @@ export function registerCallHandlers(io, socket) {
     const call = db.prepare('SELECT * FROM calls WHERE id = ?').get(callId);
     if (!call) return socket.emit('call:error', { message: 'Call not found.' });
     if (call.status !== 'ringing') return socket.emit('call:error', { message: 'This call is no longer available.' });
+    if (call.caller_id === userId) return;
     const participants = conversationParticipants(call.conversation_id);
     if (!participants.includes(userId)) return socket.emit('call:error', { message: "You're not part of this call." });
 
@@ -72,23 +83,25 @@ export function registerCallHandlers(io, socket) {
   socket.on('call:decline', ({ callId }) => {
     const call = db.prepare('SELECT * FROM calls WHERE id = ?').get(callId);
     if (!call) return;
+    if (!conversationParticipants(call.conversation_id).includes(userId) || call.status !== 'ringing') return;
     db.prepare("UPDATE calls SET status = 'declined', ended_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?").run(callId);
-    io.to(`call:${callId}`).emit('call:declined', { callId, declinedBy: userId });
+    tellParticipants(call.conversation_id, 'call:declined', { callId, declinedBy: userId });
   });
 
   socket.on('call:end', ({ callId }) => {
     const call = db.prepare('SELECT * FROM calls WHERE id = ?').get(callId);
-    if (!call) return;
+    if (!call || !conversationParticipants(call.conversation_id).includes(userId)) return;
     if (call.status === 'ringing' || call.status === 'active') {
       db.prepare("UPDATE calls SET status = 'ended', ended_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?").run(callId);
     }
     db.prepare("UPDATE call_participants SET left_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE call_id = ? AND user_id = ?").run(callId, userId);
-    io.to(`call:${callId}`).emit('call:ended', { callId, endedBy: userId });
+    tellParticipants(call.conversation_id, 'call:ended', { callId, endedBy: userId });
   });
 
   // Pure relay for WebRTC SDP offers/answers and ICE candidates — the server never
   // inspects or stores the media/SDP content, it just forwards it between the two peers.
   socket.on('call:signal', ({ callId, data }) => {
+    if (!callId || !socket.rooms.has(`call:${callId}`)) return; // only people actually in this call
     socket.to(`call:${callId}`).emit('call:signal', { callId, from: userId, data });
   });
 }

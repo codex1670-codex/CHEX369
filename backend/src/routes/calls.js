@@ -17,6 +17,16 @@ function callDTO(row, viewerId) {
   };
 }
 
+// STUN lets two phones on the same wifi (or most home networks) find each other directly. For calls
+// across strict networks / mobile data set TURN_URL (+ TURN_USERNAME, TURN_CREDENTIAL) on the server.
+router.get('/ice', requireAuth, (_req, res) => {
+  const iceServers = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302', 'stun:global.stun.twilio.com:3478'] }];
+  if (process.env.TURN_URL) {
+    iceServers.push({ urls: process.env.TURN_URL.split(',').map(u => u.trim()).filter(Boolean), username: process.env.TURN_USERNAME || '', credential: process.env.TURN_CREDENTIAL || '' });
+  }
+  res.json({ iceServers });
+});
+
 router.get('/history', requireAuth, (req, res) => {
   const rows = db.prepare(`
     SELECT c.* FROM calls c

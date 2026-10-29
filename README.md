@@ -19,7 +19,8 @@ endpoint or a real Socket.io event and shows the real result.
 
 **Social graph**
 - Follow/unfollow, block, mute, restrict, close friends
-- Profile relationship menu (mute/restrict/block/report)
+- Profile relationship menu (mute/restrict/block/report) that remembers its state, plus Settings lists of blocked / muted / restricted people
+- Story highlights (permanent, editable collections on your profile) and a private story archive
 
 **Games**
 - **All 24 games can be played online** (27 online games in total). Create a room, send the 6-character

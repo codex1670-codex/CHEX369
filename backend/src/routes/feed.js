@@ -1,7 +1,8 @@
 import { Router } from 'express';
 import db from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
-import { postDTO, VISIBLE_SQL } from './posts.js';
+import { postDTO, VISIBLE_SQL, visibleParams } from './posts.js';
+import { PRIVATE_OK_SQL } from './users.js';
 
 const router = Router();
 const PAGE_SIZE = 10;
@@ -25,11 +26,12 @@ router.get('/following', requireAuth, (req, res) => {
     WHERE p.deleted_at IS NULL
       AND p.created_at < ?
       AND (p.user_id IN (SELECT followed_id FROM follows WHERE follower_id = ?) OR p.user_id = ?)
+      AND ${PRIVATE_OK_SQL('p.user_id')}
       ${placeholders ? `AND p.user_id NOT IN (${placeholders})` : ''}
     ORDER BY p.created_at DESC
     LIMIT ?
   `;
-  const params = [cursor, req.userId, req.userId, ...(blocked.length ? blocked : []), PAGE_SIZE + 1];
+  const params = [cursor, req.userId, req.userId, req.userId, req.userId, ...(blocked.length ? blocked : []), PAGE_SIZE + 1];
   const rows = db.prepare(sql).all(...params);
 
   const hasMore = rows.length > PAGE_SIZE;
@@ -59,7 +61,7 @@ router.get('/foryou', requireAuth, (req, res) => {
     ORDER BY (like_count * 2 + comment_count * 3) DESC, p.created_at DESC
     LIMIT ?
   `;
-  const params = [cursor, req.userId, req.userId, ...(blocked.length ? blocked : []), PAGE_SIZE + 1];
+  const params = [cursor, ...visibleParams(req.userId), ...(blocked.length ? blocked : []), PAGE_SIZE + 1];
   const rows = db.prepare(sql).all(...params);
 
   const hasMore = rows.length > PAGE_SIZE;

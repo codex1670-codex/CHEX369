@@ -3,11 +3,12 @@ import { v4 as uuid } from 'uuid';
 import db, { toPublicUser, USER_MEDIA_COLUMNS_SQL } from '../db.js';
 import { requireAuth, optionalAuth } from '../middleware/auth.js';
 import { processMentionsAndHashtags } from '../content.js';
+import { canViewAccountContent, PRIVATE_OK_SQL } from './users.js';
 import { reelUpload, MAX_REEL_UPLOAD_BYTES, MAX_REEL_VIDEO_BYTES, mediaMiddleware, removeLocalUpload, editsToJson, parseEdits } from '../uploads.js';
 
 const router = Router();
 
-function reelDTO(row, viewerId) {
+export function reelDTO(row, viewerId) {
   const likeCount = db.prepare('SELECT COUNT(*) c FROM reel_likes WHERE reel_id = ?').get(row.id).c;
   const commentCount = db.prepare('SELECT COUNT(*) c FROM reel_comments WHERE reel_id = ? AND deleted_at IS NULL').get(row.id).c;
   const likedByMe = viewerId ? !!db.prepare('SELECT 1 FROM reel_likes WHERE reel_id = ? AND user_id = ?').get(row.id, viewerId) : false;
@@ -59,13 +60,21 @@ router.get('/feed', optionalAuth, (req, res) => {
     : [];
   const placeholders = blocked.length ? blocked.map(() => '?').join(',') : null;
   const rows = db.prepare(`
-    SELECT * FROM reels WHERE deleted_at IS NULL AND created_at < ?
+    SELECT * FROM reels WHERE deleted_at IS NULL AND created_at < ? AND ${PRIVATE_OK_SQL('user_id')}
     ${placeholders ? `AND user_id NOT IN (${placeholders})` : ''}
     ORDER BY created_at DESC LIMIT 11
-  `).all(cursor, ...(blocked.length ? blocked : []));
+  `).all(cursor, req.userId ?? null, req.userId ?? null, ...(blocked.length ? blocked : []));
   const hasMore = rows.length > 10;
   const page = rows.slice(0, 10);
   res.json({ reels: page.map(r => reelDTO(r, req.userId)), nextCursor: hasMore ? page[page.length - 1].created_at : null });
+});
+
+// A single reel by id — used when a search result is opened.
+router.get('/:id', optionalAuth, (req, res, next) => {
+  if (['feed', 'saved', 'history'].includes(req.params.id)) return next();
+  const row = db.prepare('SELECT * FROM reels WHERE id = ? AND deleted_at IS NULL').get(req.params.id);
+  if (!row || !canViewAccountContent(row.user_id, req.userId)) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Reel not found.' } });
+  res.json({ reel: reelDTO(row, req.userId) });
 });
 
 router.delete('/:id', requireAuth, (req, res) => {

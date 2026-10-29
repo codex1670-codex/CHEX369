@@ -145,9 +145,10 @@ router.get('/feed', requireAuth, (req, res) => {
       AND s.user_id NOT IN (
         SELECT blocked_id FROM blocks WHERE blocker_id = ?
         UNION SELECT blocker_id FROM blocks WHERE blocked_id = ?
+        UNION SELECT muted_id FROM mutes WHERE muter_id = ?
       )
     ORDER BY s.created_at ASC
-  `).all(req.userId, req.userId, req.userId, req.userId);
+  `).all(req.userId, req.userId, req.userId, req.userId, req.userId);
 
   const visible = rows.filter(r => {
     if (r.user_id === req.userId) return true;
@@ -200,4 +201,5 @@ router.delete('/:id', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
+export { storyDTO };
 export default router;

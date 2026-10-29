@@ -1,15 +1,16 @@
 // Real theme persistence — spec #180 ("turn on dark mode" / settings-level theme control).
 // NEXA previously had exactly one (dark) theme with no toggle. This adds a genuine second
 // theme (light) plus a toggle, wired into Settings and into Codex's `set_theme` action.
+// The DEFAULT theme (nothing saved yet) is "light" = white & gold; dark (royal navy & gold) is one tap away.
 import { applyColors, resetColors } from './colors.js';
 const KEY = 'nexa.theme';
 
 export function getStoredTheme() {
   try {
     const v = localStorage.getItem(KEY);
-    return v === 'light' || v === 'dark' ? v : 'dark';
+    return v === 'light' || v === 'dark' ? v : 'light';
   } catch {
-    return 'dark';
+    return 'light';
   }
 }
 

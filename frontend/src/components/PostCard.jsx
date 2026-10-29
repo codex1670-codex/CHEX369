@@ -7,6 +7,13 @@ import EditedMedia from './EditedMedia.jsx';
 import PhotoEditor from './PhotoEditor.jsx';
 import VideoEditor from './VideoEditor.jsx';
 import { fileKind, MAX_IMAGE_BYTES, MAX_VIDEO_BYTES } from '../editSettings.js';
+import FullscreenMediaViewer from './FullscreenMediaViewer.jsx';
+import { useHeartBurst, useTapHandlers } from './HeartBurst.jsx';
+import ReactionPicker from './ReactionPicker.jsx';
+import { loadQuickReactions } from '../quickReactions.js';
+import { useLongPress } from './useLongPress.js';
+import ShareSheet from './ShareSheet.jsx';
+import ActionSheet, { ConfirmSheet } from './ActionSheet.jsx';
 
 function timeAgo(iso) {
   const diff = (Date.now() - new Date(iso).getTime()) / 1000;
@@ -70,7 +77,7 @@ function CommentRow({ comment, postId, postAuthorId, onChanged, onReply, depth =
   );
 }
 
-export default function PostCard({ post, onOpenProfile }) {
+export default function PostCard({ post, onOpenProfile, onDeleted }) {
   const { user } = useAuth();
   const [p, setP] = useState(post);
   const containerRef = useRef(null);
@@ -98,11 +105,18 @@ export default function PostCard({ post, onOpenProfile }) {
   useEffect(() => {
     const el = containerRef.current;
     if (!el || p.mediaType !== 'video') return undefined;
-    const obs = new IntersectionObserver(([e]) => { if (!e.isIntersecting) videoRef.current?.pause(); }, { threshold: 0.2 });
+    // Feed videos autoplay (muted, looping) while mostly on screen and pause when scrolled away.
+    const obs = new IntersectionObserver(([e]) => {
+      const v = videoRef.current;
+      if (!v) return;
+      if (e.intersectionRatio >= 0.5) v.play().catch(() => {});
+      else v.pause();
+    }, { threshold: [0, 0.5] });
     obs.observe(el);
     return () => obs.disconnect();
   }, [p.mediaType, p.id]);
   const [showComments, setShowComments] = useState(false);
+  const [sharing, setSharing] = useState(false);
   const [comments, setComments] = useState(null);
   const [commentText, setCommentText] = useState('');
   const [replyTo, setReplyTo] = useState(null);
@@ -114,10 +128,31 @@ export default function PostCard({ post, onOpenProfile }) {
   const [mediaEditor, setMediaEditor] = useState(false);   // photo/video editor modal open
   const [mediaError, setMediaError] = useState('');
   const [mediaBusy, setMediaBusy] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);          // the ⋯ menu
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
+  const [gone, setGone] = useState(false);                  // deleted — card disappears right away
   const videoRef = useRef(null);
   const replaceInputRef = useRef(null);
 
   const isMine = p.author.id === user.id;
+
+  // Long-press the photo/video (or right-click, or tap "React") to react with one of my top-10 emoji.
+  const [picking, setPicking] = useState(false);
+  const [quick, setQuick] = useState(loadQuickReactions);
+  const [reactError, setReactError] = useState('');
+  const openPicker = () => { setQuick(loadQuickReactions()); setPicking(true); };
+  const longPress = useLongPress(openPicker, { disabled: editingPost });
+  const myReaction = (p.reactions || []).find(r => r.mine)?.emoji || null;
+  // emoji = react (replaces my previous one); null, or the one I already have = remove it.
+  const react = async (emoji) => {
+    setPicking(false); setReactError('');
+    try {
+      const res = !emoji || emoji === myReaction ? await api.unreactPost(p.id) : await api.reactPost(p.id, emoji);
+      setP(res.post);
+    } catch (err) { setReactError(err.message || 'Could not react.'); }
+  };
 
   const toggleLike = async () => {
     if (busy) return;
@@ -133,6 +168,19 @@ export default function PostCard({ post, onOpenProfile }) {
       setBusy(false);
     }
   };
+
+  // Double tap: only ever LIKES (never un-likes), with the 3D heart at the tap point.
+  const mediaWrapRef = useRef(null);
+  const { trigger: burstHeart, layer: heartLayer } = useHeartBurst();
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const [viewerSeed, setViewerSeed] = useState(null);
+  const mediaTap = useTapHandlers({
+    onSingle: (e) => { videoRef.current?.pause(); setViewerSeed({ t: e.t, x: e.clientX, y: e.clientY }); setViewerOpen(true); },
+    onDouble: (e) => {
+      burstHeart(e.clientX, e.clientY, mediaWrapRef.current);
+      if (!p.likedByMe) toggleLike();
+    },
+  });
 
   const openComments = async () => {
     setShowComments(s => !s);
@@ -207,9 +255,26 @@ export default function PostCard({ post, onOpenProfile }) {
     setEditingPost(false);
   };
 
+  // Delete my own post (after a confirmation). The server removes it for everyone; the page's list
+  // is told through onDeleted so the post vanishes without a reload.
+  const deleteMyPost = async () => {
+    setDeleting(true); setDeleteError('');
+    try {
+      await api.deletePost(p.id);
+      setConfirmDelete(false);
+      setGone(true);
+      onDeleted?.(p.id);
+    } catch (err) {
+      setDeleteError(err.message || 'Could not delete the post.');
+      setConfirmDelete(false);
+    } finally { setDeleting(false); }
+  };
+
   // Top-level comments first, then their replies grouped underneath.
   const topLevel = (comments || []).filter(c => !c.parentCommentId);
   const repliesOf = (id) => (comments || []).filter(c => c.parentCommentId === id);
+
+  if (gone) return null;
 
   return (
     <div className="glass-card post-card" ref={containerRef}>
@@ -219,13 +284,23 @@ export default function PostCard({ post, onOpenProfile }) {
           <div className="name">{p.author.displayName}</div>
           <div className="time">@{p.author.username} · {timeAgo(p.createdAt)}{p.editedAt && ' · edited'} · <span className={`audience-chip ${p.audience === 'followers' ? 'followers' : 'public'}`} title={p.audience === 'followers' ? 'Only followers can see this' : 'Everyone can see this'}>{p.audience === 'followers' ? '👥 Followers' : '🌐 Public'}</span></div>
         </div>
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }} onClick={e => e.stopPropagation()}>
-          {isMine && <button className="btn-ghost" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => setEditingPost(e => !e)}>Edit</button>}
-          <button className="btn-ghost" style={{ padding: '4px 10px', fontSize: 12 }} onClick={toggleSave}>{p.savedByMe ? '🔖 Saved' : '🔖 Save'}</button>
-          {!isMine && <button className="btn-ghost" style={{ padding: '4px 10px', fontSize: 12 }} onClick={reportPost}>Report</button>}
-        </div>
+        <button type="button" className="post-more" aria-label="More options" aria-haspopup="menu" onClick={e => { e.stopPropagation(); setMenuOpen(true); }}>⋯</button>
       </div>
       {reportStatus && <div className="request-banner" style={{ marginBottom: 10 }}>{reportStatus}</div>}
+      {deleteError && <div className="error-banner" style={{ marginBottom: 10 }}>{deleteError}</div>}
+      {menuOpen && (
+        <ActionSheet title="Post" onClose={() => setMenuOpen(false)} actions={[
+          isMine && { key: 'edit', label: 'Edit', icon: '✏️', onClick: () => setEditingPost(true) },
+          { key: 'save', label: p.savedByMe ? 'Remove from saved' : 'Save', icon: '🔖', onClick: toggleSave },
+          { key: 'share', label: 'Share', icon: '↗', onClick: () => setSharing(true) },
+          isMine && { key: 'delete', label: 'Delete', icon: '🗑️', danger: true, onClick: () => setConfirmDelete(true) },
+          !isMine && { key: 'report', label: 'Report', icon: '🚩', danger: true, onClick: reportPost },
+        ]} />
+      )}
+      {confirmDelete && (
+        <ConfirmSheet title="Delete post?" message="This removes the post for everyone, including its likes and comments. You can't undo this."
+          confirmLabel="Delete" danger busy={deleting} onConfirm={deleteMyPost} onClose={() => setConfirmDelete(false)} />
+      )}
 
       {editingPost ? (
         <div style={{ marginBottom: 12 }}>
@@ -256,11 +331,18 @@ export default function PostCard({ post, onOpenProfile }) {
       )}
 
       {p.mediaUrl && (
-        <EditedMedia
-          src={p.mediaUrl} type={p.mediaType} edits={p.edits} videoRef={videoRef} controls={p.mediaType === 'video'}
-          fit="contain" mediaMaxHeight={560}
-          style={{ margin: '0 -4px 12px', borderRadius: 12, background: '#000' }}
-        />
+        <div className="post-media-wrap tap-media" ref={mediaWrapRef} {...mediaTap} {...longPress}
+          role="button" aria-label="Open full screen. Double tap to like." style={{ margin: '0 -4px 12px', borderRadius: 12, overflow: 'hidden' }}>
+          <EditedMedia
+            src={p.mediaUrl} type={p.mediaType} edits={p.edits} videoRef={videoRef} controls={false} muted autoPlay loop
+            fit="contain" mediaMaxHeight={560}
+            style={{ background: '#000', pointerEvents: 'none' }}
+          />
+          {heartLayer}
+        </div>
+      )}
+      {viewerOpen && p.mediaUrl && (
+        <FullscreenMediaViewer mediaType={p.mediaType === 'video' ? 'video' : 'photo'} url={p.mediaUrl} name={p.caption} seedTap={viewerSeed} onLike={() => { if (!p.likedByMe) toggleLike(); }} onClose={() => { setViewerOpen(false); videoRef.current?.play().catch(() => {}); }} />
       )}
 
       {mediaEditor && p.mediaType === 'image' && (
@@ -272,10 +354,24 @@ export default function PostCard({ post, onOpenProfile }) {
 
       <div className="post-actions">
         <button className={p.likedByMe ? 'liked' : ''} onClick={toggleLike}>
-          {p.likedByMe ? '♥' : '♡'} {p.likeCount}
+          <span className="heart-icon">{p.likedByMe ? '♥' : '♡'}</span> {p.likeCount}
         </button>
         <button onClick={openComments}>💬 {p.commentCount}</button>
+        <button onClick={openPicker} aria-label="React with an emoji" aria-haspopup="dialog">{myReaction || '😊'} <span className="lbl">React</span></button>
+        <button onClick={() => setSharing(true)} aria-label="Share this post" aria-haspopup="dialog">↗ <span className="lbl">Share</span></button>
+        <button type="button" className={`post-save${p.savedByMe ? ' on' : ''}`} onClick={toggleSave} aria-pressed={!!p.savedByMe} aria-label={p.savedByMe ? 'Remove from saved' : 'Save post'}>🔖</button>
       </div>
+      {sharing && <ShareSheet kind="post" id={p.id} onClose={() => setSharing(false)} />}
+      {(p.reactions || []).length > 0 && (
+        <div className="react-chips" style={{ margin: '0 0 8px 4px' }}>
+          {p.reactions.map(g => (
+            <button key={g.emoji} type="button" className={`react-chip${g.mine ? ' mine' : ''}`} aria-label={`${g.emoji} ${g.count}${g.mine ? ', yours — tap to remove' : ''}`}
+              onClick={() => react(g.mine ? null : g.emoji)}>{g.emoji}{g.count > 1 ? ` ${g.count}` : ''}</button>
+          ))}
+        </div>
+      )}
+      {reactError && <div style={{ fontSize: 11.5, color: 'var(--pink-ink)', margin: '0 0 6px 4px' }}>{reactError}</div>}
+      {picking && <ReactionPicker quick={quick} current={myReaction} onPick={react} onClose={() => setPicking(false)} onQuickChange={setQuick} />}
       {showComments && (
         <div className="comments-block">
           {topLevel.map(c => (

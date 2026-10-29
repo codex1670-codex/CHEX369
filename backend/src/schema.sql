@@ -246,6 +246,15 @@ CREATE TABLE IF NOT EXISTS message_reactions (
   PRIMARY KEY (message_id, user_id)
 );
 
+-- Emoji reactions on posts (one per person per post; reacting again swaps the emoji).
+CREATE TABLE IF NOT EXISTS post_reactions (
+  post_id     TEXT NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+  user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  emoji       TEXT NOT NULL,
+  created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  PRIMARY KEY (post_id, user_id)
+);
+
 CREATE TABLE IF NOT EXISTS notifications (
   id          TEXT PRIMARY KEY,
   recipient_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -531,3 +540,25 @@ BEGIN
       ORDER BY created_at DESC, rowid DESC LIMIT 100
     );
 END;
+
+-- Story highlights: a named, permanent collection of the owner's stories. Stories themselves
+-- are only *visible* for 24h (see expires_at), but the rows are never purged, so a highlight keeps
+-- showing its stories after they expire. Deleting a story (soft delete) removes it from every
+-- highlight; deleting the highlight never deletes the underlying stories.
+CREATE TABLE IF NOT EXISTS story_highlights (
+  id             TEXT PRIMARY KEY,
+  user_id        TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  title          TEXT NOT NULL,
+  cover_story_id TEXT,
+  created_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  updated_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE INDEX IF NOT EXISTS idx_highlights_user ON story_highlights(user_id, created_at);
+
+CREATE TABLE IF NOT EXISTS story_highlight_items (
+  highlight_id TEXT NOT NULL REFERENCES story_highlights(id) ON DELETE CASCADE,
+  story_id     TEXT NOT NULL REFERENCES stories(id) ON DELETE CASCADE,
+  added_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  PRIMARY KEY (highlight_id, story_id)
+);
+CREATE INDEX IF NOT EXISTS idx_highlight_items_story ON story_highlight_items(story_id);

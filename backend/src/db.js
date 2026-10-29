@@ -4,6 +4,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import persistence from './persistence.js';
 import { seedGameCatalog } from './gameCatalog.js';
+import { seedAppCatalog } from './appCatalog.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DB_PATH = process.env.NEXA_DB_PATH || path.join(__dirname, '..', 'nexa.db');
@@ -75,6 +76,10 @@ const addColumnIfMissing = (table, col, def) => {
   const cols = db.prepare(`PRAGMA table_info(${table})`).all().map(c => c.name);
   if (!cols.includes(col)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${def}`);
 };
+// App catalog: how to launch the installed phone app (Android package / iOS URL scheme).
+addColumnIfMissing('app_registry', 'android_package', 'TEXT');
+addColumnIfMissing('app_registry', 'ios_scheme', 'TEXT');
+seedAppCatalog(db);
 addColumnIfMissing('posts', 'media_type', "TEXT CHECK (media_type IN ('image','video'))");
 addColumnIfMissing('posts', 'edits', 'TEXT');
 addColumnIfMissing('reels', 'edits', 'TEXT');
@@ -89,8 +94,24 @@ addColumnIfMissing('users', 'is_private', 'INTEGER NOT NULL DEFAULT 0');
 // altered in place) and carries the attachment in these columns instead.
 addColumnIfMissing('messages', 'media_url', 'TEXT');
 addColumnIfMissing('messages', 'media_kind', "TEXT");
+addColumnIfMissing('messages', 'media_seconds', 'INTEGER'); // voice-note length
 addColumnIfMissing('messages', 'media_name', 'TEXT');
 addColumnIfMissing('messages', 'media_bytes', 'INTEGER');
+// Shared post / reel inside a chat: the message keeps a short text and points at the item here.
+addColumnIfMissing('messages', 'shared_kind', 'TEXT');
+addColumnIfMissing('messages', 'shared_id', 'TEXT');
+// Chat controls (per person, never visible to the others in the chat):
+//  muted      = no alerts for new messages in this chat
+//  cleared_at = "Delete chat": messages up to this moment are hidden for me only
+addColumnIfMissing('conversation_participants', 'muted', 'INTEGER NOT NULL DEFAULT 0');
+addColumnIfMissing('conversation_participants', 'cleared_at', 'TEXT');
+// "Delete for me" on a single message: hidden for that person, still visible to everyone else.
+db.exec(`CREATE TABLE IF NOT EXISTS message_hidden (
+  message_id TEXT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+  user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  PRIMARY KEY (message_id, user_id)
+)`);
 // Profile Studio: theme / background / dim / blur chosen in the studio, stored as JSON so
 // every viewer of a profile sees the same look.
 addColumnIfMissing('users', 'profile_studio', 'TEXT');

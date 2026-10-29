@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api.js';
+import FullscreenMediaViewer from './FullscreenMediaViewer.jsx';
 
 // Profile Studio — ported from the standalone Profile_studio.html.
 //
@@ -182,6 +183,7 @@ export default function ProfileStudio({ profile, isSelf, onUpdated, openSheet, o
     '--ps-bg': t[1], '--ps-panel': t[2], '--ps-ink': t[3], '--ps-mute': t[4], '--ps-ac': t[5], '--ps-acink': t[6],
     '--ps-dim': studio.dim / 100, '--ps-blur': `${studio.blur}px`,
   };
+  const [fullscreen, setFullscreen] = useState(false);
   const hasVideo = profile.displayMode === 'video' && profile.profileVideoUrl;
   const hasPhoto = profile.displayMode === 'photo' && profile.avatarPhotoUrl;
 
@@ -222,11 +224,29 @@ export default function ProfileStudio({ profile, isSelf, onUpdated, openSheet, o
 
         <div className="ps-card">
           {isSelf ? (
-            <button className="ps-av" onClick={() => setSheet('video')} aria-label="Change profile photo or video">
-              <div className="ps-avbox">{avatarInner}</div><span className="ps-badge">Edit</span>
-            </button>
+            <div className="ps-av" role="button" tabIndex={0}
+              aria-label={hasVideo || hasPhoto ? 'Open profile picture full screen' : 'Change profile photo or video'}
+              onClick={() => (hasVideo || hasPhoto ? setFullscreen(true) : setSheet('video'))}
+              onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); (hasVideo || hasPhoto ? setFullscreen(true) : setSheet('video')); } }}>
+              <div className="ps-avbox">{avatarInner}</div>
+              <button type="button" className="ps-badge" onClick={e => { e.stopPropagation(); setSheet('video'); }} aria-label="Change profile photo or video">Edit</button>
+            </div>
           ) : (
-            <div className="ps-av ps-static"><div className="ps-avbox">{avatarInner}</div></div>
+            <div className="ps-av ps-static" role={hasVideo || hasPhoto ? 'button' : undefined} tabIndex={hasVideo || hasPhoto ? 0 : undefined}
+              aria-label={hasVideo || hasPhoto ? 'Open profile picture full screen' : undefined}
+              onClick={() => { if (hasVideo || hasPhoto) setFullscreen(true); }}
+              style={hasVideo || hasPhoto ? { cursor: 'pointer' } : undefined}>
+              <div className="ps-avbox">{avatarInner}</div>
+            </div>
+          )}
+          {fullscreen && (hasVideo || hasPhoto) && (
+            <FullscreenMediaViewer
+              mediaType={hasVideo ? 'video' : 'photo'}
+              url={hasVideo ? profile.profileVideoUrl : profile.avatarPhotoUrl}
+              posterUrl={hasVideo ? profile.profileVideoCoverUrl : undefined}
+              name={profile.displayName}
+              onClose={() => setFullscreen(false)}
+            />
           )}
 
           <h1 ref={nameRef} className="ps-name" contentEditable={isSelf} suppressContentEditableWarning spellCheck={false}

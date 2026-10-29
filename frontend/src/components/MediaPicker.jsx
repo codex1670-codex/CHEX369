@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import CameraCapture, { cameraSupported } from './CameraCapture.jsx';
 import EditedMedia from './EditedMedia.jsx';
 import PhotoEditor from './PhotoEditor.jsx';
 import VideoEditor from './VideoEditor.jsx';
@@ -19,6 +21,7 @@ export default function MediaPicker({ value, onChange, allow = ['image', 'video'
   const [editing, setEditing] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [url, setUrl] = useState(null);
+  const [cameraOpen, setCameraOpen] = useState(false);
   const fileRef = useRef(null);
   const camRef = useRef(null);
 
@@ -60,6 +63,15 @@ export default function MediaPicker({ value, onChange, allow = ['image', 'video'
     onChange({ ...value, duration: d, edits });
   };
 
+  // "Camera" opens the live camera right here (photo or video). Where the browser can't (no HTTPS /
+  // no camera API) it falls back to the phone's own camera app via the capture input.
+  const openCamera = () => { if (cameraSupported()) setCameraOpen(true); else camRef.current?.click(); };
+  const onCameraCapture = (file) => { setCameraOpen(false); choose(file); };
+  const cameraLayer = cameraOpen && createPortal(
+    <CameraCapture modes={allow.includes('image') ? ['photo', 'video'] : ['video']} onCapture={onCameraCapture} onClose={() => setCameraOpen(false)}
+      onFallback={() => { setCameraOpen(false); camRef.current?.click(); }} />,
+    document.body);
+
   const onDrop = (ev) => {
     ev.preventDefault(); setDragOver(false);
     if (!disabled) choose(ev.dataTransfer.files?.[0]);
@@ -78,11 +90,12 @@ export default function MediaPicker({ value, onChange, allow = ['image', 'video'
         </div>
         <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
           <button type="button" className="btn-ghost" disabled={disabled} onClick={() => fileRef.current?.click()}>📁 Choose file</button>
-          <button type="button" className="btn-ghost" disabled={disabled} onClick={() => camRef.current?.click()}>📷 Camera</button>
+          <button type="button" className="btn-ghost" disabled={disabled} onClick={openCamera}>📷 Camera</button>
         </div>
         <input ref={fileRef} type="file" accept={accept} hidden onChange={e => choose(e.target.files?.[0])} />
         <input ref={camRef} type="file" accept={acceptCam} capture="environment" hidden onChange={e => choose(e.target.files?.[0])} />
         {error && <div className="error-banner" style={{ marginTop: 10 }}>{error}</div>}
+        {cameraLayer}
       </div>
     );
   }
@@ -102,11 +115,14 @@ export default function MediaPicker({ value, onChange, allow = ['image', 'video'
         <button type="button" className="btn-ghost" disabled={disabled} onClick={() => setEditing(true)}>✏️ Edit {isVideo ? 'video' : 'photo'}</button>
         {!isVideo && edited && <button type="button" className="btn-ghost" disabled={disabled} onClick={() => onChange({ ...value, file: value.originalFile })}>↺ Undo edits</button>}
         {isVideo && edited && <button type="button" className="btn-ghost" disabled={disabled} onClick={() => onChange({ ...value, edits: defaultEdits() })}>↺ Undo edits</button>}
+        <button type="button" className="btn-ghost" disabled={disabled} onClick={openCamera}>📷 Retake</button>
         <button type="button" className="btn-ghost" disabled={disabled} onClick={() => fileRef.current?.click()}>Replace</button>
         <button type="button" className="btn-ghost" style={{ color: 'var(--pink-ink)' }} disabled={disabled} onClick={clear}>Remove</button>
         {edited && <span style={{ fontSize: 12, color: 'var(--teal-ink)' }}>Edited ✓</span>}
         <input ref={fileRef} type="file" accept={accept} hidden onChange={e => choose(e.target.files?.[0])} />
+        <input ref={camRef} type="file" accept={acceptCam} capture="environment" hidden onChange={e => choose(e.target.files?.[0])} />
       </div>
+      {cameraLayer}
       {error && <div className="error-banner" style={{ marginTop: 8 }}>{error}</div>}
 
       {editing && !isVideo && (

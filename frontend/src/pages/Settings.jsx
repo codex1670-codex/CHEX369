@@ -3,6 +3,10 @@ import { api } from '../api.js';
 import { useAuth } from '../AuthContext.jsx';
 import { getStoredTheme, applyTheme } from '../theme.js';
 import { get3D, set3D } from '../ui3d.js';
+import PermissionsPanel from '../components/PermissionsPanel.jsx';
+import SafetyLists from '../components/SafetyLists.jsx';
+import HistoryPanel from '../components/HistoryPanel.jsx';
+import HighlightsRow from '../components/HighlightsRow.jsx';
 import { PRESETS, getActiveColors, getCustomColors, saveColors, resetColors, worstContrast, autoText } from '../colors.js';
 
 function Appearance() {
@@ -196,8 +200,8 @@ function BioAI() {
   );
 }
 
-export default function Settings({ onBack }) {
-  const { clearSession } = useAuth();
+export default function Settings({ onBack, onOpenProfile }) {
+  const { user, clearSession, logout } = useAuth();
   const [setup, setSetup] = useState(null);
   const [totpCode, setTotpCode] = useState('');
   const [status, setStatus] = useState('');
@@ -258,13 +262,28 @@ export default function Settings({ onBack }) {
 
   return (
     <div>
-      <button className="btn-ghost" style={{ marginBottom: 16 }} onClick={onBack}>← Back to profile</button>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+        <button className="btn-ghost" onClick={onBack}>← Back to profile</button>
+        <button className="btn-ghost settings-logout" onClick={logout}>⏻ Log out</button>
+      </div>
       <h2 className="page-title">Account Settings</h2>
       {status && <div className="request-banner" style={{ marginBottom: 16 }}>{status}</div>}
       {error && <div className="error-banner">{error}</div>}
 
+      <div className="glass-card" style={{ padding: 20, marginBottom: 20 }}>
+        <div style={{ fontFamily: 'var(--font-display)', fontSize: 16, marginBottom: 4 }}>Phone permissions</div>
+        <p style={{ fontSize: 13, color: 'var(--text-mid)', marginBottom: 14 }}>Notifications, microphone, camera, location and more. Tap Allow to get the phone's own permission box.</p>
+        <PermissionsPanel />
+      </div>
       <Appearance />
       <AccountPrivacy />
+      <SafetyLists onOpenProfile={onOpenProfile} />
+      <div className="glass-card" style={{ padding: 20, marginBottom: 20 }} data-testid="highlights-card">
+        <div style={{ fontFamily: 'var(--font-display)', fontSize: 16, marginBottom: 4 }}>Story highlights</div>
+        <p style={{ fontSize: 13, color: 'var(--text-mid)', marginBottom: 4 }}>Keep your best stories on your profile after the 24 hours are up. Tap ＋ to make one, or ✎ to rename, add or remove stories, change the cover, or delete it.</p>
+        <HighlightsRow username={user.username} isSelf />
+      </div>
+      <HistoryPanel />
       <OnlineStatus />
 
       <div className="glass-card" style={{ padding: 20, marginBottom: 20 }}>

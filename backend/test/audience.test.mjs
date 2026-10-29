@@ -9,7 +9,7 @@ process.env.NEXA_DB_PATH = path.join(os.tmpdir(), `nexa-audience-test-${process.
 process.env.PORT = '0';
 
 const { default: db } = await import('../src/db.js');
-const { canViewPost, VISIBLE_SQL } = await import('../src/routes/posts.js');
+const { canViewPost, VISIBLE_SQL, visibleParams } = await import('../src/routes/posts.js');
 const presence = await import('../src/presence.js');
 const bcrypt = (await import('bcryptjs')).default;
 
@@ -39,7 +39,7 @@ test('followers-only post: visible to author and followers, hidden from everyone
 });
 
 test('SQL filter used by For You / hashtags matches canViewPost', () => {
-  const ids = (viewer) => db.prepare(`SELECT p.id FROM posts p WHERE ${VISIBLE_SQL} ORDER BY p.id`).all(viewer, viewer).map(r => r.id);
+  const ids = (viewer) => db.prepare(`SELECT p.id FROM posts p WHERE ${VISIBLE_SQL} ORDER BY p.id`).all(...visibleParams(viewer)).map(r => r.id);
   assert.deepEqual(ids(stranger), ['old', 'pub']);
   assert.deepEqual(ids(fan), ['fol', 'old', 'pub']);
   assert.deepEqual(ids(author), ['fol', 'old', 'pub']);

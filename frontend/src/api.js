@@ -132,6 +132,7 @@ export const api = {
   me: () => request('/auth/me'),
 
   getUser: (username) => request(`/users/${username}`),
+  userPosts: (username, cursor) => request(`/users/${encodeURIComponent(username)}/posts${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`),
   updateMe: (payload) => request('/users/me', { method: 'PATCH', body: payload }),
   follow: (username) => request(`/users/${username}/follow`, { method: 'POST' }),
   unfollow: (username) => request(`/users/${username}/follow`, { method: 'DELETE' }),
@@ -147,13 +148,17 @@ export const api = {
 
   createPost: (payload) => request('/posts', { method: 'POST', body: payload }),
   // `edits` is only sent when given, so a caption-only edit never touches video settings.
+  deletePost: (id) => request(`/posts/${id}`, { method: 'DELETE' }),
   editPost: (id, caption, edits, audience) => request(`/posts/${id}`, { method: 'PATCH', body: { ...(caption !== undefined ? { caption } : {}), ...(edits ? { edits } : {}), ...(audience ? { audience } : {}) } }),
   setShowOnline: (showOnline) => request('/users/me/presence', { method: 'PATCH', body: { showOnline } }),
   // Post with a photo or video from the device (gallery, camera, downloaded file).
   uploadPost: (file, caption, edits, audience) => requestForm('/posts/upload', mediaForm(file, { caption: caption || '', audience: audience || 'public' }, edits)),
   replacePostMedia: (id, file, edits) => requestForm(`/posts/${id}/media`, mediaForm(file, {}, edits)),
+  post: (id) => request(`/posts/${encodeURIComponent(id)}`),
   like: (id) => request(`/posts/${id}/like`, { method: 'POST' }),
   unlike: (id) => request(`/posts/${id}/like`, { method: 'DELETE' }),
+  reactPost: (id, emoji) => request(`/posts/${id}/react`, { method: 'POST', body: { emoji } }),
+  unreactPost: (id) => request(`/posts/${id}/react`, { method: 'DELETE' }),
   getComments: (id) => request(`/posts/${id}/comments`),
   addComment: (id, text, parentCommentId) => request(`/posts/${id}/comments`, { method: 'POST', body: { text, parentCommentId } }),
   editComment: (postId, commentId, text) => request(`/posts/${postId}/comments/${commentId}`, { method: 'PATCH', body: { text } }),
@@ -166,7 +171,11 @@ export const api = {
 
   conversations: () => request('/messages/conversations'),
   conversationMessages: (id) => request(`/messages/conversations/${id}/messages`),
+  markConversationRead: (id) => request(`/messages/conversations/${id}/read`, { method: 'POST' }),
   sendMessage: (payload) => request('/messages/send', { method: 'POST', body: payload }),
+  callIce: () => request('/calls/ice'),
+  selfChat: () => request('/messages/self', { method: 'POST' }),
+  shareItem: (kind, id, toUsernames, text) => request('/messages/share', { method: 'POST', body: { kind, id, toUsernames, text } }),
   // Photo / video attachment (≤500MB). payload = { conversationId | toUsername }.
   sendMessageMedia: (file, payload, text, onProgress) => {
     const form = new FormData();
@@ -191,7 +200,8 @@ export const api = {
 
   notesFeed: () => request('/notes/feed'),
   noteMoods: () => request('/notes/moods'),
-  noteSongs: () => request('/notes/songs'),
+  // Empty term => trending chart; otherwise search by song name, lyrics line, artist or movie.
+  noteSongs: (term, language) => request(`/notes/songs?term=${encodeURIComponent(term || '')}&language=${encodeURIComponent(language || 'tamil')}`),
   createNote: (payload) => request('/notes', { method: 'POST', body: payload }),
   editNote: (payload) => request('/notes/mine', { method: 'PATCH', body: payload }),
   deleteMyNote: () => request('/notes/mine', { method: 'DELETE' }),
@@ -208,6 +218,7 @@ export const api = {
   storyViewers: (id) => request(`/stories/${id}/viewers`),
   deleteStory: (id) => request(`/stories/${id}`, { method: 'DELETE' }),
 
+  reel: (id) => request(`/reels/${encodeURIComponent(id)}`),
   reelsFeed: (cursor) => request(`/reels/feed${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`),
   createReel: (payload) => request('/reels', { method: 'POST', body: payload }),
   // Real device upload — gallery, camera roll, or a downloaded file — as opposed to
@@ -238,6 +249,18 @@ export const api = {
   unrestrict: (username) => request(`/users/${username}/restrict`, { method: 'DELETE' }),
   block: (username) => request(`/users/${username}/block`, { method: 'POST' }),
   unblock: (username) => request(`/users/${username}/block`, { method: 'DELETE' }),
+  // Settings lists (always my own): who I have blocked / muted / restricted.
+  blockedUsers: () => request('/users/me/blocked'),
+  mutedUsers: () => request('/users/me/muted'),
+  restrictedUsers: () => request('/users/me/restricted'),
+
+  // Story highlights + story archive.
+  storyArchive: () => request('/highlights/archive'),
+  userHighlights: (username) => request(`/highlights/user/${encodeURIComponent(username)}`),
+  getHighlight: (id) => request(`/highlights/${id}`),
+  createHighlight: (payload) => request('/highlights', { method: 'POST', body: payload }),
+  editHighlight: (id, payload) => request(`/highlights/${id}`, { method: 'PATCH', body: payload }),
+  deleteHighlight: (id) => request(`/highlights/${id}`, { method: 'DELETE' }),
 
   savePost: (id) => request(`/posts/${id}/save`, { method: 'POST' }),
   unsavePost: (id) => request(`/posts/${id}/save`, { method: 'DELETE' }),
@@ -276,6 +299,13 @@ export const api = {
   unpinMessage: (id) => request(`/messages/${id}/pin`, { method: 'DELETE' }),
   pinnedMessages: (conversationId) => request(`/messages/conversations/${conversationId}/pinned`),
   forwardMessage: (id, payload) => request(`/messages/${id}/forward`, { method: 'POST', body: payload }),
+  hideMessage: (id) => request(`/messages/${id}/hide`, { method: 'POST' }),
+  muteChat: (id) => request(`/messages/conversations/${id}/mute`, { method: 'POST' }),
+  unmuteChat: (id) => request(`/messages/conversations/${id}/mute`, { method: 'DELETE' }),
+  deleteChat: (id) => request(`/messages/conversations/${id}/delete`, { method: 'POST' }),
+  renameGroup: (id, name) => request(`/messages/conversations/${id}`, { method: 'PATCH', body: { name } }),
+  addGroupMembers: (id, usernames) => request(`/messages/conversations/${id}/members`, { method: 'POST', body: { usernames } }),
+  removeGroupMember: (id, username) => request(`/messages/conversations/${id}/members/${encodeURIComponent(username)}`, { method: 'DELETE' }),
   createGroup: (name, usernames) => request('/messages/conversations/group', { method: 'POST', body: { name, usernames } }),
   getChatTheme: () => request('/messages/theme'),
   setChatTheme: (theme) => request('/messages/theme', { method: 'POST', body: { theme } }),

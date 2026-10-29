@@ -122,12 +122,20 @@ const MEDIA_MIME = {
   'video/mp4': { ext: '.mp4', kind: 'video' },
   'video/webm': { ext: '.webm', kind: 'video' },
   'video/quicktime': { ext: '.mov', kind: 'video' },
+  // Voice notes (chat only: the posts/stories/reels routes never allow the 'audio' kind)
+  'audio/webm': { ext: '.weba', kind: 'audio' },
+  'audio/ogg': { ext: '.ogg', kind: 'audio' },
+  'audio/mp4': { ext: '.m4a', kind: 'audio' },
+  'audio/mpeg': { ext: '.mp3', kind: 'audio' },
+  'audio/wav': { ext: '.wav', kind: 'audio' },
 };
 // Downloaded files frequently arrive as application/octet-stream or with an empty type, so
 // fall back to the extension; the magic-byte sniff below still decides what's really inside.
 const EXT_TO_INFO = Object.fromEntries(Object.values(MEDIA_MIME).map(i => [i.ext, i]));
 EXT_TO_INFO['.jpeg'] = EXT_TO_INFO['.jpg'];
-const mediaInfoFor = (file) => MEDIA_MIME[file.mimetype] || EXT_TO_INFO[path.extname(file.originalname || '').toLowerCase()] || null;
+EXT_TO_INFO['.aac'] = EXT_TO_INFO['.m4a'];
+const baseMime = (m) => String(m || '').split(';')[0].trim().toLowerCase();
+const mediaInfoFor = (file) => MEDIA_MIME[baseMime(file.mimetype)] || EXT_TO_INFO[path.extname(file.originalname || '').toLowerCase()] || null;
 export const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 // Public deployments need a ceiling (disk / database space, abuse). Default 100MB; override with
 // MAX_VIDEO_MB (0 = unlimited, only sensible on your own hardware). Reels keep their own 50MB cap.
@@ -136,6 +144,8 @@ export const MAX_VIDEO_BYTES = _mv > 0 ? _mv * 1024 * 1024 : null;
 export const MAX_REEL_VIDEO_BYTES = 50 * 1024 * 1024;
 // Chat attachments: photos and videos up to 500MB each.
 export const MAX_MESSAGE_MEDIA_BYTES = 500 * 1024 * 1024;
+// Voice notes are short; keep them small.
+export const MAX_VOICE_NOTE_BYTES = 25 * 1024 * 1024;
 // Stories have no playback-length cap either (null = unlimited).
 export const MAX_STORY_VIDEO_SECONDS = null;
 
@@ -152,7 +162,11 @@ export function sniffMediaKind(filePath) {
     if (buf[0] === 0x89 && ascii(1, 4) === 'PNG') return 'image';
     if (ascii(0, 3) === 'GIF') return 'image';
     if (ascii(0, 4) === 'RIFF' && ascii(8, 12) === 'WEBP') return 'image';
-    if (ascii(4, 8) === 'ftyp') return 'video'; // mp4 / mov
+    if (ascii(0, 4) === 'OggS') return 'audio';
+    if (ascii(0, 3) === 'ID3') return 'audio'; // mp3 with tag
+    if (ascii(0, 4) === 'RIFF' && ascii(8, 12) === 'WAVE') return 'audio';
+    if (buf[0] === 0xff && (buf[1] & 0xe0) === 0xe0) return 'audio'; // bare mp3/aac frame
+    if (ascii(4, 8) === 'ftyp') return 'video'; // mp4 / mov (also m4a: same container)
     if (buf[0] === 0x1a && buf[1] === 0x45 && buf[2] === 0xdf && buf[3] === 0xa3) return 'video'; // webm/mkv
     return null;
   } catch {
@@ -164,7 +178,7 @@ export function sniffMediaKind(filePath) {
 
 /**
  * Express middleware factory. `subdir` is the folder under /uploads, `allow` is the set of
- * accepted kinds (['image','video'] or ['video']). On success sets
+ * accepted kinds (['image','video'], ['video'] or, for chat, also 'audio' voice notes). On success sets
  *   req.media = { url, kind, filePath, bytes }
  * and leaves any other multipart text fields (caption, edits, audience…) on req.body.
  */
@@ -187,7 +201,7 @@ export function mediaMiddleware(subdir, allow = ['image', 'video'], { maxVideoBy
   }).single('media');
 
   const fail = (res, code, message) => res.status(400).json({ error: { code, message } });
-  const allowedLabel = allow.length === 2 ? 'a photo (.jpg/.png/.webp/.gif) or video (.mp4/.webm/.mov)' : 'a video (.mp4/.webm/.mov)';
+  const allowedLabel = (allow.length >= 2 ? 'a photo (.jpg/.png/.webp/.gif) or video (.mp4/.webm/.mov)' : 'a video (.mp4/.webm/.mov)') + (allow.includes('audio') ? ' or a voice note' : '');
 
   return (req, res, next) => uploader(req, res, (err) => {
     if (err) {
@@ -198,9 +212,10 @@ export function mediaMiddleware(subdir, allow = ['image', 'video'], { maxVideoBy
     if (!req.file) return fail(res, 'NO_FILE', 'Choose a file to upload.');
     const claimed = mediaInfoFor(req.file).kind;
     const real = sniffMediaKind(req.file.path);
-    if (real !== claimed) {
+    const sameKind = real === claimed || (claimed === 'audio' && real === 'video'); // webm/mp4 containers are shared
+    if (!sameKind) {
       fs.unlink(req.file.path, () => {});
-      return fail(res, 'INVALID_MEDIA', "That file doesn't look like a real photo or video.");
+      return fail(res, 'INVALID_MEDIA', "That file doesn't look like a real photo, video or voice note.");
     }
     if (claimed === 'image' && req.file.size > maxImageBytes) {
       fs.unlink(req.file.path, () => {});

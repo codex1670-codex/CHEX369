@@ -1,3 +1,150 @@
+# Compact home composer and Game Store join (v66)
+
+- Home: the post box is collapsed into a **＋ Post** button; tap it to open the composer (a Close button collapses it again, and it closes after posting).
+- Game Store → Discover: the "Have a room code?" box is now a **🔑 Join** button at the start of the category row; tap it to show the room-code field.
+
+# Unread badges in Messages (v65)
+
+- Each chat in the Messages list now shows a count badge for messages you haven't opened yet (99+ cap; grey when the chat is muted). The chat's name and preview turn bold while it has unread messages.
+- Backend: `GET /messages/conversations` returns `unreadCount` per chat (other people's visible messages newer than your last read). New `POST /messages/conversations/:id/read` marks a chat read.
+- The badge clears as soon as you open the chat, and stays at zero while a new message arrives in the chat you have open.
+- Test: `backend/test/unreadBadges.test.mjs`.
+
+# Unreleased — Codex questions, search shortcuts, white & gold default
+
+- **Default theme is white & gold** (light). Dark (navy & gold) is unchanged and still saved if chosen. New "White gold" colour preset.
+- **Codex follows the theme**: its mini box, reply card and panel use theme colours instead of a fixed dark box.
+- **`search <userid>`** opens that profile (exact username or your nickname); other text opens the Search screen. Previously the word "search" matched the Google app alias and opened Google.
+- **`search reel`** opens Reels; **`search reel <words>`** plays the best matching reel (blocked/private users excluded). Search page has All / People / Reels chips.
+- **Questions go to Google in any language** (`what is…`, `python enna`, `kya hai…`, `என்ன…`, `qué es…`, `open <unknown>`): new `ask_google` action, opened in a new tab (falls back to the same tab if blocked). Small talk ("how are you", "what's up") is answered, not searched.
+- Test change: "what time is it" now opens Google instead of being ignored.
+
+# Changes in v57
+
+## Added
+- **Delete a post.** Your own posts now have a ⋯ menu (Edit · Save · Share · Delete). Delete asks first, then removes the
+  post for everyone — feed, profile, saved lists, shared cards — and deletes its photo/video file. Others see Report instead.
+- **Long-press a chat in Messages** (right-click on desktop, ⋯ on hover): **Delete chat · Mute · Block · Restrict**.
+  - *Delete chat* clears it for you only; the other person keeps theirs and it returns if either of you writes again.
+  - *Mute* silences alerts for that chat only (messages still arrive). *Restrict* silences that person's chat alerts.
+  - *Block* now also closes the existing chat for both people (before, a blocked person could keep messaging an old chat).
+    The chat shows "You blocked …" with an Unblock button.
+- **Message menu.** Long-press (or right-click) any message: react, Copy, Pin, Edit (yours), **Delete for me**, **Unsend** (yours).
+  Unsend and edits now also update live for the other person.
+- **Group chats.** "New group" in Messages (pick 2+ people, optional name). Group rows show stacked avatars; messages show who
+  sent them. Group info: rename, add people, remove people (admins), mute, leave. If the last admin leaves, the next member is
+  promoted. Groups hold up to 50 people. Delete chat in a group means leave.
+
+## Changed — phone layout
+- Posts are edge-to-edge like Instagram with one ⋯ button; Save moved next to like/comment/share.
+- Buttons no longer break into one letter per line; the composer, tabs and rows wrap cleanly; no sideways scrolling on any page
+  from 320px to 430px wide. Buttons are flat and borders thin on phones. Profile header is compact.
+- Chat opens full screen; the floating Ask bar is hidden inside a chat and no longer covers the end of long pages.
+
+## Fixed
+- After a long-press, the next normal tap on the same item was swallowed.
+
+## Database
+- Upgrades itself on first start (adds `muted` / `cleared_at` to chat members and a `message_hidden` table). Nothing is lost.
+
+# Changes in v56
+
+## Changed
+- **Login / sign-up:** field hints are now plain words (Username, Password, Email, Display name) instead of sample values,
+  and the "Demo accounts" line is gone.
+
+## Fixed — voice & video calls now really work between two phones
+- The call screen was never connected to the live connection (so nothing rang), the caller never learned its call id,
+  network candidates that arrived early were thrown away, and the video elements did not exist when the streams arrived.
+  All rewritten: the call screen now ringtones, asks for microphone/camera first, connects phone-to-phone (same wifi works
+  directly), shows a full-screen video call with a small self-view, mute / camera-off / end buttons and a timer.
+- Cancelling or missing a call now closes the other person's ringing screen; calls from your own notes chat are refused.
+- `GET /api/calls/ice` serves the connection helpers. For calls across different networks / mobile data, set `TURN_URL`
+  (and `TURN_USERNAME`, `TURN_CREDENTIAL`) on the server.
+- Note: browsers only allow camera/microphone on **https** (or localhost) — the deployed https site is fine; plain
+  `http://192.168.x.x` addresses are blocked by the phone's browser.
+
+# Changes in v55
+
+## Added
+- **Profile posts as a grid.** Posts (and saved posts) show as a 3-column grid of square thumbnails — photo, video (▶ badge)
+  or the caption for text posts. Tap a tile to open the full post (like, comment, react, share) in a popup.
+- **Note → Open conversation** now opens the chat with the person who posted the note (their existing conversation if you
+  already have one, otherwise a new chat). The same applies to people you pick from the Messages search.
+- **Self chat.** A pinned "You" row at the top of Messages opens a private chat with yourself (notes, links, shared reels).
+  Backend: `POST /api/messages/self`; messaging your own username now opens it instead of failing.
+- **Share posts and reels.** New ↗ Share button on every post and reel. It lists the people you follow and who follow you
+  (plus yourself), has search (also finds anyone else), supports picking several people and an optional message, and sends a
+  tappable card into each chat. Tapping the card opens the post (popup) or the reel. Backend: `POST /api/messages/share`,
+  `messages.shared_kind/shared_id` columns. People you haven't chatted with get it as a message request (text only).
+- **Reels: press and hold** anywhere on a reel (or right-click on desktop) opens its comments.
+- Tests: 4 backend + 3 frontend.
+
+# Changes in v50
+
+## Added: safety lists, story highlights and history in Settings
+- **Settings → Blocked, muted & restricted.** Three tabs listing everyone you've limited, with a one-tap Unblock / Unmute /
+  Unrestrict. Muted and restricted people also have a View button. Lists are always your own — nobody can see who limited them.
+  API: `GET /api/users/me/blocked | muted | restricted`.
+- **Settings → Story highlights.** Create, rename, add/remove stories, pick a cover, or delete highlights. Highlights stay on your
+  profile after the 24 hours are up; deleting a highlight never deletes the stories. Highlights show on every profile and respect
+  each story's audience (everyone / followers / close friends), blocks and private accounts.
+  API: `/api/highlights` (`GET /archive`, `GET /user/:username`, `GET /:id`, `POST /`, `PATCH /:id`, `DELETE /:id`).
+- **Settings → History** (private to you): story archive (expired stories are kept for you), reels watched / liked / saved / posted, and call log.
+- **Profile menu (•••) now remembers.** Mute / Restrict show the saved state (Unmute / Unrestrict) when you reopen a profile, with a
+  Muted / Restricted tag. Block asks first, then shows an Undo screen with a link to Settings. Profiles now return `isMuted`,
+  `isRestricted`, `isCloseFriend` (only ever about *your own* choices).
+- **Muting someone now also hides their stories** from your story tray (it already hid their posts and notes).
+- New DB tables `story_highlights`, `story_highlight_items` (created automatically on boot). Files: `routes/highlights.js`,
+  `components/SafetyLists.jsx`, `HighlightsRow.jsx`, `HighlightEditor.jsx`, `HistoryPanel.jsx`.
+- Tests: `backend/test/safetyHighlights.test.mjs`, `frontend/test/safety.test.jsx`.
+
+# Changes in v44
+
+## Added
+- **Live camera in Messages.** The ＋ → Camera button now opens a full-screen live camera inside CHEX instead of the phone's
+  camera app. Choose Photo or Video, tap the round button (video: tap to start, tap again to stop, up to 10:00), flip front/back
+  camera, then Retake or Use. The result lands in the message box like any attachment, with an optional caption, and sends as usual.
+  If the browser can't open a live camera (no https, camera blocked) it offers the phone camera app instead.
+  Files: `components/CameraCapture.jsx`, `pages/Messages.jsx`.
+- Server note: video recordings arrive as `video/webm;codecs=...`; the upload check already ignores the codec part (v42).
+
+# Changes in v43
+
+## Added / fixed: screen fit on phone and desktop
+- **Phone menu is now a horizontal bar at the bottom** (Home, Search, Reels, Messages, Alerts, Games, Profile, with unread badges).
+  The old side rail and floating ＋ menu are hidden on phones, every page gets full width, and content has room above the
+  bar so no page or button is covered. It respects the phone's bottom safe area.
+- **Messages on phone:** the list shows alone; tapping a person opens the chat **full screen** (list, notes and menu bar hidden)
+  with a ← button back to the list. The keyboard now resizes the page so the message box is never hidden behind it.
+- **Desktop:** the menu rail sits at the left edge and pages use the whole screen (content up to 1180px, Messages full width)
+  instead of a narrow centered column. Message bubbles are wider and wrap long words.
+- Phones: inputs use 16px text (no zoom-on-focus), bigger tap targets, wrapping profile header, chess/board grid shrinks to fit narrow screens.
+- Settings has a **Log out** button (the rail's Log out is not visible on phones).
+- Pages use dynamic viewport height so mobile browser bars don't cut the page.
+
+# Changes in v42
+
+## Added
+- **Voice notes in Messages.** When the message box is empty the send button becomes a 🎤. Tap it to record
+  (timer + delete + send, auto-sends at 5:00, cancelled if you leave the chat). Voice notes show a play/pause
+  bubble with progress and length, only one plays at a time, and chat previews say "🎤 Voice note".
+  Files: `components/VoiceRecorder.jsx`, `components/VoiceNotePlayer.jsx`, `pages/Messages.jsx`.
+- Server: `/messages/send-media` now also accepts audio (webm/ogg/m4a/mp3/wav, max 25 MB, header-checked),
+  stores its length in a new `messages.media_seconds` column (added automatically). Posts, stories and reels still refuse audio.
+- Like photos and videos, a first voice note to someone who hasn't accepted you yet is blocked until they accept.
+
+# Changes in v41
+
+## Added
+- **Phone permissions.** A first-run sheet (after the splash) asks for notifications, microphone, camera, location,
+  clipboard and persistent storage, with an "Allow all" button. The same list lives in **Settings -> Phone permissions**
+  with live status (Allowed / Blocked / Not asked) and help for re-enabling blocked ones. Replaces the old
+  notifications-only prompt. Files: `src/permissions.js`, `components/PermissionsPanel.jsx`, `components/PermissionsPrompt.jsx`.
+- Gallery needs no permission on the web: the upload buttons open the phone gallery/camera directly.
+- Server `Permissions-Policy` now allows geolocation and clipboard for the app itself (was blocking location).
+- Note: a web app cannot open the phone dialer permission or contact list; CHEX calls run in-app on mic + camera.
+
 # Changes in v40
 
 ## Added
@@ -38,3 +185,13 @@
 - 24 browser games (Card, Racing, Arcade, Puzzle, Party, Two Player — 4 each), 1P/vs-CPU and 2-player modes.
 - Online Reversi (server engine with automatic pass handling).
 - Tests: 7 new backend tests (61 total) and 50 frontend tests (logic + smoke test of every game/mode).
+
+## Royal Gold look (all pages + games)
+- New `frontend/src/royal.css` (loaded last): navy backgrounds, royal-blue banners, glossy gold frames/buttons, gold game-icon tiles.
+- Violet accents recoloured to royal blue across styles.css, mobile.css and every game file; navy default dark colours + "Royal gold" preset in colors.js.
+- Devices with a saved custom colour scheme keep it: Settings → Appearance → "Royal gold" (or reset) to adopt the new navy.
+
+## App catalog — "open <app>" opens the phone app (v63)
+- `backend/src/appCatalog.js`: 130+ apps (social, streaming, Google, shopping, UPI, travel, AI, games) seeded on every boot with Android package + iOS scheme + website. Previously the catalog table was never filled, so "open <app>" had nothing to resolve.
+- `frontend/src/appLauncher.js`: Android opens the installed app by package (Chrome intent) and lands on a Google search if it isn't installed; iPhone tries the URL scheme then falls back to Google; computers open the website (or Google).
+- Apps not in the list also go to Google. "open youtube and search X" opens the app on that search where the app supports it.

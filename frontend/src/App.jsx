@@ -21,7 +21,7 @@ import { tiltMove, tiltLeave } from './ui3d.js';
 import { connectSocket, disconnectSocket, getSocket } from './socket.js';
 import { setCodexContext } from './codexContext.js';
 import { announcementForBatch, notifyOnce, alertsEnabled, setAlertsEnabled } from './announce.js';
-import PushPrompt from './components/PushPrompt.jsx';
+import PermissionsPrompt from './components/PermissionsPrompt.jsx';
 import { syncPushIfAllowed } from './push.js';
 
 const NAV = [
@@ -45,6 +45,8 @@ export default function App() {
   const [gamesTab, setGamesTab] = useState(null); // 'discover' | 'friends' | 'mine' | 'tournaments' | null
   const [messageStart, setMessageStart] = useState(null);
   const [searchQuery, setSearchQuery] = useState(null);
+  const [searchScope, setSearchScope] = useState(null); // 'reels' when opened by "search reel …"
+  const [startReelId, setStartReelId] = useState(null); // reel opened from Search
   const [counts, setCounts] = useState({ messages: 0, other: 0 });
   const [aiAlerts, setAiAlerts] = useState(alertsEnabled());
   useEffect(() => {
@@ -154,6 +156,7 @@ export default function App() {
 
   const navigate = (key, param) => {
     historyRef.current.push({ route, profileUsername, profileView, gamesTab });
+    const reelId = typeof param === 'object' ? param?.reelId : undefined;
     if (historyRef.current.length > 30) historyRef.current.shift();
     const username = typeof param === 'string' ? param : param?.username;
     const query = typeof param === 'object' ? param?.query : undefined;
@@ -173,7 +176,9 @@ export default function App() {
     if (key === 'profile') { setProfileUsername(username || user.username); setProfileView(['saved-posts', 'saved-reels', 'reels-history', 'profile-studio'].includes(view) ? view : null); }
     if (key === 'games') setGamesTab(tab && ['discover', '2players', 'friends', 'mine', 'tournaments'].includes(tab) ? tab : null);
     if (key === 'messages') setMessageStart(username || null);
+    if (key === 'search') setSearchScope(typeof param === 'object' && param?.scope === 'reels' ? 'reels' : null);
     if (key === 'search' && query) setSearchQuery(query);
+    if (key === 'reels') setStartReelId(reelId || null);
     setRoute(key);
     // Baseline context reset on navigation — the destination page's own effect will
     // shortly enrich this with real content (current reel/profile/conversation) once
@@ -236,17 +241,27 @@ export default function App() {
         </div>
         , document.body)}
         <div style={{ flex: 1 }} />
-        <div className="rail-user"><Avatar user={user} size={32} fullscreenOnClick online /></div>
+        <button type="button" className="rail-user rail-user-btn" onClick={() => navigate('profile', user.username)} aria-label="Open my profile" title="My profile"><Avatar user={user} size={32} online /></button>
         <button className="rail-item" onClick={logout} aria-label="Log out"><span className="pill">⏻</span><span className="rail-label">Log out</span></button>
+      </nav>
+
+      <nav className="nav-bar-mobile" aria-label="Main navigation (phone)">
+        {NAV.map((n) => (
+          <button key={n.key} type="button" className={route === n.key ? 'active' : ''} aria-label={n.label} aria-current={route === n.key ? 'page' : undefined}
+            onClick={() => navigate(n.key, n.key === 'profile' ? user.username : undefined)}>
+            <span className="nb-ico" aria-hidden>{n.icon}{badgeFor(n.key) > 0 && <span className="count-badge nb-badge">{fmtCount(badgeFor(n.key))}</span>}</span>
+            <span className="nb-lbl">{n.key === 'notifications' ? 'Alerts' : n.label}</span>
+          </button>
+        ))}
       </nav>
 
       <main className={`main-col ${route === 'messages' ? 'fixed-page' : ''}`} onTouchStart={onSwipeStart} onTouchEnd={onSwipeEnd}>
         {route === 'feed' && <Feed onOpenProfile={(u) => navigate('profile', u)} />}
-        {route === 'search' && <Search onOpenProfile={(u) => navigate('profile', u)} initialQuery={searchQuery} onConsumeQuery={() => setSearchQuery(null)} />}
-        {route === 'reels' && <Reels />}
+        {route === 'search' && <Search onOpenProfile={(u) => navigate('profile', u)} onOpenReel={(id) => navigate('reels', { reelId: id })} initialQuery={searchQuery} initialScope={searchScope} onConsumeQuery={() => setSearchQuery(null)} />}
+        {route === 'reels' && <Reels startReelId={startReelId} onConsumeStart={() => setStartReelId(null)} />}
         {route === 'notifications' && <Notifications onOpenProfile={(u) => navigate('profile', u)} />}
         {route === 'games' && <Games initialTab={gamesTab} onConsumeInitialTab={() => setGamesTab(null)} initialJoinCode={joinCode} onConsumeJoinCode={() => setJoinCode(null)} />}
-        {route === 'settings' && <Settings onBack={() => navigate('profile', user.username)} />}
+        {route === 'settings' && <Settings onBack={() => navigate('profile', user.username)} onOpenProfile={(u) => navigate('profile', u)} />}
         {route === 'profile' && (
           <Profile
             username={profileUsername || user.username}
@@ -258,14 +273,14 @@ export default function App() {
           />
         )}
         {route === 'messages' && (
-          <Messages startWithUsername={messageStart} onConsumeStart={() => setMessageStart(null)} />
+          <Messages startWithUsername={messageStart} onConsumeStart={() => setMessageStart(null)} onOpenReel={(id) => navigate('reels', { reelId: id })} />
         )}
       </main>
 
       <Codex navigate={navigate} goBack={goBack} currentUser={user} />
       <CallLayer />
       <InstallBanner />
-      <PushPrompt />
+      <PermissionsPrompt />
     </div>
     </PresenceProvider>
   );

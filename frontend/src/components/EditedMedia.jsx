@@ -90,6 +90,14 @@ export default function EditedMedia({
     v.playbackRate = speed;
     if (start > 0 && v.currentTime < start) v.currentTime = start;
     if (v.videoWidth) setNatural({ w: v.videoWidth, h: v.videoHeight });
+    // Clips recorded in the browser (live camera) are webm files that report an infinite length until
+    // the end is seeked to; do that once so trimming and progress work, then go back to the start.
+    if (v.duration === Infinity) {
+      const settle = () => { v.removeEventListener('timeupdate', settle); v.currentTime = start || 0; onDuration?.(v.duration); };
+      v.addEventListener('timeupdate', settle);
+      v.currentTime = 1e101;
+      return;
+    }
     onDuration?.(v.duration);
   };
   const onTimeUpdate = (ev) => {

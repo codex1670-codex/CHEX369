@@ -4,6 +4,7 @@ import { api } from '../api.js';
 import { requestStartCall } from '../callBus.js';
 import { getCodexContext } from '../codexContext.js';
 import { applyTheme } from '../theme.js';
+import { launchApp, openExternal } from '../appLauncher.js';
 import { scanControls, pressControl, typeInto, scrollPage, scrollToControl, settle, sleep } from '../uiControls.js';
 
 const MAX_STEPS = 8;
@@ -45,7 +46,10 @@ const HELP = `I can help with things CHEX's backend actually supports right now:
 • "open the game store" / "show my tournaments" / "show my games" — jumps to that Game Store tab
 • "turn on dark mode" / "turn on light mode"
 • "call rahul" / "video call rahul" — starts a real call if you already have a conversation with them
-• "open spotify" / "open youtube and search AI tutorials" — opens the real web app in a new tab
+• "search rahul" — opens that person's profile · "search reel" — opens Reels · "search reel cats" — plays the best matching reel
+• "what is gravity" / "python enna" / "kya hai AI" — any question, in any language, opens in Google
+• "open whatsapp" / "open youtube and search AI tutorials" — opens the app installed on your phone;
+  if it isn't installed I search Google for it (100+ apps: social, music, shopping, UPI, games…)
 • "save rahul as bestie" — a private nickname only you can see; once saved, an AI-configured
   Codex can use it anywhere you'd type a username (e.g. "message bestie", "who is bestie")
 • "comment: nice one!" / "unlike this" / "unsave this" / "mark notifications read"
@@ -277,14 +281,37 @@ async function runCommand(raw, { navigate, currentUser }) {
     }
   }
 
+  // Search shortcuts: "search reel" -> Reels, "search reel cats" -> reels about cats, "search rahul" -> rahul's profile.
+  m = lower.match(/^(?:search|find)\s+reels?(?:\s+(.+))?$/);
+  if (m) {
+    return m[1]
+      ? { ok: true, text: `Searching reels for "${m[1]}".`, navigate: () => navigate('search', { query: m[1], scope: 'reels' }) }
+      : { ok: true, text: 'Opening Reels.', navigate: () => navigate('reels') };
+  }
+  m = lower.match(/^(?:search|find)\s+@?([\w.'-]+)$/);
+  if (m) {
+    const who = m[1];
+    try {
+      const r = await api.search(who);
+      const hit = (r.users || []).find(u => u.username.toLowerCase() === who);
+      if (hit) return { ok: true, text: `Opening @${hit.username}'s profile.`, navigate: () => navigate('profile', hit.username) };
+    } catch { /* fall through to the Search screen */ }
+    return { ok: true, text: `Searching for "${who}".`, navigate: () => navigate('search', { query: who }) };
+  }
+  // Questions in any language go to Google (the server does this too; this is the offline safety net).
+  if (/^(what|whats|what's|why|how|when|where|which|explain|define)\b/i.test(lower) || /(?:^|\s)(?:enna|ennanu|kya|kaise|kyun|enti|enthu)\s*\??$/i.test(lower) || /[?？؟]\s*$/.test(lower) || /[\u0B80-\u0BFF\u0900-\u097F\u0C00-\u0C7F\u0C80-\u0CFF\u0D00-\u0D7F]/.test(lower) && /(என்ன|क्या|ఏమిటి|ಏನು|എന്ത്)/.test(lower)) {
+    const q = text.replace(/\s+/g, ' ').trim().slice(0, 300);
+    openExternal(`https://www.google.com/search?q=${encodeURIComponent(q)}`);
+    return { ok: true, text: `Opening Google for "${q}"…` };
+  }
+
   m = lower.match(/^open\s+([a-z0-9 ]+?)(?:\s+and\s+search\s+(.+))?$/);
   if (m) {
     const [, appQuery, searchFor] = m;
     try {
       const res = await api.resolveApp(appQuery.trim(), searchFor);
       if (!res.resolved) return { ok: false, text: res.message };
-      if (!res.launchable) return { ok: false, text: res.message };
-      window.open(res.url, '_blank', 'noopener');
+      if (res.launch) launchApp(res.launch); else window.open(res.url, '_blank', 'noopener');
       return { ok: true, text: `Opening ${res.app.displayName}${searchFor ? ` and searching "${searchFor}"` : ''}…` };
     } catch (err) {
       return { ok: false, text: `Couldn't resolve that app: ${err.message}` };
@@ -470,7 +497,8 @@ export default function Codex({ navigate, goBack, currentUser }) {
         if (abortRef.current) { say('Stopped.'); return; }
         if (item.kind === 'navigate') { navigate(item.screen, item); await settle(); }
         else if (item.kind === 'theme') applyTheme(item.theme, true);
-        else if (item.kind === 'openUrl') window.open(item.url, '_blank', 'noopener');
+        else if (item.kind === 'openApp') launchApp(item.app);
+        else if (item.kind === 'openUrl') openExternal(item.url);
         else if (item.kind === 'startCall') requestStartCall(item.conversationId, item.type);
         else if (item.kind === 'ui') { if (!(await runUiStep(item.step))) return; }
       }
@@ -506,7 +534,8 @@ export default function Codex({ navigate, goBack, currentUser }) {
     if (res.message) { setLog(l => [...l, { who: 'codex', text: res.message }]); speak(res.message); }
     if (res.sequence) { runSequence(res.sequence); return; }
     if (res.navigate) navigate(res.navigate.screen, res.navigate);
-    if (res.openUrl) window.open(res.openUrl, '_blank', 'noopener');
+    if (res.openApp) launchApp(res.openApp);
+    else if (res.openUrl) openExternal(res.openUrl);
     if (res.startCall) requestStartCall(res.startCall.conversationId, res.startCall.type);
     if (res.setTheme) applyTheme(res.setTheme, true);
   };
@@ -812,7 +841,7 @@ export default function Codex({ navigate, goBack, currentUser }) {
           <div className="codex-panel-header">
             <span className="t">Codex</span>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              <select value={voiceLang} onChange={e => setVoiceLang(e.target.value)} style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-soft)', borderRadius: 6, color: 'var(--text-mid)', fontSize: 11 }}>
+              <select value={voiceLang} onChange={e => setVoiceLang(e.target.value)} style={{ background: 'var(--surface-hover)', border: '1px solid var(--border-soft)', borderRadius: 6, color: 'var(--text-mid)', fontSize: 11 }}>
                 <option value="auto">Auto</option>
                 <option value="en-US">EN</option>
                 <option value="en-IN">EN-IN</option>
@@ -876,7 +905,7 @@ export default function Codex({ navigate, goBack, currentUser }) {
               : 'Smart offline mode — typos, Tanglish & many languages OK. Add ANTHROPIC_API_KEY for free-form AI.'}
           </div>
           <form className="codex-input-row" onSubmit={submit}>
-            <button type="button" onClick={toggleListening} disabled={!!pending || !!uiPrompt} style={{ background: listening ? 'var(--pink)' : 'transparent', border: '1px solid var(--border-soft)', borderRadius: '50%', width: 34, height: 34, color: 'white', cursor: 'pointer', flexShrink: 0 }}>
+            <button type="button" onClick={toggleListening} disabled={!!pending || !!uiPrompt} style={{ background: listening ? 'var(--pink)' : 'transparent', border: '1px solid var(--border-soft)', borderRadius: '50%', width: 34, height: 34, color: 'var(--text-hi)', cursor: 'pointer', flexShrink: 0 }}>
               {listening ? '⏹' : '🎙'}
             </button>
             <input placeholder={pending || uiPrompt ? 'Answer above first…' : agentRunning ? 'Working…' : listening ? 'Listening…' : 'Tell Codex what to do…'} value={listening && interim ? interim : input} onChange={e => setInput(e.target.value)} disabled={!!pending || !!uiPrompt || agentRunning} />

@@ -1,10 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { api } from '../api.js';
 import PostCard from '../components/PostCard.jsx';
 import Avatar from '../components/Avatar.jsx';
 import { useAuth } from '../AuthContext.jsx';
 import StoriesBar from '../components/StoriesBar.jsx';
 import MediaPicker from '../components/MediaPicker.jsx';
+import CameraCapture, { cameraSupported } from '../components/CameraCapture.jsx';
+import { defaultEdits, fileKind, MAX_IMAGE_BYTES, MAX_VIDEO_BYTES } from '../editSettings.js';
 
 export default function Feed({ onOpenProfile }) {
   const { user } = useAuth();
@@ -18,6 +21,21 @@ export default function Feed({ onOpenProfile }) {
   const [media, setMedia] = useState(null);       // { file, kind, edits, … } from MediaPicker
   const [showMedia, setShowMedia] = useState(false);
   const [audience, setAudience] = useState('public'); // 'public' | 'followers'
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const [composerOpen, setComposerOpen] = useState(false); // the composer is collapsed into a ＋ Post button until opened
+  const camInputRef = useRef(null);
+
+  // Live camera: take a photo or record a video, then it's attached to the post like any picked file.
+  const useCapturedFile = (file) => {
+    setCameraOpen(false);
+    const kind = file && fileKind(file);
+    if (!kind) return;
+    if (kind === 'image' && file.size > MAX_IMAGE_BYTES) { setError(`That photo is too large — photos must be under ${MAX_IMAGE_BYTES / 1048576}MB.`); return; }
+    if (kind === 'video' && file.size > MAX_VIDEO_BYTES) { setError(`That video is too large — videos must be under ${Math.round(MAX_VIDEO_BYTES / 1048576)}MB.`); return; }
+    setError(''); setShowMedia(true);
+    setMedia({ file, originalFile: file, kind, edits: kind === 'video' ? defaultEdits() : null, duration: 0 });
+  };
+  const openCamera = () => { if (cameraSupported()) setCameraOpen(true); else camInputRef.current?.click(); };
 
   const load = async (reset = true) => {
     const fetcher = tab === 'following' ? api.feedFollowing : api.feedForYou;
@@ -40,6 +58,7 @@ export default function Feed({ onOpenProfile }) {
       setCaption('');
       setMedia(null);
       setShowMedia(false);
+      setComposerOpen(false);
       if (tab === 'following') setPosts(p => [res.post, ...(p || [])]);
     } catch (err) {
       setError(err.message);
@@ -56,7 +75,13 @@ export default function Feed({ onOpenProfile }) {
         <button className={tab === 'foryou' ? 'active' : ''} onClick={() => setTab('foryou')}>For You</button>
       </div>
 
-      <form className="glass-card composer" onSubmit={submitPost}>
+      {!composerOpen && (
+        <button type="button" className="btn-primary composer-toggle" onClick={() => setComposerOpen(true)} aria-expanded="false" aria-label="Write a new post">
+          <span aria-hidden="true">＋</span> Post
+        </button>
+      )}
+
+      {composerOpen && <form className="glass-card composer" onSubmit={submitPost}>
         <div style={{ display: 'flex', gap: 10 }}>
           <Avatar user={user} size={38} />
           <textarea
@@ -85,13 +110,19 @@ export default function Feed({ onOpenProfile }) {
           {audience === 'public' ? 'Anyone on CHEX can see this post.' : 'Only people who follow you can see this post.'}
         </div>
         <div className="composer-footer">
-          {!showMedia && <button type="button" className="btn-ghost" onClick={() => setShowMedia(true)}>📷 Photo / video</button>}
+          {!media && <button type="button" className="btn-ghost" disabled={posting} onClick={openCamera} aria-label="Open camera to take a photo or video">📷 Camera</button>}
+          {!showMedia && <button type="button" className="btn-ghost" onClick={() => setShowMedia(true)}>🖼️ Photo / video</button>}
           {showMedia && !media && <button type="button" className="btn-ghost" onClick={() => setShowMedia(false)}>Cancel media</button>}
+          <button type="button" className="btn-ghost" disabled={posting} onClick={() => setComposerOpen(false)} aria-label="Close composer">Close</button>
           <button className="btn-primary" style={{ width: 'auto', padding: '9px 20px' }} disabled={posting || (!caption.trim() && !media)}>
             {posting ? (media ? 'Uploading…' : 'Posting…') : 'Post'}
           </button>
         </div>
-      </form>
+        {cameraOpen && createPortal(
+          <CameraCapture onCapture={useCapturedFile} onClose={() => setCameraOpen(false)} onFallback={() => { setCameraOpen(false); camInputRef.current?.click(); }} />,
+          document.body)}
+        <input ref={camInputRef} type="file" accept="image/*,video/*" capture="environment" hidden onChange={e => { useCapturedFile(e.target.files?.[0]); e.target.value = ''; }} />
+      </form>}
 
       {posts === null && <div className="empty-state"><span className="loading-dot" /> Loading feed…</div>}
 
@@ -102,7 +133,7 @@ export default function Feed({ onOpenProfile }) {
         </div>
       )}
 
-      {posts?.map(p => <PostCard key={p.id} post={p} onOpenProfile={onOpenProfile} />)}
+      {posts?.map(p => <PostCard key={p.id} post={p} onOpenProfile={onOpenProfile} onDeleted={(id) => setPosts(list => (list || []).filter(x => x.id !== id))} />)}
 
       {cursor && posts?.length > 0 && (
         <div style={{ textAlign: 'center' }}>

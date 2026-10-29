@@ -4,13 +4,17 @@ import App from './App.jsx';
 import AppBackground from './components/AppBackground.jsx';
 import { AuthProvider } from './AuthContext.jsx';
 import './styles.css';
+import './mobile.css';
+import './royal.css';
 import { getStoredTheme, applyTheme } from './theme.js';
 import { apply3D } from './ui3d.js';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
+import { initKeyboardAware } from './keyboard.js';
 
 // Applied before first paint so there's no flash of the wrong theme.
 applyTheme(getStoredTheme());
 apply3D();
+initKeyboardAware();
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>

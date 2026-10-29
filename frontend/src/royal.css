@@ -1,0 +1,170 @@
+/* ───────────────────────── Royal Gold look ─────────────────────────
+   Deep navy backgrounds, royal-blue banners, glossy gold frames and gold buttons,
+   matching the "Play Smart, Earn Big!" reference. Loaded LAST so it layers over
+   styles.css / mobile.css. Every colour is a token so it can be tuned in one place. */
+
+:root {
+  --gold-1: #fff3a0;
+  --gold-2: #ffd23f;
+  --gold-3: #ffb300;
+  --gold-4: #ff8f00;
+  --gold-ink: #2a1500;          /* dark brown letters that sit on gold */
+  --royal: #3f6fe0;
+  --royal-hi: #5a82ea;
+  --royal-deep: #27439a;
+  --gold-grad: linear-gradient(180deg, #fff08a 0%, #ffcf24 45%, #ff9d00 100%);
+  --gold-frame: linear-gradient(135deg, #fff7b0, #ffc400 40%, #ff9100 70%, #ffe55c);
+  --banner-grad: linear-gradient(180deg, var(--royal-hi), #3b5fc9);
+  --edge-gold: #a55a00;
+}
+
+/* ---- background: soft gold glow top, royal glow bottom ---- */
+.app-bg::before {
+  content: ''; position: absolute; inset: 0;
+  background:
+    radial-gradient(ellipse 720px 420px at 50% -8%, rgba(255, 196, 0, .14), transparent 65%),
+    radial-gradient(ellipse 620px 620px at 100% 100%, rgba(63, 111, 224, .30), transparent 60%);
+}
+
+/* ---- page titles become royal-blue banners with a gold lip ---- */
+body .page-title, body .main-col > .page-title, body .main-col > h1, body .main-col > h2 {
+  background: var(--banner-grad); color: #fff;
+  text-align: center; padding: 12px 18px;
+  border-radius: 0 0 22px 22px; border: 2px solid rgba(255, 214, 64, .75); border-top: 0;
+  box-shadow: 0 6px 18px rgba(20, 40, 120, .45);
+  text-shadow: 0 2px 0 rgba(0, 0, 0, .25);
+}
+
+/* ---- cards: gold-tinted edge everywhere, full glossy frame on feature cards ---- */
+.glass-card { border-color: rgba(255, 196, 0, .5); box-shadow: 0 2px 0 rgba(0, 0, 0, .18), 0 0 14px rgba(255, 196, 0, .08); }
+.gm-listing, .gm-frame, .auth-card {
+  border: 3px solid transparent;
+  background: linear-gradient(var(--surface), var(--surface)) padding-box, var(--gold-frame) border-box;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .3), 0 0 18px rgba(255, 196, 0, .18);
+}
+
+/* ---- primary buttons: glossy gold, dark letters ---- */
+body .btn-primary, body .feed-tabs button.active, body .gm-btn.primary {
+  background: var(--gold-grad); border: 2px solid #fff3a0; color: var(--gold-ink) !important;
+  box-shadow: 0 3px 0 var(--edge-gold), inset 0 1px 0 rgba(255, 255, 255, .6);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, .35);
+}
+body .btn-primary:hover:not(:disabled), body .gm-btn.primary:hover:not(:disabled) { background: var(--gold-grad); filter: brightness(1.07); opacity: 1; }
+:root[data-3d="on"] body .btn-primary, :root[data-3d="on"] .btn-primary {
+  background: var(--gold-grad);
+  box-shadow: 0 5px 0 var(--edge-gold), 0 12px 20px rgba(255, 160, 0, .35), inset 0 1px 0 rgba(255, 255, 255, .6);
+}
+:root[data-3d="on"] .btn-primary:hover:not(:disabled) { background: var(--gold-grad); box-shadow: 0 7px 0 var(--edge-gold), 0 16px 26px rgba(255, 160, 0, .45), inset 0 1px 0 rgba(255, 255, 255, .7); }
+:root[data-3d="on"] .btn-primary:active:not(:disabled) { box-shadow: 0 1px 0 var(--edge-gold), 0 3px 8px rgba(255, 160, 0, .35); }
+:root[data-3d="on"] .btn-primary:disabled { box-shadow: 0 3px 0 var(--edge-gold); }
+:root[data-3d="on"] .feed-tabs button.active { background: var(--gold-grad); box-shadow: 0 3px 0 var(--edge-gold); }
+:root[data-3d="on"] .rail-fab { background: var(--gold-grad); color: var(--gold-ink); box-shadow: 0 6px 0 var(--edge-gold), 0 14px 24px rgba(255, 160, 0, .45), inset 0 2px 0 rgba(255, 255, 255, .6); }
+:root[data-3d="on"] .rail-fab:hover { box-shadow: 0 8px 0 var(--edge-gold), 0 18px 30px rgba(255, 160, 0, .5), inset 0 2px 0 rgba(255, 255, 255, .6); }
+:root[data-3d="on"] .rail-fab:active { box-shadow: 0 1px 0 var(--edge-gold), 0 4px 10px rgba(255, 160, 0, .4); }
+
+/* secondary buttons: royal blue when selected, gold hairline otherwise */
+.btn-ghost, .gm-btn { border-color: rgba(255, 196, 0, .55); }
+.btn-ghost.sel, .gm-btn.on { background: var(--royal); border-color: var(--gold-2); color: #fff; }
+:root[data-3d="on"] .btn-ghost.sel { background: linear-gradient(180deg, var(--royal-hi), var(--royal)); }
+
+/* ---- inputs ---- */
+input:focus, textarea:focus, select:focus, .gm-input:focus, .field input:focus, .field textarea:focus {
+  border-color: var(--gold-3); box-shadow: 0 0 0 3px rgba(255, 196, 0, .25); outline: none;
+}
+
+/* ---- navigation ---- */
+.nav-rail { background: linear-gradient(180deg, var(--bg-deep), #0a1030); border-right: 2px solid rgba(255, 196, 0, .45); }
+.nexa-wordmark { background: var(--gold-grad); -webkit-background-clip: text; background-clip: text; color: transparent !important; }
+.nav-link.active { background: var(--gold-grad); color: var(--gold-ink); box-shadow: 0 3px 0 var(--edge-gold); }
+.nav-bar-mobile { background: rgba(8, 12, 40, .96); border-top: 2px solid rgba(255, 196, 0, .55); }
+.nav-bar-mobile button.active { color: var(--gold-2); text-shadow: 0 0 10px rgba(255, 196, 0, .65); }
+:root[data-3d="on"] .rail-fab-menu button.active { background: var(--gold-grad); color: var(--gold-ink); box-shadow: 0 5px 0 var(--edge-gold), 0 12px 22px rgba(255, 160, 0, .45), inset 0 1px 0 rgba(255, 255, 255, .6); }
+
+/* ═════════════ Games ═════════════ */
+/* category ribbons (like the REWARDS plate) */
+.gm-cat-title {
+  display: inline-block; background: var(--banner-grad); color: #fff; font-size: 13px;
+  padding: 7px 18px; border-radius: 12px; border: 2px solid var(--gold-2);
+  box-shadow: 0 3px 0 rgba(0, 0, 0, .3), 0 0 14px rgba(255, 196, 0, .25);
+}
+.gm-chipbtn { border-color: rgba(255, 196, 0, .6); }
+.gm-chipbtn:hover { background: var(--gold-grad); color: var(--gold-ink); border-color: #fff3a0; }
+
+/* game icon = glossy gold tile, like the "Play with friends" / trophy tiles */
+.gm-listing-icon {
+  width: 58px; height: 58px; display: flex; align-items: center; justify-content: center;
+  border-radius: 16px; border: 3px solid var(--gold-2);
+  background: radial-gradient(circle at 50% 30%, #fff3a0 0%, #ffc21a 55%, #ff9100 100%);
+  box-shadow: 0 4px 0 var(--edge-gold), 0 0 16px rgba(255, 196, 0, .45), inset 0 1px 0 rgba(255, 255, 255, .7);
+}
+
+/* in-game header banner */
+.gm-head { background: var(--banner-grad); border: 2px solid var(--gold-2); border-radius: 16px; padding: 10px 14px; box-shadow: 0 4px 0 rgba(0, 0, 0, .25); }
+.gm-head .gm-title { color: #fff; text-shadow: 0 2px 0 rgba(0, 0, 0, .25); }
+.gm-head .gm-sub { color: #dfe8ff; }
+.gm-head .btn-ghost { background: rgba(255, 255, 255, .18); color: #fff; border-color: rgba(255, 255, 255, .55); }
+
+.gm-canvas { border: 3px solid var(--gold-3); box-shadow: 0 0 18px rgba(255, 196, 0, .25), 0 6px 14px rgba(0, 0, 0, .35); background: #0c1238; }
+.gm-stat { border-color: rgba(255, 196, 0, .6); background: linear-gradient(180deg, var(--surface-hover), var(--surface)); }
+.gm-stat b { color: var(--gold-2); text-shadow: 0 1px 0 rgba(0, 0, 0, .3); }
+:root[data-theme="light"] .gm-stat b { color: #b36b00; text-shadow: none; }
+
+.gm-tap { background: var(--banner-grad); border-color: var(--gold-2); color: #fff; }
+.gm-tap.alt { background: var(--gold-grad); border-color: #fff3a0; color: var(--gold-ink); }
+.gm-tile.slide { background: linear-gradient(180deg, var(--royal-hi), var(--royal)); border: 2px solid var(--gold-2); }
+.gm-tile.slide.ok { background: var(--gold-grad); color: var(--gold-ink); }
+.gm-mem { border-color: var(--gold-3); }
+.gm-mem.done { background: rgba(255, 196, 0, .2); border-color: var(--gold-2); }
+.gm-card.hl { box-shadow: 0 0 0 3px var(--gold-2), 0 0 14px rgba(255, 196, 0, .6); }
+.gm-ttt, .gm-lo { border-color: rgba(255, 196, 0, .55); }
+.gm-ttt.win { background: rgba(255, 196, 0, .22); border-color: var(--gold-2); }
+.gm-grid.c4 { border: 2px solid var(--gold-3); }
+.gm-opt.right { background: rgba(255, 196, 0, .25); border-color: var(--gold-2); }
+.gm-chip.on { border-color: var(--gold-2); background: rgba(255, 196, 0, .2); }
+.gm-code { border-color: var(--gold-2); background: rgba(255, 196, 0, .12); color: var(--gold-2); }
+:root[data-theme="light"] .gm-code { color: #b36b00; }
+
+.gm-overlay { background: radial-gradient(circle at 50% 30%, rgba(40, 70, 170, .92), rgba(6, 10, 36, .95)); }
+.gm-overlay-title { color: var(--gold-2); text-shadow: 0 3px 0 rgba(0, 0, 0, .45), 0 0 18px rgba(255, 196, 0, .55); font-size: 28px; }
+.gm-overlay-sub { color: #e6edff; }
+.gm-countdown { color: var(--gold-2); text-shadow: 0 4px 0 #a55a00, 0 0 28px rgba(255, 196, 0, .7); }
+
+/* ---- other shared surfaces ---- */
+.error-banner { border-color: #ff5c93; }
+.dot { background: var(--gold-3); }
+
+@media (prefers-reduced-motion: reduce) {
+  body .btn-primary, .gm-chipbtn { transition: none; }
+}
+
+
+/* ═════════════ White & gold (the default light theme) ═════════════
+   Same gold language as the dark royal look, but on white: gold banners with dark-brown letters,
+   white bars with a gold edge, gold selection chips. Dark mode above is untouched. */
+:root[data-theme="light"] {
+  --banner-grad: linear-gradient(180deg, #ffe58a, #ffc83a);
+  --royal: #c99700; --royal-hi: #e3b400; --royal-deep: #8a6200;
+}
+:root[data-theme="light"] .app-bg::before {
+  background:
+    radial-gradient(ellipse 720px 420px at 50% -8%, rgba(255, 196, 0, .22), transparent 65%),
+    radial-gradient(ellipse 620px 620px at 100% 100%, rgba(255, 214, 90, .28), transparent 60%);
+}
+:root[data-theme="light"] body .page-title, :root[data-theme="light"] body .main-col > .page-title,
+:root[data-theme="light"] body .main-col > h1, :root[data-theme="light"] body .main-col > h2 {
+  color: var(--gold-ink); text-shadow: none; box-shadow: 0 6px 16px rgba(190, 140, 0, .25);
+}
+:root[data-theme="light"] .gm-cat-title, :root[data-theme="light"] .gm-head .gm-title, :root[data-theme="light"] .gm-tap { color: var(--gold-ink); text-shadow: none; }
+:root[data-theme="light"] .gm-head .gm-sub { color: #6b4e00; }
+:root[data-theme="light"] .gm-head .btn-ghost { background: rgba(255, 255, 255, .55); color: var(--gold-ink); border-color: rgba(120, 80, 0, .45); }
+:root[data-theme="light"] .btn-ghost.sel, :root[data-theme="light"] .gm-btn.on { background: var(--gold-grad); border-color: #fff3a0; color: var(--gold-ink); }
+:root[data-theme="light"] .nav-rail { background: linear-gradient(180deg, #ffffff, #fff3c4); }
+:root[data-theme="light"] .nav-bar-mobile { background: rgba(255, 253, 246, .97); }
+:root[data-theme="light"] .nav-bar-mobile button.active { color: #a66a00; text-shadow: none; }
+
+/* ---- Codex (the assistant box) follows the active theme: white & gold by default, navy & gold in dark ---- */
+.codex-mini, .codex-mini-reply { border: 2px solid rgba(255, 196, 0, .6); color: var(--text-hi); }
+.codex-panel { color: var(--text-hi); }
+.codex-mini-msg { color: var(--text-hi); }
+.codex-panel-header button, .codex-mini-x { color: var(--text-mid); }
+.codex-mini select, .codex-panel select { color-scheme: light dark; }

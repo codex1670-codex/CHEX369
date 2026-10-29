@@ -2,7 +2,7 @@ import { Router } from 'express';
 import fs from 'fs';
 import path from 'path';
 import { nicknameForProfile, setNicknameForProfile, deleteNicknamesForProfile } from '../nicknames.js';
-import db from '../db.js';
+import db, { toPublicUser, USER_MEDIA_COLUMNS_SQL } from '../db.js';
 import { isConnected } from '../presence.js';
 import { requireAuth, optionalAuth } from '../middleware/auth.js';
 import { v4 as uuid } from 'uuid';
@@ -49,12 +49,22 @@ function canSeeConnections(owner, viewerId) {
   return !!db.prepare('SELECT 1 FROM follows WHERE follower_id = ? AND followed_id = ?').get(owner.id, viewerId);
 }
 
+// Content (posts, reels) of a private account is hidden from everyone except the owner and the
+// people the owner follows — the same rule as the followers/following lists above.
+function canViewAccountContent(ownerId, viewerId) {
+  const owner = db.prepare('SELECT id, is_private FROM users WHERE id = ?').get(ownerId);
+  return !owner || canSeeConnections(owner, viewerId);
+}
+// SQL twin of the above for list queries: `col` is the owner-id column; binds (viewerId, viewerId).
+const PRIVATE_OK_SQL = (col) => `(${col} = ? OR ${col} NOT IN (SELECT id FROM users WHERE is_private = 1) OR EXISTS (SELECT 1 FROM follows pf WHERE pf.follower_id = ${col} AND pf.followed_id = ?))`;
+
 function profileFor(user, viewerId) {
   const followerCount = db.prepare('SELECT COUNT(*) c FROM follows WHERE followed_id = ?').get(user.id).c;
   const followingCount = db.prepare('SELECT COUNT(*) c FROM follows WHERE follower_id = ?').get(user.id).c;
   const postCount = db.prepare('SELECT COUNT(*) c FROM posts WHERE user_id = ? AND deleted_at IS NULL').get(user.id).c;
   const isFollowing = viewerId ? !!db.prepare('SELECT 1 FROM follows WHERE follower_id = ? AND followed_id = ?').get(viewerId, user.id) : false;
   const isSelf = viewerId === user.id;
+  const rel = (sql) => (viewerId && !isSelf ? !!db.prepare(sql).get(viewerId, user.id) : false);
   return {
     id: user.id,
     username: user.username,
@@ -69,8 +79,13 @@ function profileFor(user, viewerId) {
     studio: parseStudio(user.profile_studio),
     followerCount, followingCount, postCount,
     isFollowing, isSelf,
+    // What the viewer has done to this person (never exposed the other way round).
+    isMuted: rel('SELECT 1 FROM mutes WHERE muter_id = ? AND muted_id = ?'),
+    isRestricted: rel('SELECT 1 FROM restricts WHERE owner_id = ? AND restricted_id = ?'),
+    isCloseFriend: rel('SELECT 1 FROM close_friends WHERE owner_id = ? AND friend_id = ?'),
     isPrivate: !!user.is_private,
     canSeeConnections: canSeeConnections(user, viewerId),
+    canSeePosts: canSeeConnections(user, viewerId),
     // Section 190 — Nickname: a private label only the viewer sees, never returned when
     // viewing your own profile (isSelf) since it wouldn't mean anything there.
     nickname: nicknameFor(viewerId, user.id),
@@ -327,6 +342,23 @@ router.delete('/:username/follow', requireAuth, (req, res) => {
   res.json({ user: profileFor(updated, req.userId) });
 });
 
+// A person's posts for their profile page. Private accounts: 403 unless you're the owner or
+// someone the owner follows. Followers-only posts are still limited to followers.
+router.get('/:username/posts', optionalAuth, async (req, res) => {
+  const target = db.prepare('SELECT * FROM users WHERE username = ?').get(req.params.username);
+  if (!target || target.account_status !== 'active') return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'User not found.' } });
+  if (req.userId && isBlocked(req.userId, target.id)) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'User not found.' } });
+  if (!canSeeConnections(target, req.userId)) return res.status(403).json({ error: { code: 'PRIVATE_ACCOUNT', message: 'This account is private. Their posts are hidden.' } });
+  const { postDTO, VISIBLE_SQL, visibleParams } = await import('./posts.js');
+  const cursor = req.query.cursor || '9999-12-31T23:59:59.999Z';
+  const rows = db.prepare(`
+    SELECT p.* FROM posts p WHERE p.user_id = ? AND p.deleted_at IS NULL AND p.created_at < ? AND ${VISIBLE_SQL}
+    ORDER BY p.created_at DESC LIMIT 31
+  `).all(target.id, cursor, ...visibleParams(req.userId));
+  const page = rows.slice(0, 30);
+  res.json({ posts: page.map(r => postDTO(r, req.userId)), nextCursor: rows.length > 30 ? page[page.length - 1].created_at : null });
+});
+
 router.get('/:username/followers', optionalAuth, (req, res) => {
   const target = db.prepare('SELECT * FROM users WHERE username = ?').get(req.params.username);
   if (!target) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'User not found.' } });
@@ -360,6 +392,22 @@ router.get('/', requireAuth, (req, res) => {
   `).all(`%${q}%`, `%${q}%`, req.userId);
   res.json({ users: list.map(u => profileFor(u, req.userId)) });
 });
+
+// Settings lists: everyone I have blocked / muted / restricted, newest first. Always scoped to the
+// signed-in user, so nobody can ever read who has blocked, muted or restricted them.
+function relationList(table, ownerCol, targetCol) {
+  return (req, res) => {
+    const rows = db.prepare(`
+      SELECT u.id, u.username, u.display_name, u.avatar_color, ${USER_MEDIA_COLUMNS_SQL.split(', ').map(c => 'u.' + c).join(', ')}, r.created_at AS since
+      FROM ${table} r JOIN users u ON u.id = r.${targetCol}
+      WHERE r.${ownerCol} = ? ORDER BY r.created_at DESC
+    `).all(req.userId);
+    res.json({ users: rows.map(r => ({ ...toPublicUser(r), since: r.since })) });
+  };
+}
+router.get('/me/blocked', requireAuth, relationList('blocks', 'blocker_id', 'blocked_id'));
+router.get('/me/muted', requireAuth, relationList('mutes', 'muter_id', 'muted_id'));
+router.get('/me/restricted', requireAuth, relationList('restricts', 'owner_id', 'restricted_id'));
 
 router.get('/me/close-friends', requireAuth, (req, res) => {
   const list = db.prepare(`
@@ -439,5 +487,5 @@ function isMuted(muterId, mutedId) {
   return !!db.prepare('SELECT 1 FROM mutes WHERE muter_id = ? AND muted_id = ?').get(muterId, mutedId);
 }
 
-export { profileFor, isBlocked, isRestricted, isMuted };
+export { profileFor, isBlocked, isRestricted, isMuted, canViewAccountContent, PRIVATE_OK_SQL };
 export default router;
