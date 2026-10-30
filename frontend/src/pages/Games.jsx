@@ -61,7 +61,7 @@ function ConnectFourBoard({ room, myId, onMove }) {
   const myTurn = turn === myId && !room.state.winner;
   const COLS = 7, ROWS = 6;
   return (
-    <div style={{ display: 'inline-grid', gridTemplateColumns: `repeat(${COLS}, 36px)`, gap: 4, background: 'rgba(124,92,255,0.12)', padding: 8, borderRadius: 12 }}>
+    <div style={{ display: 'inline-grid', gridTemplateColumns: `repeat(${COLS}, 36px)`, gap: 4, background: 'rgba(63,111,224,0.12)', padding: 8, borderRadius: 12 }}>
       {Array.from({ length: ROWS * COLS }).map((_, i) => {
         const col = i % COLS;
         const cell = board[i];
@@ -104,7 +104,7 @@ function CheckersBoard({ room, myId, onMove }) {
         return (
           <div key={i} onClick={() => dark && handleClick(i)}
             style={{
-              width: 40, height: 40, background: dark ? (selected === i ? 'rgba(124,92,255,0.35)' : 'rgba(255,255,255,0.05)') : 'transparent',
+              width: 40, height: 40, background: dark ? (selected === i ? 'rgba(63,111,224,0.35)' : 'rgba(255,255,255,0.05)') : 'transparent',
               display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: dark && myTurn ? 'pointer' : 'default',
             }}>
             {cell && (
@@ -160,7 +160,7 @@ function ChessBoard({ room, myId, onMove }) {
           const piece = board[i];
           const row = Math.floor(d / 8), col = d % 8;
           const dark = (row + col) % 2 === 1;
-          const bg = i === selected ? 'rgba(124,92,255,0.55)' : i === kingInCheckIdx ? 'rgba(255,92,147,0.55)' : dark ? 'rgba(255,255,255,0.09)' : 'rgba(255,255,255,0.02)';
+          const bg = i === selected ? 'rgba(63,111,224,0.55)' : i === kingInCheckIdx ? 'rgba(255,92,147,0.55)' : dark ? 'rgba(255,255,255,0.09)' : 'rgba(255,255,255,0.02)';
           return (
             <div key={d} onClick={() => handleClick(d)}
               style={{ width: 44, height: 44, background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 30, lineHeight: 1, cursor: myTurn ? 'pointer' : 'default', userSelect: 'none' }}>
@@ -456,6 +456,7 @@ export default function Games({ initialTab, onConsumeInitialTab, initialJoinCode
   const [myRooms, setMyRooms] = useState(null);
   const [friendsRooms, setFriendsRooms] = useState(null);
   const [joinCode, setJoinCode] = useState('');
+  const [joinOpen, setJoinOpen] = useState(false); // room-code box is collapsed into a Join button
   const [error, setError] = useState('');
   const [room, setRoom] = useState(null);
   const [tournament, setTournament] = useState(null);
@@ -560,22 +561,25 @@ export default function Games({ initialTab, onConsumeInitialTab, initialJoinCode
 
       {tab === 'discover' && (
         <>
-          <form className="glass-card" style={{ padding: 20, marginBottom: 16 }} onSubmit={join}>
-            <div style={{ fontSize: 13.5, marginBottom: 10, color: 'var(--text-mid)' }}>Have a room code?</div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <input value={joinCode} onChange={e => setJoinCode(e.target.value)} placeholder="e.g. XYZ123"
-                style={{ flex: 1, minWidth: 0, background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border-soft)', borderRadius: 10, padding: '9px 12px', color: 'var(--text-hi)', outline: 'none', fontSize: 14, textTransform: 'uppercase' }} />
-              <button className="btn-primary" style={{ width: 'auto', padding: '9px 18px' }} type="submit">Join</button>
-            </div>
-            {error && <div className="error-banner" style={{ marginTop: 10 }}>{error}</div>}
-          </form>
-
-          {loadError && <div className="error-banner" style={{ marginBottom: 12 }}>{loadError}</div>}
-          <div className="gm-cats">
+          <div className="gm-cats gm-topbar">
+            <button type="button" className="btn-primary gm-join-toggle" aria-expanded={joinOpen} onClick={() => setJoinOpen(o => !o)}>🔑 Join</button>
             {['Online', ...LOCAL_CATEGORIES].map(cat => (
               <button key={cat} type="button" className="gm-chipbtn" onClick={() => document.getElementById(`cat-${cat}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>{cat}</button>
             ))}
           </div>
+
+          {joinOpen && (
+            <form className="glass-card" style={{ padding: 14, margin: '8px 0 12px' }} onSubmit={join}>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input autoFocus value={joinCode} onChange={e => setJoinCode(e.target.value)} placeholder="Room code, e.g. XYZ123" aria-label="Room code"
+                  style={{ flex: 1, minWidth: 0, background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border-soft)', borderRadius: 10, padding: '9px 12px', color: 'var(--text-hi)', outline: 'none', fontSize: 14, textTransform: 'uppercase' }} />
+                <button className="btn-primary" style={{ width: 'auto', padding: '9px 18px' }} type="submit">Join</button>
+              </div>
+            </form>
+          )}
+          {error && <div className="error-banner" style={{ margin: '8px 0 12px' }}>{error}</div>}
+
+          {loadError && <div className="error-banner" style={{ marginBottom: 12 }}>{loadError}</div>}
 
           <div id="cat-Online" className="gm-cat-title">Online · play with friends</div>
           {games === null && <div className="empty-state"><span className="loading-dot" /></div>}

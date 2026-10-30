@@ -28,7 +28,7 @@ export function canMove2048(b) {
 }
 const addTile = (b) => { const e = b.map((v, i) => (v ? -1 : i)).filter(i => i >= 0); if (!e.length) return b; const n = b.slice(); n[pick(e)] = rand() < 0.9 ? 2 : 4; return n; };
 const t2048Start = () => addTile(addTile(Array(16).fill(0)));
-const TILE_BG = { 0: 'rgba(255,255,255,.06)', 2: '#3b3358', 4: '#4a3f73', 8: '#7c5cff', 16: '#9b7dff', 32: '#b45cff', 64: '#ff5c93', 128: '#ff8a5c', 256: '#ffb84d', 512: '#e6c84d', 1024: '#26e0c9', 2048: '#5ca8ff' };
+const TILE_BG = { 0: 'rgba(255,255,255,.06)', 2: '#3b3358', 4: '#4a3f73', 8: '#3f6fe0', 16: '#6f95ff', 32: '#b45cff', 64: '#ff5c93', 128: '#ff8a5c', 256: '#ffb84d', 512: '#e6c84d', 1024: '#26e0c9', 2048: '#5ca8ff' };
 
 export function Game2048({ duel }) {
   const [g, setG] = useState(() => ({ board: t2048Start(), score: 0, over: false, won: false, keepGoing: false }));

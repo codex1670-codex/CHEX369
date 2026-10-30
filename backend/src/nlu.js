@@ -127,6 +127,18 @@ const LEX_SRC = {
   WHOIS: `whois yaar yaaru yaarunu kaun evaru yar quien quién qui wer`,
   AS: `as aaga`,
   READ: `read seen clear mark dismiss`,
+  // Question words. QUESTION only counts at the START of a sentence (English/European: "what is X");
+  // QUESTION_ANY also counts at the END ("python na enna", "gravity kya hai") and, for non-Latin
+  // scripts, anywhere in the sentence. Either way the whole question is handed to Google.
+  QUESTION: `what whats what's why how when where which explain define
+    que como cuando donde cual cuanto quoi pourquoi quand quel quelle was wie warum wann welche welcher onde qual cosa dove perche`,
+  QUESTION_ANY: `enna ennanu yenna eppadi epdi eppo yen
+    kya kyun kyu kyon kaise kab kahan kitna kitne kitni konsa kaunsa
+    enti emiti enduku ekkada enu yaake hege yelli enthu enthanu engane evide kemon keno kivabe
+    என்ன ஏன் எப்படி எங்கே எப்போது क्या क्यों कैसे कब कहाँ कहां ఏమిటి ఏంటి ఎందుకు ఎలా ఎక్కడ
+    ಏನು ಯಾಕೆ ಹೇಗೆ ಎಲ್ಲಿ എന്ത് എന്താണ് എങ്ങനെ എവിടെ কী কেন কিভাবে কোথায়
+    ما ماذا لماذا كيف أين متى 何 なぜ どうして どこ 什么 什麼 为什么 為什麼 怎么 怎麼 哪里 哪裡
+    뭐 무엇 왜 어떻게 어디 언제 что почему как где когда`,
   HELP: `help commands command udhavi madad ayuda aide hilfe`,
   THANKS: `thanks thx ty nandri nanri shukriya dhanyavad gracias merci danke grazie obrigado thankyou`,
   GREET: `hi hii hiii hey heyy hello helo hlo hola bonjour hallo ciao namaste namaskar vanakkam vanakam salaam salam yo sup
@@ -198,7 +210,7 @@ const WORDS = new Map();        // exact word -> Set(concept)
 const FUZZY_POOL = [];          // [{ word, concepts:Set }] — latin words >= 4 chars, meaningful concepts only
 const CJK_WORDS = [];           // CJK lexicon words, longest first
 
-const NO_FUZZY = new Set(['FILLER', 'FILLERW', 'TAILW', 'NEG', 'LIGHT', 'DATM', 'ACCM', 'PREPM', 'QUOTE', 'LOCM', 'CONJ', 'ME', 'YOU', 'REF', 'HIM', 'GREET', 'AS', 'STORE', 'THEME', 'READ', 'VOICE', 'THANKS', 'HELP', 'WHOIS', 'RENAME']);
+const NO_FUZZY = new Set(['QUESTION', 'QUESTION_ANY', 'FILLER', 'FILLERW', 'TAILW', 'NEG', 'LIGHT', 'DATM', 'ACCM', 'PREPM', 'QUOTE', 'LOCM', 'CONJ', 'ME', 'YOU', 'REF', 'HIM', 'GREET', 'AS', 'STORE', 'THEME', 'READ', 'VOICE', 'THANKS', 'HELP', 'WHOIS', 'RENAME']);
 
 for (const [concept, src] of Object.entries(LEX_SRC)) {
   for (const w of src.split(/\s+/).filter(Boolean)) {
@@ -367,7 +379,7 @@ function prepare(seg, env) {
   return { seg, work, toks, bag, body: body || null, hasColon, has: (k) => bag.has(k), first: (k) => bag.get(k)?.[0] };
 }
 
-const GENERIC_NAME_BLOCK = new Set(['SEND', 'MSG', 'OPEN', 'LIGHT', 'FOLLOW', 'MUTE', 'BLOCK', 'RESTRICT', 'LIKE', 'SAVE', 'SHARE', 'COMMENT', 'POST', 'NOTE', 'STORY', 'CREATE', 'REEL', 'VIDEO', 'GAME', 'PLAY', 'JOIN', 'INVITE', 'PROFILE', 'NOTIF', 'FEED', 'SEARCH', 'SETTINGS', 'HISTORY', 'CALL', 'THEME_DARK', 'THEME_LIGHT', 'THEME', 'DELETE', 'NICK', 'GREET', 'REF', 'ME', 'YOU', 'FILLER', 'DATM', 'ACCM', 'PREPM', 'QUOTE', 'LOCM', 'CONJ', 'URL', 'NUM', 'SYMBOL', 'HASHTAG', 'NEG', 'AS', 'STORE', 'THANKS', 'HELP', 'WHOIS', 'RENAME', 'READ', 'VOICE', 'FILLERW', 'TAILW', 'SAVED', 'HIM']);
+const GENERIC_NAME_BLOCK = new Set(['QUESTION', 'QUESTION_ANY', 'SEND', 'MSG', 'OPEN', 'LIGHT', 'FOLLOW', 'MUTE', 'BLOCK', 'RESTRICT', 'LIKE', 'SAVE', 'SHARE', 'COMMENT', 'POST', 'NOTE', 'STORY', 'CREATE', 'REEL', 'VIDEO', 'GAME', 'PLAY', 'JOIN', 'INVITE', 'PROFILE', 'NOTIF', 'FEED', 'SEARCH', 'SETTINGS', 'HISTORY', 'CALL', 'THEME_DARK', 'THEME_LIGHT', 'THEME', 'DELETE', 'NICK', 'GREET', 'REF', 'ME', 'YOU', 'FILLER', 'DATM', 'ACCM', 'PREPM', 'QUOTE', 'LOCM', 'CONJ', 'URL', 'NUM', 'SYMBOL', 'HASHTAG', 'NEG', 'AS', 'STORE', 'THANKS', 'HELP', 'WHOIS', 'RENAME', 'READ', 'VOICE', 'FILLERW', 'TAILW', 'SAVED', 'HIM']);
 const isNameLike = (t) => t.kinds.has('MENTION') || t.kinds.has('PERSON') || ![...t.kinds].some(k => GENERIC_NAME_BLOCK.has(k) || k.startsWith('GAMEKEY') || ['MYGAMES', 'DISCOVER', 'FRIENDS', 'TOURNAMENT', 'SAVEDPOSTS', 'SAVEDREELS', 'REELSHISTORY', 'PROFILESTUDIO'].includes(k));
 const PERSON_FIRST_VERBS = new Set(['message', 'messages', 'msg', 'msgs', 'dm', 'dms', 'text', 'tell', 'say', 'sollu', 'solu', 'sollunga', 'bol', 'bolo', 'kaho', 'bata', 'batao', 'cheppu', 'parayu', 'dis', 'dile', 'dime', 'schreib']);
 
@@ -475,6 +487,8 @@ function appMatch(P, env, used) {
       }
     }
   }
+  // The catalog lists Google under the alias "search" — but in "search rahul" that word is the COMMAND, not the app.
+  if (best && T.slice(best.from, best.to + 1).every(t => t.kinds.has('SEARCH'))) best = null;
   if (best) for (let i = best.from; i <= best.to; i++) used.add(i);
   return best;
 }
@@ -490,6 +504,8 @@ export const HELP_TEXT = `I understand typos, mixed languages (Tanglish, Hinglis
 • call rahul / video call rahul
 • play chess with priya / join game ABC123
 • open spotify / youtube la <search> / search #hashtag
+• search rahul (opens the profile) / search reel (opens Reels) / search reel cats (opens the best matching reel)
+• ask anything: what is gravity / python enna / kya hai AI — opens it in Google, in any language
 • dark mode / light mode
 • save rahul as bestie, who is bestie, show my nicknames
 Chain steps with "and": "follow priya and message her hi".`;
@@ -506,6 +522,8 @@ const SEND_TRIM = new Set(['SEND', 'MSG', 'LIGHT', 'FILLER', 'TAILW', 'QUOTE', '
 const QUERY_TRIM = new Set(['SEARCH', 'OPEN', 'PLAY', 'LIGHT', 'FILLER', 'FILLERW', 'TAILW', 'QUOTE', 'CREATE', 'DATM', 'ACCM', 'PREPM', 'LOCM', 'YOU', 'ME', 'CONJ']);
 const CREATE_TRIM = new Set(['LIGHT', 'FILLER', 'TAILW', 'QUOTE', 'CREATE', 'DATM', 'ACCM', 'PREPM', 'LOCM', 'POST', 'NOTE', 'STORY', 'COMMENT', 'SEND']);
 
+// Tidy a spoken/typed question before it goes to Google: drop polite lead-ins, collapse spaces, cap the length.
+const cleanQuestion = (q) => String(q).replace(/^\s*(?:(?:please|pls|plz|codex|nexa|hey|hi|ok|okay)[\s,]+)+/i, '').replace(/\s+/g, ' ').trim().slice(0, 300);
 const act = (name, input) => ({ kind: 'actions', actions: [{ name, input }] });
 const reply = (message, extra = {}) => ({ kind: 'reply', message, ...extra });
 const clarify = (message) => ({ kind: 'clarify', message });
@@ -514,7 +532,7 @@ const isNoise = (t) => t.kinds.size > 0 && [...t.kinds].every(k => NOISE.has(k))
 const entityText = (T, pred) => T.filter(pred).map(t => t.raw).join(' ').trim();
 const isEntity = (t) => !t.kinds.size || t.kinds.has('PERSON') || t.kinds.has('MENTION');
 
-function parseSegment(seg, env, state) {
+function parseSegmentCore(seg, env, state) {
   const P = prepare(seg, env);
   P.env = env;
   const T = P.toks;
@@ -533,6 +551,25 @@ function parseSegment(seg, env, state) {
   if (has('THANKS') && nn.length === 0) return reply("You're welcome!");
   if (has('GREET') && nn.every(t => t.kinds.has('GREET') || (!t.kinds.size && /^(there|bro|buddy|friend|everyone|all)$/.test(t.lower)))) {
     return reply('Hi! What would you like me to do? e.g. "open reels" or "send rahul hi".');
+  }
+
+  // ── 0b. small talk, then questions -> Google ──
+  if (/^(?:(?:hi+|hey+|hello|hlo|vanakkam)[\s,!]*)?(?:how\s*(?:are|r)\s*(?:you|u|ya)|how'?s\s*it\s*going|what'?s\s*up|whats\s*up|wass?up|sup|kaise\s*ho|kya\s*haal|epdi\s*(?:irukka|irukkinga|iruka|irukeenga)|enna\s*(?:panra|pandra|panreenga))\b[?!.\s]*$/i.test(seg.trim())) {
+    return reply("I'm good, thanks for asking! What would you like me to do?");
+  }
+  {
+    const qOk = (t) => !t.personExact;                                   // a real username that looks like a question word stays a username
+    const latinWord = (t) => /^[\u0000-\u024F]+$/.test(t.raw);
+    const qLead = !!lead && lead.kinds.has('QUESTION') && qOk(lead);
+    const qAny = T.filter(t => t.kinds.has('QUESTION_ANY') && qOk(t));
+    // Only exact command words count here: a topic like "python" is fuzzily close to a Hindi 'send' word, but it is not one.
+    const quiet = !['SEND', 'MSG', 'CALL'].some(k => T.some(t => t.kinds.has(k) && !t.fuzzy));
+    const qEdge = quiet && qAny.some(t => t === lead || t === trail || !latinWord(t));
+    const qAfterVerb = !!lead && (lead.kinds.has('OPEN') || lead.kinds.has('SEARCH')) && T.some(t => (t.kinds.has('QUESTION') || t.kinds.has('QUESTION_ANY')) && qOk(t));
+    if (!P.hasColon && !P.body && (qLead || qEdge || qAfterVerb)) {
+      const from = (lead.kinds.has('OPEN') || lead.kinds.has('SEARCH')) && T[lead.i + 1] ? T[lead.i + 1].start : 0;
+      return act('ask_google', { query: cleanQuestion(seg.slice(from)) });
+    }
   }
 
   // ── 1. nicknames ──
@@ -704,6 +741,11 @@ function parseSegment(seg, env, state) {
   if (has('NOTIF')) return (has('READ') || has('DELETE')) ? act('mark_notifications_read', {}) : act('navigate', { screen: 'notifications' });
 
   // ── 10. search ──
+  // "search reel" -> the Reels screen; "search reel cats" -> the best matching reel (scope 'reels').
+  if (has('SEARCH') && has('REEL') && !has('OPEN')) {
+    const q = extractBody(P, idxOf('SEARCH', 'REEL'), QUERY_TRIM);
+    return q ? act('search', { query: q, scope: 'reels' }) : act('navigate', { screen: 'reels' });
+  }
   const appUsed = new Set();
   const appHit = appMatch(P, env, appUsed);
   if (has('SEARCH') && !appHit) {
@@ -764,6 +806,14 @@ function parseSegment(seg, env, state) {
     if (!body && nn.length === 1 && (T[pr13.idx].kinds.has('PERSON') || T[pr13.idx].kinds.has('MENTION'))) { remember(pr13); return act('navigate', { screen: 'profile', username: pr13.name }); }
   }
   return NONE;
+}
+
+// A sentence that ends in a question mark and matched nothing else is still a question: ask Google.
+function parseSegment(seg, env, state) {
+  const r = parseSegmentCore(seg, env, state);
+  const t = String(seg).trim();
+  if (r.kind === 'none' && t.length > 2 && /[?？؟]\s*$/.test(t) && !/^https?:\/\//i.test(t)) return act('ask_google', { query: cleanQuestion(t) });
+  return r;
 }
 
 // ───────────────────────────── public API ─────────────────────────────

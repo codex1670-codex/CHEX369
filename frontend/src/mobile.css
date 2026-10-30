@@ -25,7 +25,7 @@
 .as-cancel { display: block; width: calc(100% - 24px); min-height: 48px; margin: 8px 12px 0; border-radius: 12px; border: 1px solid var(--border-soft, rgba(255,255,255,.18)); background: rgba(255,255,255,.05); color: inherit; font: inherit; font-size: 15px; cursor: pointer; }
 .as-emoji-row { display: flex; justify-content: space-between; gap: 4px; padding: 6px 14px 12px; }
 .as-emoji { flex: 1 1 0; min-width: 0; max-width: 52px; aspect-ratio: 1; border-radius: 50%; border: 0; background: rgba(255,255,255,.08); font-size: 22px; line-height: 1; cursor: pointer; padding: 0; }
-.as-emoji.on { background: rgba(124,92,255,.45); }
+.as-emoji.on { background: rgba(63,111,224,.45); }
 .as-emoji.more { font-size: 20px; }
 @keyframes as-up { from { transform: translateY(40px); opacity: 0; } to { transform: none; opacity: 1; } }
 @keyframes as-fade { from { opacity: 0; } to { opacity: 1; } }
@@ -52,7 +52,7 @@
 .gs-name-row, .gs-search { padding: 10px 14px 4px; flex: none; }
 .gs-name-row input, .gs-search input { width: 100%; box-sizing: border-box; }
 .gs-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 14px 2px; flex: none; max-height: 96px; overflow-y: auto; }
-.gs-chip { border: 0; border-radius: 999px; padding: 6px 10px; font: inherit; font-size: 12.5px; background: rgba(124,92,255,.35); color: inherit; cursor: pointer; white-space: nowrap; }
+.gs-chip { border: 0; border-radius: 999px; padding: 6px 10px; font: inherit; font-size: 12.5px; background: rgba(63,111,224,.35); color: inherit; cursor: pointer; white-space: nowrap; }
 .gs-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding-top: 4px; }
 .gs-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px)); }
 .gs-scroll .gs-list { flex: none; overflow: visible; }
@@ -64,12 +64,13 @@
 .gs-user { font-size: 12px; color: var(--text-lo, #a9a3c4); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .fl-row.share-row { width: 100%; box-sizing: border-box; background: none; border: 0; color: inherit; font: inherit; display: flex; align-items: center; gap: 12px; padding: 8px 14px; cursor: pointer; }
 .share-check { width: 24px; height: 24px; border-radius: 50%; border: 2px solid rgba(255,255,255,.3); display: grid; place-items: center; font-size: 13px; flex: none; }
-.share-row.on .share-check { background: #7c5cff; border-color: #7c5cff; }
+.share-row.on .share-check { background: #3f6fe0; border-color: #3f6fe0; }
 .gs-hero { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 18px 16px 8px; text-align: center; }
 .gs-hero-name { font-size: 18px; overflow-wrap: anywhere; }
 .gs-hero-sub { font-size: 12.5px; color: var(--text-lo, #a9a3c4); }
 .gs-rename { display: flex; gap: 8px; width: 100%; align-items: center; }
-.gs-rename input { flex: 1 1 auto; min-width: 0; }
+.gs-rename input { flex: 1 1 auto; min-width: 0; width: auto; direction: ltr; unicode-bidi: plaintext; text-align: left; font-size: 16px; color: var(--text-hi, #fff); }
+.gs-rename .gs-rename-save { flex: 0 0 auto; width: auto; min-width: 72px; padding: 10px 16px; }
 .gs-actions { display: flex; gap: 10px; padding: 10px 14px; }
 .gs-act { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 6px; border-radius: 12px; border: 1px solid var(--border-soft, rgba(255,255,255,.15)); background: rgba(255,255,255,.04); color: inherit; font: inherit; font-size: 12.5px; cursor: pointer; white-space: nowrap; }
 .gs-act span { font-size: 18px; }
@@ -222,4 +223,36 @@ button.chat-id { cursor: pointer; }
   /* bottom sheets / dialogs stay inside the visible area instead of being cut off by the keyboard */
   html.kb-open .as-sheet, html.kb-open .ps-sp, html.kb-open .perm-sheet { max-height: calc(var(--vvh, 100dvh) - 12px); }
   html.kb-open .gs-box { height: var(--vvh, 100dvh); }
+}
+
+/* unread badge on a chat in the Messages list */
+.convo-item .convo-unread {
+  flex: none; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: var(--pink); color: #fff;
+  font-size: 11px; font-weight: 800; line-height: 20px; text-align: center; box-sizing: border-box;
+}
+.convo-item .convo-unread.muted { background: rgba(255,255,255,.28); }
+.convo-item.unread .convo-name { font-weight: 800; }
+.convo-item.unread .last { color: var(--text-hi, #fff); font-weight: 600; }
+
+/* collapsed home composer + Game Store join bar */
+.composer-toggle { width: auto; padding: 9px 22px; margin: 0 0 16px; display: inline-flex; align-items: center; gap: 6px; }
+.gm-topbar { align-items: center; flex-wrap: nowrap; }
+.gm-topbar > * { flex: none; white-space: nowrap; }
+.gm-join-toggle { width: auto; padding: 8px 18px; }
+
+
+/* ---- Note composer: the Messages page is a fixed-height, non-scrolling layout, so the composer
+   (emoji, mood, song search, audience) used to be clipped and impossible to scroll while the
+   keyboard was open. Let the card scroll inside itself, sized to the visible viewport. ---- */
+.notes-wrap { flex: 0 0 auto; min-height: 0; }
+.note-composer {
+  max-height: calc(var(--vvh, 100dvh) - 170px); min-height: 180px;
+  overflow-y: auto; overflow-x: hidden;
+  overscroll-behavior: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y;
+}
+html.kb-open .note-composer { max-height: calc(var(--vvh, 100dvh) - 150px); }
+.note-composer .note-song-picker { max-height: min(220px, 34dvh); overscroll-behavior: contain; touch-action: pan-y; }
+@media (max-width: 800px) {
+  /* while composing, hide the chat list underneath so the card gets the room */
+  .messages-root:has(.note-composer) .messages-layout { display: none; }
 }

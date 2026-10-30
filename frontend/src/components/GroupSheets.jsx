@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { api } from '../api.js';
 import Avatar from './Avatar.jsx';
@@ -184,6 +184,18 @@ export function GroupInfoSheet({ convo, onClose, onChanged, onLeft, onOpenProfil
   const [removeTarget, setRemoveTarget] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const nameRef = useRef(null);
+  const caretRef = useRef(null);
+
+  // Keep the caret where the user is typing. Without this some Android keyboards jump it to the
+  // start after each re-render, so typed text ends up reversed ("group" -> "puorg").
+  useLayoutEffect(() => {
+    const el = nameRef.current;
+    if (el && caretRef.current != null && document.activeElement === el) {
+      try { el.setSelectionRange(caretRef.current, caretRef.current); } catch { /* ignore */ }
+    }
+  }, [name]);
+  const onNameChange = (e) => { caretRef.current = e.target.selectionStart; setName(e.target.value); };
 
   const guard = async (fn) => {
     setBusy(true); setError('');
@@ -212,8 +224,8 @@ export function GroupInfoSheet({ convo, onClose, onChanged, onLeft, onOpenProfil
           <GroupAvatar convo={convo} size={84} myId={user.id} />
           {renaming ? (
             <div className="gs-rename">
-              <input className="share-search" aria-label="Group name" maxLength={60} autoFocus value={name} onChange={e => setName(e.target.value)} />
-              <button type="button" className="btn-primary" disabled={!name.trim() || busy} onClick={saveName}>Save</button>
+              <input ref={nameRef} className="share-search gs-rename-input" aria-label="Group name" dir="ltr" maxLength={60} autoFocus autoComplete="off" autoCorrect="off" spellCheck={false} value={name} onChange={onNameChange} onKeyDown={e => { if (e.key === 'Enter' && name.trim() && !busy) saveName(); }} />
+              <button type="button" className="btn-primary gs-rename-save" disabled={!name.trim() || busy} onClick={saveName}>Save</button>
             </div>
           ) : (
             <>

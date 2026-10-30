@@ -1,13 +1,9 @@
-
 node_modules/
 **/node_modules/
+dist/
+build/
 .env
 .env.*
 !.env.example
-dist/
-build/
-coverage/
 
-# Local SQLite database files
 backend/nexa.db
-backend/nexa.db-*

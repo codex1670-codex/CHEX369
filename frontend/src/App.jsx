@@ -45,6 +45,7 @@ export default function App() {
   const [gamesTab, setGamesTab] = useState(null); // 'discover' | 'friends' | 'mine' | 'tournaments' | null
   const [messageStart, setMessageStart] = useState(null);
   const [searchQuery, setSearchQuery] = useState(null);
+  const [searchScope, setSearchScope] = useState(null); // 'reels' when opened by "search reel …"
   const [startReelId, setStartReelId] = useState(null); // reel opened from Search
   const [counts, setCounts] = useState({ messages: 0, other: 0 });
   const [aiAlerts, setAiAlerts] = useState(alertsEnabled());
@@ -175,6 +176,7 @@ export default function App() {
     if (key === 'profile') { setProfileUsername(username || user.username); setProfileView(['saved-posts', 'saved-reels', 'reels-history', 'profile-studio'].includes(view) ? view : null); }
     if (key === 'games') setGamesTab(tab && ['discover', '2players', 'friends', 'mine', 'tournaments'].includes(tab) ? tab : null);
     if (key === 'messages') setMessageStart(username || null);
+    if (key === 'search') setSearchScope(typeof param === 'object' && param?.scope === 'reels' ? 'reels' : null);
     if (key === 'search' && query) setSearchQuery(query);
     if (key === 'reels') setStartReelId(reelId || null);
     setRoute(key);
@@ -255,7 +257,7 @@ export default function App() {
 
       <main className={`main-col ${route === 'messages' ? 'fixed-page' : ''}`} onTouchStart={onSwipeStart} onTouchEnd={onSwipeEnd}>
         {route === 'feed' && <Feed onOpenProfile={(u) => navigate('profile', u)} />}
-        {route === 'search' && <Search onOpenProfile={(u) => navigate('profile', u)} onOpenReel={(id) => navigate('reels', { reelId: id })} initialQuery={searchQuery} onConsumeQuery={() => setSearchQuery(null)} />}
+        {route === 'search' && <Search onOpenProfile={(u) => navigate('profile', u)} onOpenReel={(id) => navigate('reels', { reelId: id })} initialQuery={searchQuery} initialScope={searchScope} onConsumeQuery={() => setSearchQuery(null)} />}
         {route === 'reels' && <Reels startReelId={startReelId} onConsumeStart={() => setStartReelId(null)} />}
         {route === 'notifications' && <Notifications onOpenProfile={(u) => navigate('profile', u)} />}
         {route === 'games' && <Games initialTab={gamesTab} onConsumeInitialTab={() => setGamesTab(null)} initialJoinCode={joinCode} onConsumeJoinCode={() => setJoinCode(null)} />}

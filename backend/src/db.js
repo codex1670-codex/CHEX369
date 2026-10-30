@@ -4,6 +4,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import persistence from './persistence.js';
 import { seedGameCatalog } from './gameCatalog.js';
+import { seedAppCatalog } from './appCatalog.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DB_PATH = process.env.NEXA_DB_PATH || path.join(__dirname, '..', 'nexa.db');
@@ -75,6 +76,10 @@ const addColumnIfMissing = (table, col, def) => {
   const cols = db.prepare(`PRAGMA table_info(${table})`).all().map(c => c.name);
   if (!cols.includes(col)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${def}`);
 };
+// App catalog: how to launch the installed phone app (Android package / iOS URL scheme).
+addColumnIfMissing('app_registry', 'android_package', 'TEXT');
+addColumnIfMissing('app_registry', 'ios_scheme', 'TEXT');
+seedAppCatalog(db);
 addColumnIfMissing('posts', 'media_type', "TEXT CHECK (media_type IN ('image','video'))");
 addColumnIfMissing('posts', 'edits', 'TEXT');
 addColumnIfMissing('reels', 'edits', 'TEXT');

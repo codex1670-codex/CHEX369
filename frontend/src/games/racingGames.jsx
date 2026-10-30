@@ -49,7 +49,7 @@ export function TrafficDodge({ duel }) {
     const laneW = TD.w / TD.lanes;
     for (const c of s.cars) { ctx.fillStyle = `hsl(${c.hue} 70% 55%)`; rr(ctx, (c.lane + 0.5) * laneW - TD.carW / 2, c.y, TD.carW, TD.carH, 8); ctx.fill(); ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect((c.lane + 0.5) * laneW - 14, c.y + TD.carH - 22, 28, 14); }
     const py = TD.h - TD.carH - 24;
-    ctx.fillStyle = '#9b7dff'; rr(ctx, s.x - TD.carW / 2, py, TD.carW, TD.carH, 9); ctx.fill();
+    ctx.fillStyle = '#6f95ff'; rr(ctx, s.x - TD.carW / 2, py, TD.carW, TD.carH, 9); ctx.fill();
     ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(s.x - 14, py + 12, 28, 16);
     ctx.fillStyle = '#fff'; ctx.fillRect(s.x - 16, py + 2, 8, 4); ctx.fillRect(s.x + 8, py + 2, 8, 4);
   });
@@ -77,7 +77,7 @@ function crCar(offset, color, name) {
   const th = START_THETA, rx = CR.mid[0] + offset, ry = CR.mid[1] + offset * 0.7;
   return { name, color, offset, x: CR.cx + rx * Math.cos(th), y: CR.cy + ry * Math.sin(th), h: Math.atan2(ry * Math.cos(th), -rx * Math.sin(th)), speed: 0, prevTheta: th, progress: START_THETA - (-Math.PI / 2), finished: null };
 }
-const crInit = (players) => ({ cars: [crCar(14, '#9b7dff', 'P1'), crCar(-14, '#ff5c93', players === 2 ? 'P2' : 'CPU')], t: 0, cd: 3.2, over: false });
+const crInit = (players) => ({ cars: [crCar(14, '#6f95ff', 'P1'), crCar(-14, '#ff5c93', players === 2 ? 'P2' : 'CPU')], t: 0, cd: 3.2, over: false });
 const onTrack = (x, y) => {
   const o = ((x - CR.cx) / CR.outer[0]) ** 2 + ((y - CR.cy) / CR.outer[1]) ** 2;
   const i = ((x - CR.cx) / CR.inner[0]) ** 2 + ((y - CR.cy) / CR.inner[1]) ** 2;

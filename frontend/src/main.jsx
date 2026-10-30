@@ -5,6 +5,7 @@ import AppBackground from './components/AppBackground.jsx';
 import { AuthProvider } from './AuthContext.jsx';
 import './styles.css';
 import './mobile.css';
+import './royal.css';
 import { getStoredTheme, applyTheme } from './theme.js';
 import { apply3D } from './ui3d.js';
 import ErrorBoundary from './components/ErrorBoundary.jsx';

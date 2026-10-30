@@ -182,7 +182,7 @@ export default function NotesBar({ onOpenMessage }) {
       </div>
 
       {composing && (
-        <div className="glass-card" style={{ padding: 16, marginBottom: 16 }}>
+        <div className="glass-card note-composer" style={{ padding: 16, marginBottom: 16 }}>
           <form onSubmit={submitNote}>
             <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
               {['💭', '🎧', '☕', '😴', '🔥', '📚'].map(e => (

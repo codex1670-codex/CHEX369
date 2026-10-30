@@ -183,7 +183,7 @@ export function HiLoBoard({ room, myId, onMove }) {
 }
 
 /* ───────── Simon ───────── */
-const PADS = ['#ff5c93', '#26e0c9', '#ffb84d', '#7c5cff'];
+const PADS = ['#ff5c93', '#26e0c9', '#ffb84d', '#3f6fe0'];
 export function SimonBoard({ room, myId, onMove }) {
   const { seq, turn, round, last, winner } = room.state;
   const myTurn = turn === myId && !winner;

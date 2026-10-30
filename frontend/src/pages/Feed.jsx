@@ -22,6 +22,7 @@ export default function Feed({ onOpenProfile }) {
   const [showMedia, setShowMedia] = useState(false);
   const [audience, setAudience] = useState('public'); // 'public' | 'followers'
   const [cameraOpen, setCameraOpen] = useState(false);
+  const [composerOpen, setComposerOpen] = useState(false); // the composer is collapsed into a ＋ Post button until opened
   const camInputRef = useRef(null);
 
   // Live camera: take a photo or record a video, then it's attached to the post like any picked file.
@@ -57,6 +58,7 @@ export default function Feed({ onOpenProfile }) {
       setCaption('');
       setMedia(null);
       setShowMedia(false);
+      setComposerOpen(false);
       if (tab === 'following') setPosts(p => [res.post, ...(p || [])]);
     } catch (err) {
       setError(err.message);
@@ -73,7 +75,13 @@ export default function Feed({ onOpenProfile }) {
         <button className={tab === 'foryou' ? 'active' : ''} onClick={() => setTab('foryou')}>For You</button>
       </div>
 
-      <form className="glass-card composer" onSubmit={submitPost}>
+      {!composerOpen && (
+        <button type="button" className="btn-primary composer-toggle" onClick={() => setComposerOpen(true)} aria-expanded="false" aria-label="Write a new post">
+          <span aria-hidden="true">＋</span> Post
+        </button>
+      )}
+
+      {composerOpen && <form className="glass-card composer" onSubmit={submitPost}>
         <div style={{ display: 'flex', gap: 10 }}>
           <Avatar user={user} size={38} />
           <textarea
@@ -105,6 +113,7 @@ export default function Feed({ onOpenProfile }) {
           {!media && <button type="button" className="btn-ghost" disabled={posting} onClick={openCamera} aria-label="Open camera to take a photo or video">📷 Camera</button>}
           {!showMedia && <button type="button" className="btn-ghost" onClick={() => setShowMedia(true)}>🖼️ Photo / video</button>}
           {showMedia && !media && <button type="button" className="btn-ghost" onClick={() => setShowMedia(false)}>Cancel media</button>}
+          <button type="button" className="btn-ghost" disabled={posting} onClick={() => setComposerOpen(false)} aria-label="Close composer">Close</button>
           <button className="btn-primary" style={{ width: 'auto', padding: '9px 20px' }} disabled={posting || (!caption.trim() && !media)}>
             {posting ? (media ? 'Uploading…' : 'Posting…') : 'Post'}
           </button>
@@ -113,7 +122,7 @@ export default function Feed({ onOpenProfile }) {
           <CameraCapture onCapture={useCapturedFile} onClose={() => setCameraOpen(false)} onFallback={() => { setCameraOpen(false); camInputRef.current?.click(); }} />,
           document.body)}
         <input ref={camInputRef} type="file" accept="image/*,video/*" capture="environment" hidden onChange={e => { useCapturedFile(e.target.files?.[0]); e.target.value = ''; }} />
-      </form>
+      </form>}
 
       {posts === null && <div className="empty-state"><span className="loading-dot" /> Loading feed…</div>}
 

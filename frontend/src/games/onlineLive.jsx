@@ -39,10 +39,10 @@ export function PongLive({ room, myId, frame, send }) {
   useEffect(() => {
     const ctx = cv.current?.getContext('2d'); if (!ctx) return;
     const f = frame?.t === 'pong' ? frame : { y: [PG.h / 2, PG.h / 2], ball: { x: PG.w / 2, y: PG.h / 2 }, score: [0, 0] };
-    ctx.fillStyle = '#14101f'; ctx.fillRect(0, 0, PG.w, PG.h);
+    ctx.fillStyle = '#0c1238'; ctx.fillRect(0, 0, PG.w, PG.h);
     ctx.fillStyle = 'rgba(255,255,255,.18)'; for (let y = 6; y < PG.h; y += 18) ctx.fillRect(PG.w / 2 - 1, y, 2, 10);
-    ctx.fillStyle = slot === 0 ? '#9b7dff' : '#ff5c93'; rr(ctx, PG.m, f.y[0] - PG.ph / 2, PG.pw, PG.ph, 3); ctx.fill();
-    ctx.fillStyle = slot === 1 ? '#9b7dff' : '#ff5c93'; rr(ctx, PG.w - PG.m - PG.pw, f.y[1] - PG.ph / 2, PG.pw, PG.ph, 3); ctx.fill();
+    ctx.fillStyle = slot === 0 ? '#6f95ff' : '#ff5c93'; rr(ctx, PG.m, f.y[0] - PG.ph / 2, PG.pw, PG.ph, 3); ctx.fill();
+    ctx.fillStyle = slot === 1 ? '#6f95ff' : '#ff5c93'; rr(ctx, PG.w - PG.m - PG.pw, f.y[1] - PG.ph / 2, PG.pw, PG.ph, 3); ctx.fill();
     ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(f.ball.x, f.ball.y, 5, 0, Math.PI * 2); ctx.fill();
   }, [frame, slot]);
   const sc = frame?.t === 'pong' ? frame.score : room.state.score || [0, 0];
