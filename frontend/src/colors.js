@@ -4,11 +4,13 @@
 const KEY = 'nexa.colors';
 
 export const MODE_DEFAULTS = {
-  dark:  { bgA: '#0a0812', bgB: '#2a1f5c', angle: 135, text: '#ffffff', box: '#1a1530' },
-  light: { bgA: '#4cc9f0', bgB: '#e0f4ff', angle: 135, text: '#07162b', box: '#ffffff' },
+  dark:  { bgA: '#070b24', bgB: '#1b2a72', angle: 160, text: '#ffffff', box: '#101847' },
+  light: { bgA: '#ffffff', bgB: '#fff3c4', angle: 160, text: '#2b1d00', box: '#fffdf6' },   // white & gold (the app's default look)
 };
 
 export const PRESETS = [
+  { name: 'White gold', bgA: '#ffffff', bgB: '#fff3c4', angle: 160, text: '#2b1d00', box: '#fffdf6' },
+  { name: 'Royal gold', bgA: '#070b24', bgB: '#1b2a72', angle: 160, text: '#ffffff', box: '#101847' },
   { name: 'Ocean day',  bgA: '#4cc9f0', bgB: '#e0f4ff', angle: 135, text: '#07162b', box: '#ffffff' },
   { name: 'Midnight',   bgA: '#0a0812', bgB: '#2a1f5c', angle: 135, text: '#ffffff', box: '#1a1530' },
   { name: 'Sunset',     bgA: '#ff9966', bgB: '#ff5e62', angle: 135, text: '#1a0a05', box: '#fff4ec' },
@@ -79,7 +81,9 @@ export function applyColors() {
   // Accent colours used for TEXT (red delete buttons, teal notes, liked hearts, active tabs).
   set('--pink-ink', ink('#ff5c93', c));
   set('--teal-ink', ink('#26e0c9', c));
-  set('--violet-ink', ink('#9b7dff', c));
+  set('--violet-ink', ink('#ffc400', c)); // active tabs / icons read as gold
+  // The phone's address/status bar follows the app background.
+  try { document.querySelector('meta[name="theme-color"]')?.setAttribute('content', c.bgA); } catch { /* no document */ }
   return c;
 }
 

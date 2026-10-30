@@ -201,13 +201,14 @@ function ConvoRow({ convo, active, myId, onOpen, onMenu }) {
   const title = group ? groupTitle(convo, myId) : (other.displayName || other.username);
   const lp = useLongPress(() => onMenu(convo));
   const last = convo.lastMessage;
+  const unread = active ? 0 : (convo.unreadCount || 0);
   let prefix = '';
   if (last) {
     if (last.senderId === myId) prefix = 'You: ';
     else if (group) prefix = `${(convo.participants.find(p => p.id === last.senderId)?.displayName || '').split(' ')[0] || 'Someone'}: `;
   }
   return (
-    <div className={`convo-item ${active ? 'active' : ''}`} role="button" tabIndex={0} aria-label={`Open chat with ${title}`}
+    <div className={`convo-item ${active ? 'active' : ''}${unread ? ' unread' : ''}`} role="button" tabIndex={0} aria-label={`Open chat with ${title}${unread ? `, ${unread} unread message${unread === 1 ? '' : 's'}` : ''}`}
       onClick={() => onOpen(convo.id)} onKeyDown={e => { if (e.key === 'Enter') onOpen(convo.id); }} {...lp}>
       {group ? <GroupAvatar convo={convo} size={52} myId={myId} /> : <Avatar user={other} size={52} />}
       <div className="convo-main">
@@ -219,6 +220,7 @@ function ConvoRow({ convo, active, myId, onOpen, onMenu }) {
         </div>
         <div className="last">{last ? `${prefix}${last.content}` : (group ? 'Group created — say hi 👋' : 'Say hello 👋')}</div>
       </div>
+      {unread > 0 && <span className={`convo-unread${convo.muted ? ' muted' : ''}`} aria-hidden="true">{unread > 99 ? '99+' : unread}</span>}
       <button type="button" className="convo-more" aria-label={`Options for ${title}`} onClick={e => { e.stopPropagation(); onMenu(convo); }}>⋯</button>
     </div>
   );
@@ -290,6 +292,9 @@ export default function Messages({ startWithUsername, onConsumeStart, onOpenReel
       if (msg.conversationId === activeId) {
         setMessages(m => [...m, msg]);
         setTimeout(() => markRead(['message']), 400); // you're looking at it, so it's read
+        // Keep this chat's unread badge at zero while it's open, then refresh the list.
+        api.markConversationRead(activeId).catch(() => {}).finally(loadConversations);
+        return;
       }
       loadConversations();
     };
@@ -320,6 +325,7 @@ export default function Messages({ startWithUsername, onConsumeStart, onOpenReel
 
   useEffect(() => {
     if (!activeId) return;
+    setConversations(list => (list ? list.map(c => (c.id === activeId && c.unreadCount ? { ...c, unreadCount: 0 } : c)) : list));
     api.conversationMessages(activeId).then(res => setMessages(res.messages));
     markRead(['message']);
   }, [activeId]);

@@ -52,11 +52,11 @@ export function Snake({ duel }) {
     }
     const ctx = cv.current?.getContext('2d'); if (!ctx) return;
     const W = SN.n * SN.cell;
-    ctx.fillStyle = '#14101f'; ctx.fillRect(0, 0, W, W);
+    ctx.fillStyle = '#0c1238'; ctx.fillRect(0, 0, W, W);
     ctx.fillStyle = 'rgba(255,255,255,.035)';
     for (let i = 0; i < SN.n; i++) for (let j = 0; j < SN.n; j++) if ((i + j) % 2) ctx.fillRect(i * SN.cell, j * SN.cell, SN.cell, SN.cell);
     ctx.fillStyle = '#ff5c93'; ctx.beginPath(); ctx.arc(s.food.x * SN.cell + 8, s.food.y * SN.cell + 8, 6, 0, Math.PI * 2); ctx.fill();
-    s.snake.forEach((p, i) => { ctx.fillStyle = i === 0 ? '#26e0c9' : '#7c5cff'; rr(ctx, p.x * SN.cell + 1, p.y * SN.cell + 1, SN.cell - 2, SN.cell - 2, 4); ctx.fill(); });
+    s.snake.forEach((p, i) => { ctx.fillStyle = i === 0 ? '#26e0c9' : '#3f6fe0'; rr(ctx, p.x * SN.cell + 1, p.y * SN.cell + 1, SN.cell - 2, SN.cell - 2, 4); ctx.fill(); });
   });
 
   const restart = () => { st.current = snInit(); setUi({ score: 0, over: false }); };
@@ -135,7 +135,7 @@ export function Breakout({ duel }) {
       }
     }
     const ctx = cv.current?.getContext('2d'); if (!ctx) return;
-    ctx.fillStyle = '#14101f'; ctx.fillRect(0, 0, BK.w, BK.h);
+    ctx.fillStyle = '#0c1238'; ctx.fillRect(0, 0, BK.w, BK.h);
     for (const br of s.bricks) if (br.alive) { ctx.fillStyle = `hsl(${br.hue} 75% 60%)`; rr(ctx, br.x, br.y, BK.bw, BK.bh, 3); ctx.fill(); }
     ctx.fillStyle = '#26e0c9'; rr(ctx, s.px - BK.pw / 2, BK.py, BK.pw, BK.ph, 5); ctx.fill();
     ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(s.ball.x, s.ball.y, BK.r, 0, Math.PI * 2); ctx.fill();
@@ -259,9 +259,9 @@ export function Pong({ players = 1 }) {
       }
     }
     const ctx = cv.current?.getContext('2d'); if (!ctx) return;
-    ctx.fillStyle = '#14101f'; ctx.fillRect(0, 0, PG.w, PG.h);
+    ctx.fillStyle = '#0c1238'; ctx.fillRect(0, 0, PG.w, PG.h);
     ctx.fillStyle = 'rgba(255,255,255,.18)'; for (let y = 6; y < PG.h; y += 18) ctx.fillRect(PG.w / 2 - 1, y, 2, 10);
-    ctx.fillStyle = '#9b7dff'; rr(ctx, PG.margin, s.y[0] - PG.ph / 2, PG.pw, PG.ph, 3); ctx.fill();
+    ctx.fillStyle = '#6f95ff'; rr(ctx, PG.margin, s.y[0] - PG.ph / 2, PG.pw, PG.ph, 3); ctx.fill();
     ctx.fillStyle = '#ff5c93'; rr(ctx, PG.w - PG.margin - PG.pw, s.y[1] - PG.ph / 2, PG.pw, PG.ph, 3); ctx.fill();
     ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(s.ball.x, s.ball.y, 5, 0, Math.PI * 2); ctx.fill();
   });

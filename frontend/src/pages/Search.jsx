@@ -21,8 +21,12 @@ function ReelTile({ reel, onOpen }) {
 }
 const reelGrid = { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 8, marginBottom: 14 };
 
-export default function Search({ onOpenProfile, onOpenReel, initialQuery, onConsumeQuery }) {
+const SCOPES = [['all', 'All'], ['people', 'People'], ['reels', 'Reels']];
+
+export default function Search({ onOpenProfile, onOpenReel, initialQuery, initialScope, onConsumeQuery }) {
   const [q, setQ] = useState(initialQuery || '');
+  const [scope, setScope] = useState(initialScope || 'all'); // 'all' | 'people' | 'reels'
+  useEffect(() => { setScope(initialScope || 'all'); }, [initialScope, initialQuery]);
   const [results, setResults] = useState(null);
   const [activeTag, setActiveTag] = useState(null);
   const [tagPosts, setTagPosts] = useState(null);
@@ -56,6 +60,12 @@ export default function Search({ onOpenProfile, onOpenReel, initialQuery, onCons
         style={{ width: '100%', background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border-soft)', borderRadius: 12, padding: '12px 16px', color: 'var(--text-hi)', outline: 'none', fontSize: 15, marginBottom: 18 }}
       />
 
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }} role="tablist" aria-label="Search in">
+        {SCOPES.map(([key, name]) => (
+          <button key={key} type="button" role="tab" aria-selected={scope === key} className={`btn-ghost ${scope === key ? 'sel' : ''}`} style={{ padding: '5px 14px', fontSize: 13, width: 'auto' }} onClick={() => setScope(key)}>{name}</button>
+        ))}
+      </div>
+
       {activeTag ? (
         <div>
           <button className="btn-ghost" style={{ marginBottom: 14 }} onClick={() => { setActiveTag(null); setTagPosts(null); setTagReels([]); }}>← Back to search</button>
@@ -72,7 +82,7 @@ export default function Search({ onOpenProfile, onOpenReel, initialQuery, onCons
         </div>
       ) : (
         <>
-          {results?.users?.length > 0 && (
+          {scope !== 'reels' && results?.users?.length > 0 && (
             <div style={{ marginBottom: 20 }}>
               <div style={label}>People</div>
               {results.users.map(u => (
@@ -83,13 +93,13 @@ export default function Search({ onOpenProfile, onOpenReel, initialQuery, onCons
               ))}
             </div>
           )}
-          {results?.reels?.length > 0 && (
+          {scope !== 'people' && results?.reels?.length > 0 && (
             <div style={{ marginBottom: 20 }}>
               <div style={label}>Reels</div>
               <div style={reelGrid}>{results.reels.map(r => <ReelTile key={r.id} reel={r} onOpen={onOpenReel} />)}</div>
             </div>
           )}
-          {results?.hashtags?.length > 0 && (
+          {scope === 'all' && results?.hashtags?.length > 0 && (
             <div>
               <div style={label}>Hashtags</div>
               {results.hashtags.map(h => (
@@ -99,7 +109,7 @@ export default function Search({ onOpenProfile, onOpenReel, initialQuery, onCons
               ))}
             </div>
           )}
-          {results && results.users.length === 0 && results.hashtags.length === 0 && !(results.reels?.length) && (
+          {results && (scope === 'reels' ? !(results.reels?.length) : scope === 'people' ? results.users.length === 0 : (results.users.length === 0 && results.hashtags.length === 0 && !(results.reels?.length))) && (
             <div className="empty-state">No matches for "{q}".</div>
           )}
           {!results && !q && <div className="empty-state" style={{ color: 'var(--text-low)' }}>Search for people, reels or tap a #hashtag to explore.</div>}

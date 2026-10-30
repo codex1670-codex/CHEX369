@@ -1,3 +1,24 @@
+# Compact home composer and Game Store join (v66)
+
+- Home: the post box is collapsed into a **＋ Post** button; tap it to open the composer (a Close button collapses it again, and it closes after posting).
+- Game Store → Discover: the "Have a room code?" box is now a **🔑 Join** button at the start of the category row; tap it to show the room-code field.
+
+# Unread badges in Messages (v65)
+
+- Each chat in the Messages list now shows a count badge for messages you haven't opened yet (99+ cap; grey when the chat is muted). The chat's name and preview turn bold while it has unread messages.
+- Backend: `GET /messages/conversations` returns `unreadCount` per chat (other people's visible messages newer than your last read). New `POST /messages/conversations/:id/read` marks a chat read.
+- The badge clears as soon as you open the chat, and stays at zero while a new message arrives in the chat you have open.
+- Test: `backend/test/unreadBadges.test.mjs`.
+
+# Unreleased — Codex questions, search shortcuts, white & gold default
+
+- **Default theme is white & gold** (light). Dark (navy & gold) is unchanged and still saved if chosen. New "White gold" colour preset.
+- **Codex follows the theme**: its mini box, reply card and panel use theme colours instead of a fixed dark box.
+- **`search <userid>`** opens that profile (exact username or your nickname); other text opens the Search screen. Previously the word "search" matched the Google app alias and opened Google.
+- **`search reel`** opens Reels; **`search reel <words>`** plays the best matching reel (blocked/private users excluded). Search page has All / People / Reels chips.
+- **Questions go to Google in any language** (`what is…`, `python enna`, `kya hai…`, `என்ன…`, `qué es…`, `open <unknown>`): new `ask_google` action, opened in a new tab (falls back to the same tab if blocked). Small talk ("how are you", "what's up") is answered, not searched.
+- Test change: "what time is it" now opens Google instead of being ignored.
+
 # Changes in v57
 
 ## Added
@@ -164,3 +185,13 @@
 - 24 browser games (Card, Racing, Arcade, Puzzle, Party, Two Player — 4 each), 1P/vs-CPU and 2-player modes.
 - Online Reversi (server engine with automatic pass handling).
 - Tests: 7 new backend tests (61 total) and 50 frontend tests (logic + smoke test of every game/mode).
+
+## Royal Gold look (all pages + games)
+- New `frontend/src/royal.css` (loaded last): navy backgrounds, royal-blue banners, glossy gold frames/buttons, gold game-icon tiles.
+- Violet accents recoloured to royal blue across styles.css, mobile.css and every game file; navy default dark colours + "Royal gold" preset in colors.js.
+- Devices with a saved custom colour scheme keep it: Settings → Appearance → "Royal gold" (or reset) to adopt the new navy.
+
+## App catalog — "open <app>" opens the phone app (v63)
+- `backend/src/appCatalog.js`: 130+ apps (social, streaming, Google, shopping, UPI, travel, AI, games) seeded on every boot with Android package + iOS scheme + website. Previously the catalog table was never filled, so "open <app>" had nothing to resolve.
+- `frontend/src/appLauncher.js`: Android opens the installed app by package (Chrome intent) and lands on a Google search if it isn't installed; iPhone tries the URL scheme then falls back to Google; computers open the website (or Google).
+- Apps not in the list also go to Google. "open youtube and search X" opens the app on that search where the app supports it.

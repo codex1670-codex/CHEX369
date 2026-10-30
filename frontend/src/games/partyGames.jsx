@@ -198,7 +198,7 @@ export function PigDice({ players = 1 }) {
 }
 
 /* ───────────────────────── Simon (colour memory) ───────────────────────── */
-const PADS = [{ c: '#ff5c93', n: 'Pink' }, { c: '#26e0c9', n: 'Teal' }, { c: '#ffb84d', n: 'Amber' }, { c: '#7c5cff', n: 'Violet' }];
+const PADS = [{ c: '#ff5c93', n: 'Pink' }, { c: '#26e0c9', n: 'Teal' }, { c: '#ffb84d', n: 'Amber' }, { c: '#3f6fe0', n: 'Violet' }];
 export function Simon({ players = 1 }) {
   const [phase, setPhase] = useState('idle'); // idle | show | input | over
   const [lit, setLit] = useState(-1);

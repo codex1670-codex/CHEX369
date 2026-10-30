@@ -78,12 +78,18 @@ function conversationDTO(row, viewerId) {
     .get({ cid: row.id, viewer: viewerId || '', cleared: mine?.cleared_at || null });
   const group = isGroup(row);
   const other = !group && viewerId ? participants.find(p => p.id !== viewerId) : null;
+  // Messages from other people that arrived after I last opened this chat (and that I can still see).
+  const unreadCount = mine && viewerId
+    ? db.prepare(`SELECT COUNT(*) c FROM messages m WHERE m.conversation_id = @cid AND m.sender_id != @viewer AND m.created_at > @since AND ${VISIBLE_TO_SQL}`)
+        .get({ cid: row.id, viewer: viewerId, since: mine.last_read_at || mine.joined_at || '', cleared: mine.cleared_at || null }).c
+    : 0;
   return {
     id: row.id,
     type: row.type,
     name: group ? groupName(row.id) : null,
     participants,
     lastMessage: last ? { id: last.id, senderId: last.sender_id, content: previewText(last), createdAt: last.created_at, status: last.status } : null,
+    unreadCount,
     // My own settings for this chat — never about anyone else's.
     muted: !!mine?.muted,
     myRole: mine?.role || null,
@@ -189,6 +195,14 @@ router.get('/conversations/:id/messages', requireAuth, (req, res) => {
     messages: rows.reverse().map(m => messageDTO(m)),
     nextCursor: rows.length === 30 ? rows[0].created_at : null,
   });
+});
+
+// I'm looking at this chat: everything in it counts as read (clears its unread badge).
+router.post('/conversations/:id/read', requireAuth, (req, res) => {
+  if (!participantRow(req.params.id, req.userId)) return res.status(403).json({ error: { code: 'FORBIDDEN', message: "You don't have access to this conversation." } });
+  db.prepare("UPDATE conversation_participants SET last_read_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE conversation_id = ? AND user_id = ?")
+    .run(req.params.id, req.userId);
+  res.json({ ok: true });
 });
 
 // Core send logic, reused by POST /send and by other features (e.g. Note replies) that

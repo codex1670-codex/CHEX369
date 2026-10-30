@@ -59,3 +59,7 @@ Backend JavaScript syntax checks passed with Node.js v22.16.0. A full Vite produ
 - Everything extra is best-effort: if the chart or lyrics service is down, normal name/artist search still works.
 - Files: `backend/src/songs.js`, `backend/src/routes/notes.js`, `frontend/src/components/NotesBar.jsx`, `frontend/src/api.js`, both notesMusic tests.
 - Not tested against the live Apple/Genius servers (no network access here) — test once after deploy.
+
+## Phone keyboard fix (v61)
+- On phones, opening the keyboard no longer covers the page: the fixed bottom menu bar, AI button and banners are hidden while you type and return when the keyboard closes; the page uses the full visible height and the field you tap scrolls into view.
+- Files: `frontend/src/keyboard.js` (new), `frontend/src/main.jsx`, `frontend/src/mobile.css`.

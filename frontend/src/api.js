@@ -171,6 +171,7 @@ export const api = {
 
   conversations: () => request('/messages/conversations'),
   conversationMessages: (id) => request(`/messages/conversations/${id}/messages`),
+  markConversationRead: (id) => request(`/messages/conversations/${id}/read`, { method: 'POST' }),
   sendMessage: (payload) => request('/messages/send', { method: 'POST', body: payload }),
   callIce: () => request('/calls/ice'),
   selfChat: () => request('/messages/self', { method: 'POST' }),

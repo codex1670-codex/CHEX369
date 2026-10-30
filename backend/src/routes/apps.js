@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import db from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
+import { findApp, launchInfo } from '../appCatalog.js';
 
 const router = Router();
 
@@ -17,54 +18,27 @@ router.get('/', requireAuth, (_req, res) => {
   res.json({ apps: apps.map(appDTO) });
 });
 
-// Resolves a free-text app name/alias (and optional search query) to either:
-// - a real web URL to open (native_only = false), or
-// - an honest "can't launch native apps from a browser" result (native_only = true), or
-// - no match at all.
-// This never fakes success; the frontend must actually window.open() the returned url.
+// Resolves a free-text app name (and optional search words) to launch info for the phone:
+//  - the installed app is opened by Android package / iOS URL scheme,
+//  - if it is not installed (or this is a computer) the client falls back to Google.
+// The frontend does the actual launching (appLauncher.js); this never fakes success.
 router.post('/resolve', requireAuth, (req, res) => {
   const { query, searchFor } = req.body || {};
-  const normalized = String(query || '').trim().toLowerCase();
-  if (!normalized) {
+  if (!String(query || '').trim()) {
     return res.status(400).json({ error: { code: 'INVALID_INPUT', message: 'Provide an app name.' } });
   }
-
-  let app = db.prepare(`
-    SELECT ar.* FROM app_registry ar
-    LEFT JOIN app_aliases aa ON aa.app_id = ar.id
-    WHERE LOWER(ar.display_name) = ? OR aa.alias = ?
-    LIMIT 1
-  `).get(normalized, normalized);
-
+  const app = findApp(db, query);
   if (!app) {
-    app = db.prepare(`
-      SELECT ar.* FROM app_registry ar
-      LEFT JOIN app_aliases aa ON aa.app_id = ar.id
-      WHERE LOWER(ar.display_name) LIKE ? OR aa.alias LIKE ?
-      LIMIT 1
-    `).get(`%${normalized}%`, `%${normalized}%`);
-  }
-
-  if (!app) {
-    return res.status(404).json({
-      resolved: false,
-      message: `I don't have "${query}" in the app catalog for this build.`,
-    });
-  }
-
-  if (app.native_only) {
+    // Not in the catalog at all: still useful — let Google find it.
+    const name = String(query).trim().slice(0, 80);
     return res.json({
-      resolved: true, launchable: false, app: appDTO(app),
-      message: `${app.display_name} doesn't have a web version I can open from a browser — this build can't launch native OS apps. You'd need to open it directly on your device.`,
+      resolved: true, launchable: true, app: { id: null, displayName: name, aliases: [] },
+      launch: { id: null, name, android: null, ios: null, webUrl: null, searchUrl: null, fallbackUrl: `https://www.google.com/search?q=${encodeURIComponent(searchFor ? `${name} ${searchFor}` : `${name} app`)}` },
+      url: `https://www.google.com/search?q=${encodeURIComponent(name)}`,
     });
   }
-
-  let url = app.launch_url_web;
-  if (searchFor && app.search_url_template) {
-    url = app.search_url_template.replace('{q}', encodeURIComponent(searchFor));
-  }
-
-  res.json({ resolved: true, launchable: true, app: appDTO(app), url });
+  const launch = launchInfo(app, searchFor);
+  res.json({ resolved: true, launchable: true, app: appDTO(app), launch, url: launch.webUrl || launch.fallbackUrl });
 });
 
 export default router;

@@ -7,6 +7,24 @@ import { reelDTO } from './reels.js';
 
 const router = Router();
 
+// Reels whose caption, author name/username or hashtag matches the query (blocked and private-hidden users excluded).
+// Shared by GET /search and by Codex's "search reel <words>".
+export function findReels(q, userId, limit = 12) {
+  const normalizedTag = String(q).replace(/^#/, '').toLowerCase();
+  return db.prepare(`
+    SELECT DISTINCT r.* FROM reels r
+    JOIN users u ON u.id = r.user_id
+    LEFT JOIN reel_hashtags rh ON rh.reel_id = r.id
+    LEFT JOIN hashtags h ON h.id = rh.hashtag_id
+    WHERE r.deleted_at IS NULL AND u.account_status = 'active'
+      AND (r.caption LIKE ? OR u.username LIKE ? OR u.display_name LIKE ? OR h.tag LIKE ?)
+      AND r.user_id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = ? UNION SELECT blocker_id FROM blocks WHERE blocked_id = ?)
+      AND ${PRIVATE_OK_SQL('r.user_id')}
+    ORDER BY r.created_at DESC LIMIT ?
+  `).all(`%${q}%`, `%${q}%`, `%${q}%`, `%${normalizedTag}%`, userId, userId, userId, userId, limit);
+}
+
+
 router.get('/', requireAuth, (req, res) => {
   const q = String(req.query.q || '').trim();
   if (!q) return res.json({ users: [], hashtags: [], reels: [] });
@@ -23,18 +41,7 @@ router.get('/', requireAuth, (req, res) => {
     FROM hashtags h WHERE h.tag LIKE ? ORDER BY post_count DESC LIMIT 8
   `).all(`%${normalizedTag}%`);
 
-  // Reels whose caption, author name/username or hashtag matches the query (blocked users hidden).
-  const reelRows = db.prepare(`
-    SELECT DISTINCT r.* FROM reels r
-    JOIN users u ON u.id = r.user_id
-    LEFT JOIN reel_hashtags rh ON rh.reel_id = r.id
-    LEFT JOIN hashtags h ON h.id = rh.hashtag_id
-    WHERE r.deleted_at IS NULL AND u.account_status = 'active'
-      AND (r.caption LIKE ? OR u.username LIKE ? OR u.display_name LIKE ? OR h.tag LIKE ?)
-      AND r.user_id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = ? UNION SELECT blocker_id FROM blocks WHERE blocked_id = ?)
-      AND ${PRIVATE_OK_SQL('r.user_id')}
-    ORDER BY r.created_at DESC LIMIT 12
-  `).all(`%${q}%`, `%${q}%`, `%${q}%`, `%${normalizedTag}%`, req.userId, req.userId, req.userId, req.userId);
+  const reelRows = findReels(q, req.userId);
 
   res.json({
     users: users.map(u => profileFor(u, req.userId)),

@@ -16,6 +16,7 @@ const apps = [
   { id: 'whatsapp', names: ['whatsapp', 'chat', 'wa'] }, { id: 'maps', names: ['google maps', 'maps', 'directions'] },
   { id: 'instagram', names: ['instagram', 'insta', 'ig'] }, { id: 'chess', names: ['chess'] },
   { id: 'free-fire', names: ['free fire', 'ff'] }, { id: 'gallery', names: ['gallery', 'photos'] },
+  { id: 'google', names: ['google', 'google search', 'search'] },   // real catalog: Google has the alias "search"
 ];
 const env = (context = {}) => ({ person, apps, context });
 const run = (t, ctx) => parseCommand(t, env(ctx));
@@ -176,5 +177,43 @@ test('non-latin scripts', () => {
 });
 
 test('fuzzy matching does not turn ordinary words into commands', () => {
-  for (const t of ['live', 'life is good', 'the lake house', 'food', 'sand castle', 'clock', 'tall', 'what time is it']) if (run(t).kind === 'actions') miss(`"${t}" -> ${JSON.stringify(run(t))}`);
+  for (const t of ['live', 'life is good', 'the lake house', 'food', 'sand castle', 'clock', 'tall']) if (run(t).kind === 'actions') miss(`"${t}" -> ${JSON.stringify(run(t))}`);
+});
+
+// ── Questions go to Google (any language); "search" opens profiles / reels ──
+test('questions in any language open in Google instead of being misread as commands', () => {
+  for (const t of ['what is gravity', 'whats python', "what's a black hole", 'why is the sky blue?', 'how to cook rice', 'where is paris', 'explain recursion',
+    'python enna', 'enna python', 'gravity ennanu', 'kya hai python', 'python kya hai', 'kaise banate hain chai', 'enti python', 'qué es la gravedad', 'pourquoi le ciel est bleu',
+    'warum ist der himmel blau', 'என்ன பைதான்', 'python क्या है', '什么是重力', 'почему небо голубое', 'is it safe to eat raw eggs?'])
+    is(t, 'ask_google', { query: t });
+});
+test('a question about an app asks Google — it does not open the app or message someone', () => {
+  is('what is whatsapp', 'ask_google', { query: 'what is whatsapp' }); is('what time is it', 'ask_google', { query: 'what time is it' });
+  is('comment superb', 'comment_content', { text: 'superb' });
+  is('what is youtube', 'ask_google', { query: 'what is youtube' });
+  is('how to follow someone on instagram', 'ask_google', { query: 'how to follow someone on instagram' });
+  is('open what is python', 'ask_google', { query: 'what is python' });
+  is('search why is the sky blue', 'ask_google', { query: 'why is the sky blue' });
+  is('please what is gravity', 'ask_google', { query: 'what is gravity' });
+});
+test('real commands that merely contain a question word are unaffected', () => {
+  is('message rahul: what is up', 'send_message', { username: 'rahul', text: 'what is up' });
+  is('send rahul what time are you coming', 'send_message', { username: 'rahul', text: 'what time are you coming' });
+  is('rahul ku "enna panra" anupu', 'send_message', { username: 'rahul', text: 'enna panra' });
+  is('follow priya', 'follow_user', { username: 'priya' });
+  nav('open messages', 'messages'); nav('open reels', 'reels');
+  const r = run('what can you do'); if (r.kind !== 'reply') miss('what can you do -> help reply');
+  for (const t of ['how are you', 'hi how are you', "what's up", 'epdi irukka']) { const x = run(t); if (x.kind !== 'reply') miss(`"${t}" should be small talk, got ${JSON.stringify(x)}`); }
+});
+test('open <anything else> still opens an app (or falls back to Google in the server)', () => {
+  is('open spotify', 'open_app', { appName: 'spotify' }); is('open xyzzy', 'open_app', { appName: 'xyzzy' });
+  nav('open rahul', 'profile', { username: 'rahul' });
+});
+test('search <userid> keeps the username so the server can open the profile; search reel opens Reels', () => {
+  is('search rahul', 'search', { query: 'rahul' }); is('search @priya', 'search', { query: '@priya' });
+  nav('search reel', 'reels'); nav('search reels', 'reels'); nav('reel search', 'reels');
+  is('search reel cats', 'search', { query: 'cats', scope: 'reels' });
+  is('search reels funny dogs', 'search', { query: 'funny dogs', scope: 'reels' });
+  is('search #travel', 'search', { query: '#travel' });
+  is('google search news', 'open_app', { appName: 'google', searchFor: 'news' });   // naming the app still opens the app
 });
