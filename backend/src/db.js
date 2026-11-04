@@ -37,6 +37,63 @@ for (const [col, def] of [
   if (!noteColumns.includes(col)) db.exec(`ALTER TABLE notes ADD COLUMN ${col} ${def}`);
 }
 
+// Notes repair. Databases made by older versions (e.g. the one restored from MongoDB on Render) can
+// have a notes table with no UNIQUE(user_id), no edited_at column, or an old audience CHECK. Sharing a
+// note then crashed with HTTP 500 ("ON CONFLICT clause does not match…", "no such column: edited_at").
+// SQLite can't alter those in place, so rebuild the table once, keeping each person's newest note.
+// Safe to run every boot: it does nothing when the table is already correct.
+{
+  const cols = db.prepare('PRAGMA table_info(notes)').all().map(c => c.name);
+  const notesSql = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'notes'").get()?.sql || '';
+  const uniqueUserId = db.prepare('PRAGMA index_list(notes)').all().some(ix => ix.unique
+    && (() => { const c = db.prepare(`PRAGMA index_info("${ix.name}")`).all(); return c.length === 1 && c[0].name === 'user_id'; })());
+  const wanted = ['id', 'user_id', 'text', 'emoji', 'mood', 'audience', 'song_id', 'song_title', 'song_artist', 'song_url', 'created_at', 'edited_at', 'expires_at'];
+  const needsRebuild = notesSql && (!uniqueUserId || wanted.some(c => !cols.includes(c)) || !notesSql.includes('no_one'));
+  if (needsRebuild) {
+    const has = (c, fallback = 'NULL') => (cols.includes(c) ? c : fallback);
+    db.pragma('foreign_keys = OFF');
+    try {
+      db.exec(`
+        BEGIN;
+        DROP TABLE IF EXISTS notes_new;
+        CREATE TABLE notes_new (
+          id          TEXT PRIMARY KEY,
+          user_id     TEXT NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+          text        TEXT NOT NULL DEFAULT '',
+          emoji       TEXT,
+          mood        TEXT,
+          audience    TEXT NOT NULL DEFAULT 'followers' CHECK (audience IN ('everyone','followers','close_friends','no_one')),
+          song_id     TEXT,
+          song_title  TEXT,
+          song_artist TEXT,
+          song_url    TEXT,
+          created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+          edited_at   TEXT,
+          expires_at  TEXT NOT NULL
+        );
+        INSERT INTO notes_new (id, user_id, text, emoji, mood, audience, song_id, song_title, song_artist, song_url, created_at, edited_at, expires_at)
+          SELECT id, user_id, COALESCE(${has('text', "''")}, ''), ${has('emoji')}, ${has('mood')},
+                 CASE WHEN ${has('audience', "'followers'")} IN ('everyone','followers','close_friends','no_one') THEN ${has('audience', "'followers'")} ELSE 'followers' END,
+                 ${has('song_id')}, ${has('song_title')}, ${has('song_artist')}, ${has('song_url')},
+                 COALESCE(${has('created_at')}, strftime('%Y-%m-%dT%H:%M:%fZ','now')), ${has('edited_at')},
+                 COALESCE(${has('expires_at')}, strftime('%Y-%m-%dT%H:%M:%fZ','now','+24 hours'))
+          FROM (SELECT *, ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY ${has('created_at', 'rowid')} DESC, rowid DESC) AS rn FROM notes)
+          WHERE rn = 1 AND user_id IN (SELECT id FROM users);
+        DROP TABLE notes;
+        ALTER TABLE notes_new RENAME TO notes;
+        DELETE FROM note_likes WHERE note_id NOT IN (SELECT id FROM notes);
+        COMMIT;
+      `);
+      console.log('[nexa] repaired the notes table (older database layout)');
+    } catch (err) {
+      try { db.exec('ROLLBACK'); } catch { /* nothing open */ }
+      console.error('[nexa] could not repair the notes table:', err);
+    } finally {
+      db.pragma('foreign_keys = ON');
+    }
+  }
+}
+
 // Migration 1: older databases were created with a codex_actions CHECK that only allowed
 // four statuses, but the Codex route also audits pending_confirmation / pending_preview /
 // pending_disambiguation — on those databases the INSERT would violate the CHECK. SQLite

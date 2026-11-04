@@ -22,7 +22,7 @@ function noteDTO(row, viewerId) {
   return {
     id: row.id, text: row.text, emoji: row.emoji, mood: row.mood, audience: row.audience,
     createdAt: row.created_at, editedAt: row.edited_at, expiresAt: row.expires_at, likeCount, likedByMe,
-    author: toPublicUser(author),
+    author: toPublicUser(author) || { id: row.user_id, username: 'unknown', displayName: 'Unknown', avatarColor: null },
     song: row.song_id ? { id: row.song_id, title: row.song_title, artist: row.song_artist, previewUrl: row.song_id.startsWith('itunes-') ? row.song_url : null, language: findSong(row.song_id)?.language } : null,
   };
 }
@@ -58,7 +58,8 @@ router.get('/songs', requireAuth, async (req, res) => {
   }
 });
 
-router.post('/', requireAuth, (req, res) => {
+router.post('/', requireAuth, (req, res, next) => {
+  try {
   const { text, emoji, mood, audience, songId } = req.body || {};
   const cleanText = typeof text === 'string' ? text.trim().slice(0, 60) : '';
   const song = songId ? resolveSong(songId, req.userId) : null;
@@ -72,20 +73,29 @@ router.post('/', requireAuth, (req, res) => {
   const id = uuid();
   const expiresAt = new Date(Date.now() + NOTE_TTL_HOURS * 3600 * 1000).toISOString();
 
-  db.prepare(`
-    INSERT INTO notes (id, user_id, text, emoji, mood, audience, song_id, song_title, song_artist, song_url, expires_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(user_id) DO UPDATE SET
-      id = excluded.id, text = excluded.text, emoji = excluded.emoji, mood = excluded.mood,
-      audience = excluded.audience, song_id = excluded.song_id, song_title = excluded.song_title,
-      song_artist = excluded.song_artist, song_url = excluded.song_url,
-      created_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'), expires_at = excluded.expires_at
-  `).run(id, req.userId, cleanText, emoji || null, MOODS.includes(mood) ? mood : null, validAudience,
-    song?.id || null, song?.title || null, song?.artist || null, song?.previewUrl || null, expiresAt);
+  // Replace my previous note (one active note per person). Done as delete + insert in one transaction
+  // so it never depends on the table's constraints, and so likes on the old note are cleared first
+  // (they'd otherwise block the change with a foreign-key error).
+  db.transaction(() => {
+    const prev = db.prepare('SELECT id FROM notes WHERE user_id = ?').all(req.userId);
+    for (const n of prev) db.prepare('DELETE FROM note_likes WHERE note_id = ?').run(n.id);
+    db.prepare('DELETE FROM notes WHERE user_id = ?').run(req.userId);
+    db.prepare(`
+      INSERT INTO notes (id, user_id, text, emoji, mood, audience, song_id, song_title, song_artist, song_url, expires_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(id, req.userId, cleanText, emoji || null, MOODS.includes(mood) && mood !== 'none' ? mood : null, validAudience,
+      song?.id || null, song?.title || null, song?.artist || null, song?.previewUrl || null, expiresAt);
+  })();
 
   const row = db.prepare('SELECT * FROM notes WHERE user_id = ?').get(req.userId);
-  processMentionsAndHashtags({ text: cleanText, sourceType: 'note', sourceId: row.id, actorId: req.userId, io: req.app.get('io') });
+  // @mentions / #hashtags are a bonus: if they fail, the note is still shared.
+  try {
+    processMentionsAndHashtags({ text: cleanText, sourceType: 'note', sourceId: row.id, actorId: req.userId, io: req.app.get('io') });
+  } catch (err) {
+    console.error('[nexa] note mentions failed (note was still shared):', err);
+  }
   res.status(201).json({ note: noteDTO(row, req.userId) });
+  } catch (err) { next(err); }
 });
 
 router.delete('/mine', requireAuth, (req, res) => {
@@ -154,7 +164,12 @@ router.get('/feed', requireAuth, (req, res) => {
     return true; // 'everyone' or 'followers' — viewer already passed the follow-graph filter above
   });
 
-  res.json({ notes: visible.map(r => noteDTO(r, req.userId)) });
+  // One unreadable note must never blank everyone's notes bar.
+  const notes = [];
+  for (const r of visible) {
+    try { notes.push(noteDTO(r, req.userId)); } catch (err) { console.error('[nexa] skipped a broken note:', err); }
+  }
+  res.json({ notes });
 });
 
 router.post('/:id/like', requireAuth, (req, res) => {

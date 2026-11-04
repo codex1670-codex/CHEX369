@@ -17,7 +17,6 @@
     "jsonwebtoken": "^9.0.2",
     "mongodb": "^6.10.0",
     "multer": "^2.4.0",
-    "nexa": "file:..",
     "otpauth": "^9.5.2",
     "socket.io": "^4.7.5",
     "uuid": "^9.0.1",

@@ -42,7 +42,8 @@ export default function NotesBar({ onOpenMessage }) {
   const audioRef = useRef(null);
   const nowRef = useRef(null); // song the <audio> element was last pointed at
 
-  const load = () => api.notesFeed().then(res => setNotes(res.notes));
+  // A failed refresh (server asleep, offline…) must not throw or blank the bar: keep what we have.
+  const load = () => api.notesFeed().then(res => setNotes(res.notes || [])).catch(() => setNotes(old => old || []));
   useEffect(() => { load(); }, []);
   // Section 131/136 — mood + audience come from the same allowlisted registry the backend
   // validates against, so the picker never offers a value the server would reject.
