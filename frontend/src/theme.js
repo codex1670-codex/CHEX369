@@ -3,6 +3,7 @@
 // theme (light) plus a toggle, wired into Settings and into Codex's `set_theme` action.
 // The DEFAULT theme (nothing saved yet) is "light" = white & gold; dark (royal navy & gold) is one tap away.
 import { applyColors, resetColors } from './colors.js';
+import { clearPremium } from './premiumThemes.js';
 const KEY = 'nexa.theme';
 
 export function getStoredTheme() {
@@ -21,6 +22,6 @@ export function applyTheme(theme, resetCustom = false) {
   const t = theme === 'light' ? 'light' : 'dark';
   document.documentElement.setAttribute('data-theme', t);
   try { localStorage.setItem(KEY, t); } catch { /* storage unavailable — theme just won't persist */ }
-  if (resetCustom) resetColors(); else applyColors(); // saved colours stay on reload; explicit Dark/Light clears them
+  if (resetCustom) { clearPremium(); resetColors(); } else applyColors(); // saved colours stay on reload; explicit Dark/Light clears them
   return t;
 }

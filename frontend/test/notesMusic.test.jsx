@@ -114,3 +114,23 @@ describe('NotesBar music', () => {
     expect(screen.queryByText(/Trending now/)).toBeNull();
   });
 });
+
+describe('NotesBar favourite line + preview', () => {
+  it('shows a live preview and sends the typed favourite line with the song', async () => {
+    api.notesFeed.mockResolvedValue({ notes: [] });
+    api.noteSongs.mockResolvedValue({ songs: [{ id: 'itunes-9', title: 'Nine', artist: 'Band', previewUrl: 'https://audio/9.m4a' }] });
+    api.createNote.mockResolvedValue({});
+    render(<NotesBar />);
+    fireEvent.click(await screen.findByText('Your note'));
+    fireEvent.click(screen.getByText(/Search real songs/));
+    fireEvent.click(await screen.findByText('Add'));
+    fireEvent.change(screen.getByLabelText('Favourite line'), { target: { value: 'my own line' } });
+    const prev = screen.getByLabelText('Note preview');
+    expect(prev.textContent).toContain('Nine');
+    expect(prev.textContent).toContain('my own line');
+    fireEvent.click(screen.getByRole('button', { name: /Preview song/ }));
+    await waitFor(() => expect(plays).toContain('https://audio/9.m4a'));
+    fireEvent.click(screen.getByRole('button', { name: 'Share note' }));
+    await waitFor(() => expect(api.createNote).toHaveBeenCalledWith(expect.objectContaining({ songId: 'itunes-9', favoriteLine: 'my own line' })));
+  });
+});

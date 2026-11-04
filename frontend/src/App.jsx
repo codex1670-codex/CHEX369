@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuth } from './AuthContext.jsx';
 import Auth from './pages/Auth.jsx';
@@ -10,6 +10,12 @@ import Notifications from './pages/Notifications.jsx';
 import Games from './pages/Games.jsx';
 import Search from './pages/Search.jsx';
 import Settings from './pages/Settings.jsx';
+import CoinStore from './pages/CoinStore.jsx';
+import Stickies from './pages/Stickies.jsx';
+import MyLife from './pages/MyLife.jsx';
+const LearnPage = lazy(() => import('./pages/LearnPage.jsx'));   // CHEX learn: loaded only when opened
+import StickyAlerts from './components/StickyAlerts.jsx';
+import AlarmRinger from './components/AlarmRinger.jsx';
 import Avatar from './components/Avatar.jsx';
 import Codex from './components/Codex.jsx';
 import CallLayer from './components/CallLayer.jsx';
@@ -18,9 +24,13 @@ import Splash from './components/Splash.jsx';
 import { api } from './api.js';
 import { PresenceProvider } from './presence.jsx';
 import { tiltMove, tiltLeave } from './ui3d.js';
+import { applyTheme, getStoredTheme } from './theme.js';
+import { getPremiumId } from './premiumThemes.js';
 import { connectSocket, disconnectSocket, getSocket } from './socket.js';
-import { setCodexContext } from './codexContext.js';
+import { setCodexContext, updateCodexContext } from './codexContext.js';
 import { announcementForBatch, notifyOnce, alertsEnabled, setAlertsEnabled } from './announce.js';
+import { burstEmoji } from './emojiFx.js';
+import EmojiRain from './components/EmojiRain.jsx';
 import PermissionsPrompt from './components/PermissionsPrompt.jsx';
 import { syncPushIfAllowed } from './push.js';
 
@@ -43,6 +53,7 @@ export default function App() {
   const [profileView, setProfileView] = useState(null); // 'saved-posts' | 'saved-reels' | 'reels-history' | 'profile-studio' | null
   const [joinCode, setJoinCode] = useState(null); // from an invite link: /?join=CODE
   const [gamesTab, setGamesTab] = useState(null); // 'discover' | 'friends' | 'mine' | 'tournaments' | null
+  const [myLifeTab, setMyLifeTab] = useState(null); // which "My life" section to open
   const [messageStart, setMessageStart] = useState(null);
   const [searchQuery, setSearchQuery] = useState(null);
   const [searchScope, setSearchScope] = useState(null); // 'reels' when opened by "search reel …"
@@ -56,6 +67,8 @@ export default function App() {
   }, []);
   const announcedRef = useRef(null); // ids of unread notifications already spoken (null until first load)
   const [fabOpen, setFabOpen] = useState(false);
+  const [coinToast, setCoinToast] = useState('');
+  const coinTimer = useRef(null);
   const swipeRef = useRef(null); // touch start point for swipe-to-change-page
   const historyRef = useRef([]); // previous screens, so Codex's "go back" can return to them
 
@@ -95,7 +108,7 @@ export default function App() {
       return;
     }
     const target = params.get('open');
-    if (target && NAV.some(n => n.key === target)) {
+    if (target && (target === 'stickies' || target === 'mylife' || target === 'learn' || NAV.some(n => n.key === target))) {
       setRoute(target);
       setCodexContext({ screen: target });
       window.history.replaceState(null, '', window.location.pathname);
@@ -122,7 +135,7 @@ export default function App() {
         }
         const fresh = unreadItems.filter(n => !announcedRef.current.has(n.id)).reverse(); // oldest first
         fresh.forEach(n => announcedRef.current.add(n.id));
-        if (announce && fresh.length) notifyOnce(announcementForBatch(fresh)); // live: one chime + one spoken line per new arrival
+        if (announce && fresh.length) { notifyOnce(announcementForBatch(fresh)); burstEmoji(); } // live: one chime + one spoken line + emoji burst per new arrival
       } catch { /* offline — keep last counts */ }
     };
     const onEvent = () => { clearTimeout(timer); timer = setTimeout(() => refresh(true), 350); };
@@ -130,8 +143,17 @@ export default function App() {
     refresh(false);
     const socket = getSocket();
     ['notification:new', 'message:new', 'message_request:new'].forEach(ev => socket?.on(ev, onEvent));
+    const onCoins = (e) => {
+      const n = e?.amount || 1;
+      setCoinToast(`🪙 +${n} CHEX coin${n === 1 ? '' : 's'} — ${e?.reason || 'nice one!'}`);
+      clearTimeout(coinTimer.current);
+      coinTimer.current = setTimeout(() => setCoinToast(''), 4500);
+    };
+    socket?.on('coins:earned', onCoins);
     window.addEventListener('chex:refresh-counts', onCounts);
     return () => {
+      socket?.off('coins:earned', onCoins);
+      clearTimeout(coinTimer.current);
       clearTimeout(timer);
       ['notification:new', 'message:new', 'message_request:new'].forEach(ev => socket?.off(ev, onEvent));
       window.removeEventListener('chex:refresh-counts', onCounts);
@@ -140,6 +162,19 @@ export default function App() {
   }, [user]);
 
   // Launch screen: always shown briefly before login/home, then fades out.
+  // Premium themes are a paid unlock: if this account hasn't unlocked them (new login on a shared
+  // browser, edited storage), fall back to the plain Light/Dark look.
+  useEffect(() => {
+    if (!user || !getPremiumId()) return;
+    api.coins().then(c => { if (!c.unlocked.includes('premium-themes')) applyTheme(getStoredTheme(), true); }).catch(() => {});
+  }, [user?.id]);
+
+  // Keep the AI's idea of the current page right on every route change, however it happened:
+  // menu, bottom bar, swipe, the phone's Back button, an invite link, or the AI itself.
+  useEffect(() => {
+    if (user) updateCodexContext({ screen: route });
+  }, [route, user]);
+
   if (booting || !splashDone) return <Splash leaving={!booting && splashLeaving} />;
   if (!user) return <Auth />;
 
@@ -174,6 +209,7 @@ export default function App() {
       return;
     }
     if (key === 'profile') { setProfileUsername(username || user.username); setProfileView(['saved-posts', 'saved-reels', 'reels-history', 'profile-studio'].includes(view) ? view : null); }
+    if (key === 'mylife') setMyLifeTab(tab || null);
     if (key === 'games') setGamesTab(tab && ['discover', '2players', 'friends', 'mine', 'tournaments'].includes(tab) ? tab : null);
     if (key === 'messages') setMessageStart(username || null);
     if (key === 'search') setSearchScope(typeof param === 'object' && param?.scope === 'reels' ? 'reels' : null);
@@ -231,7 +267,16 @@ export default function App() {
                     {badgeFor(n.key) > 0 && <span className="count-badge">{fmtCount(badgeFor(n.key))}</span>}
                   </button>
                 ))}
-                <button role="menuitemcheckbox" aria-checked={aiAlerts} className="alerts-toggle" style={{ '--i': NAV.length }} onPointerMove={tiltMove} onPointerLeave={tiltLeave} onClick={() => setAlertsEnabled(!aiAlerts)}>
+                <button role="menuitem" style={{ '--i': NAV.length }} onPointerMove={tiltMove} onPointerLeave={tiltLeave} className={route === 'mylife' ? 'active' : ''} onClick={() => { setFabOpen(false); navigate('mylife'); }}>
+                  <span className="ico">🌟</span><span className="lbl">My life</span>
+                </button>
+                <button role="menuitem" style={{ '--i': NAV.length + 1 }} onPointerMove={tiltMove} onPointerLeave={tiltLeave} className={route === 'learn' ? 'active' : ''} onClick={() => { setFabOpen(false); navigate('learn'); }}>
+                  <span className="ico">🌍</span><span className="lbl">CHEX learn</span>
+                </button>
+                <button role="menuitem" style={{ '--i': NAV.length + 2 }} onPointerMove={tiltMove} onPointerLeave={tiltLeave} className={route === 'stickies' ? 'active' : ''} onClick={() => { setFabOpen(false); navigate('stickies'); }}>
+                  <span className="ico">📌</span><span className="lbl">Sticky notes</span>
+                </button>
+                <button role="menuitemcheckbox" aria-checked={aiAlerts} className="alerts-toggle" style={{ '--i': NAV.length + 3 }} onPointerMove={tiltMove} onPointerLeave={tiltLeave} onClick={() => setAlertsEnabled(!aiAlerts)}>
                   <span className="ico">{aiAlerts ? '🔊' : '🔇'}</span><span className="lbl">AI alerts: {aiAlerts ? 'On' : 'Off'}</span>
                 </button>
               </div>
@@ -255,13 +300,18 @@ export default function App() {
         ))}
       </nav>
 
+      {coinToast && <div className="coin-toast coin-toast-fixed" role="status">{coinToast}</div>}
       <main className={`main-col ${route === 'messages' ? 'fixed-page' : ''}`} onTouchStart={onSwipeStart} onTouchEnd={onSwipeEnd}>
-        {route === 'feed' && <Feed onOpenProfile={(u) => navigate('profile', u)} />}
+        {route === 'feed' && <Feed onOpenProfile={(u) => navigate('profile', u)} onOpenStickies={() => navigate('stickies')} onOpenLearn={() => navigate('learn')} />}
         {route === 'search' && <Search onOpenProfile={(u) => navigate('profile', u)} onOpenReel={(id) => navigate('reels', { reelId: id })} initialQuery={searchQuery} initialScope={searchScope} onConsumeQuery={() => setSearchQuery(null)} />}
         {route === 'reels' && <Reels startReelId={startReelId} onConsumeStart={() => setStartReelId(null)} />}
         {route === 'notifications' && <Notifications onOpenProfile={(u) => navigate('profile', u)} />}
         {route === 'games' && <Games initialTab={gamesTab} onConsumeInitialTab={() => setGamesTab(null)} initialJoinCode={joinCode} onConsumeJoinCode={() => setJoinCode(null)} />}
-        {route === 'settings' && <Settings onBack={() => navigate('profile', user.username)} onOpenProfile={(u) => navigate('profile', u)} />}
+        {route === 'settings' && <Settings onBack={() => navigate('profile', user.username)} onOpenProfile={(u) => navigate('profile', u)} onOpenCoins={() => navigate('coins')} onOpenStickies={() => navigate('stickies')} onOpenMyLife={() => navigate('mylife')} />}
+        {route === 'stickies' && <Stickies onBack={() => navigate('feed')} />}
+        {route === 'mylife' && <MyLife onBack={() => navigate('feed')} initialTab={myLifeTab} />}
+        {route === 'learn' && <Suspense fallback={<div className="glass-card life-empty">Loading…</div>}><LearnPage onBack={() => navigate('feed')} onOpenProfile={(u) => navigate('profile', u)} /></Suspense>}
+        {route === 'coins' && <CoinStore onBack={() => navigate('settings')} onOpenSettings={() => navigate('settings')} />}
         {route === 'profile' && (
           <Profile
             username={profileUsername || user.username}
@@ -278,6 +328,9 @@ export default function App() {
       </main>
 
       <Codex navigate={navigate} goBack={goBack} currentUser={user} />
+      <StickyAlerts onOpen={() => navigate('mylife', { tab: 'reminders' })} />
+      <AlarmRinger />
+      <EmojiRain />
       <CallLayer />
       <InstallBanner />
       <PermissionsPrompt />

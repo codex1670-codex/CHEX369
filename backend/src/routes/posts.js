@@ -4,6 +4,7 @@ import db, { toPublicUser, USER_MEDIA_COLUMNS_SQL } from '../db.js';
 import { requireAuth, optionalAuth } from '../middleware/auth.js';
 import { isRestricted, canViewAccountContent, PRIVATE_OK_SQL } from './users.js';
 import { processMentionsAndHashtags } from '../content.js';
+import { safeAward, safeCheckPost, safeStreakTick } from '../coins.js';
 import { mediaMiddleware, removeLocalUpload, editsToJson, parseEdits } from '../uploads.js';
 
 const router = Router();
@@ -79,7 +80,10 @@ router.post('/', requireAuth, (req, res) => {
     .run(id, req.userId, cap, typeof imageUrl === 'string' ? imageUrl.slice(0, 2000) : null, cleanAudience(audience));
   processMentionsAndHashtags({ text: cap, sourceType: 'post', sourceId: id, actorId: req.userId, io: req.app.get('io') });
   const row = db.prepare('SELECT * FROM posts WHERE id = ?').get(id);
-  res.status(201).json({ post: postDTO(row, req.userId) });
+  const coinStatus = safeCheckPost(id);
+  safeStreakTick(req.userId, req.app.get('io'));
+  const coinsEarned = row.audience === 'public' ? safeAward(req.userId) : 0;
+  res.status(201).json({ post: postDTO(row, req.userId), coinsEarned, coinStatus });
 });
 
 // Post with a photo or video picked from the device (gallery, camera, downloaded file).
@@ -91,7 +95,10 @@ router.post('/upload', requireAuth, mediaMiddleware('posts', ['image', 'video'])
     .run(id, req.userId, cap, req.media.url, req.media.kind, req.media.kind === 'video' ? editsToJson(req.body.edits) : null, cleanAudience(req.body.audience));
   processMentionsAndHashtags({ text: cap, sourceType: 'post', sourceId: id, actorId: req.userId, io: req.app.get('io') });
   const row = db.prepare('SELECT * FROM posts WHERE id = ?').get(id);
-  res.status(201).json({ post: postDTO(row, req.userId) });
+  const coinStatus = safeCheckPost(id);
+  safeStreakTick(req.userId, req.app.get('io'));
+  const coinsEarned = row.audience === 'public' ? safeAward(req.userId) : 0;
+  res.status(201).json({ post: postDTO(row, req.userId), coinsEarned, coinStatus });
 });
 
 router.get('/:id', optionalAuth, (req, res) => {
@@ -132,7 +139,9 @@ router.patch('/:id', requireAuth, (req, res) => {
   db.prepare("UPDATE posts SET caption = ?, edits = ?, audience = ?, edited_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?").run(cap, newEdits, newAudience, row.id);
   processMentionsAndHashtags({ text: cap, sourceType: 'post', sourceId: row.id, actorId: req.userId, io: req.app.get('io') });
   const updated = db.prepare('SELECT * FROM posts WHERE id = ?').get(row.id);
-  res.json({ post: postDTO(updated, req.userId) });
+  const coinStatus = safeCheckPost(updated.id);
+  const coinsEarned = updated.audience === 'public' ? safeAward(req.userId) : 0;
+  res.json({ post: postDTO(updated, req.userId), coinsEarned, coinStatus });
 });
 
 // Replace a post's photo/video with a new file (e.g. the re-edited photo from the editor).
@@ -149,8 +158,9 @@ router.post('/:id/media', requireAuth, ownPostOr4xx, mediaMiddleware('posts', ['
   db.prepare("UPDATE posts SET image_url = ?, media_type = ?, edits = ?, edited_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?")
     .run(req.media.url, req.media.kind, req.media.kind === 'video' ? editsToJson(req.body.edits) : null, row.id);
   removeLocalUpload(row.image_url);
+  safeCheckPost(row.id, { rehashMedia: true });
   const updated = db.prepare('SELECT * FROM posts WHERE id = ?').get(row.id);
-  res.json({ post: postDTO(updated, req.userId) });
+  res.json({ post: postDTO(updated, req.userId), coinsEarned: updated.audience === 'public' ? safeAward(req.userId) : 0 });
 });
 
 router.post('/:id/like', requireAuth, (req, res) => {
@@ -204,7 +214,7 @@ router.get('/:id/comments', optionalAuth, (req, res) => {
   const post = db.prepare('SELECT * FROM posts WHERE id = ? AND deleted_at IS NULL').get(req.params.id);
   if (!post || !canViewPost(post, req.userId)) return notFound(res);
   const rows = db.prepare(`
-    SELECT c.*, u.username, u.display_name, u.avatar_color, u.avatar_photo_url, u.profile_video_url, u.profile_video_cover_url, u.profile_video_muted, u.profile_display_mode FROM comments c
+    SELECT c.*, u.username, u.display_name, u.avatar_color, u.avatar_photo_url, u.profile_video_url, u.profile_video_cover_url, u.profile_video_muted, u.profile_display_mode, u.profile_frame FROM comments c
     JOIN users u ON u.id = c.user_id
     WHERE c.post_id = ? AND c.deleted_at IS NULL ORDER BY c.created_at ASC LIMIT 200
   `).all(post.id);
@@ -241,7 +251,7 @@ router.post('/:id/comments', requireAuth, (req, res) => {
     req.app.get('io')?.to(`user:${notifyTarget}`).emit('notification:new', { type: 'comment' });
   }
   const row = db.prepare(`
-    SELECT c.*, u.username, u.display_name, u.avatar_color, u.avatar_photo_url, u.profile_video_url, u.profile_video_cover_url, u.profile_video_muted, u.profile_display_mode FROM comments c JOIN users u ON u.id = c.user_id WHERE c.id = ?
+    SELECT c.*, u.username, u.display_name, u.avatar_color, u.avatar_photo_url, u.profile_video_url, u.profile_video_cover_url, u.profile_video_muted, u.profile_display_mode, u.profile_frame FROM comments c JOIN users u ON u.id = c.user_id WHERE c.id = ?
   `).get(id);
   res.status(201).json({ comment: commentDTO(row) });
 });
@@ -256,7 +266,7 @@ router.patch('/:postId/comments/:commentId', requireAuth, (req, res) => {
   }
   db.prepare("UPDATE comments SET text = ?, edited_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?").run(text.trim().slice(0, 1000), comment.id);
   const row = db.prepare(`
-    SELECT c.*, u.username, u.display_name, u.avatar_color, u.avatar_photo_url, u.profile_video_url, u.profile_video_cover_url, u.profile_video_muted, u.profile_display_mode FROM comments c JOIN users u ON u.id = c.user_id WHERE c.id = ?
+    SELECT c.*, u.username, u.display_name, u.avatar_color, u.avatar_photo_url, u.profile_video_url, u.profile_video_cover_url, u.profile_video_muted, u.profile_display_mode, u.profile_frame FROM comments c JOIN users u ON u.id = c.user_id WHERE c.id = ?
   `).get(comment.id);
   res.json({ comment: commentDTO(row) });
 });

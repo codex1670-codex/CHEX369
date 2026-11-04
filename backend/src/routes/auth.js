@@ -28,6 +28,7 @@ function publicUser(row) {
     profileVideoCoverUrl: row.profile_video_cover_url,
     profileVideoMuted: !!row.profile_video_muted,
     displayMode: row.profile_display_mode,
+    frame: row.profile_frame || null,
     showOnline: row.show_online !== 0,
     isPrivate: !!row.is_private,
     createdAt: row.created_at,

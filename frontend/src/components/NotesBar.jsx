@@ -7,6 +7,14 @@ const MOOD_ICON = { none: '', happy: '😊', chilling: '😌', busy: '⏳', cele
 const MOOD_LABEL = { none: 'No mood', happy: 'Happy', chilling: 'Chilling', busy: 'Busy', celebrating: 'Celebrating', thinking: 'Thinking' };
 const AUDIENCE_LABEL = { everyone: '🌐 Everyone', followers: '👥 Followers', close_friends: '💚 Close friends', no_one: '🔒 Only me' };
 
+const LINE_MAX = 80;
+const lineKey = (id) => `chex:note-line:${id}`;
+// The favourite line is typed by the person themselves (we never fill in lyrics). If the server does
+// not send it back, the author still sees their own line from this device.
+const readLocalLine = (id) => { try { return localStorage.getItem(lineKey(id)) || ''; } catch { return ''; } };
+const saveLocalLine = (id, v) => { try { v ? localStorage.setItem(lineKey(id), v) : localStorage.removeItem(lineKey(id)); } catch { /* storage unavailable */ } };
+const lineOf = (n, meId) => n?.favoriteLine || (n?.author?.id === meId ? readLocalLine(meId) : '');
+
 export default function NotesBar({ onOpenMessage }) {
   const { user } = useAuth();
   const [notes, setNotes] = useState(null);
@@ -20,6 +28,7 @@ export default function NotesBar({ onOpenMessage }) {
   const [songId, setSongId] = useState('');
   const [showSongPicker, setShowSongPicker] = useState(false);
   const [songTab, setSongTab] = useState('tamil');
+  const [favLine, setFavLine] = useState('');
   const [songQuery, setSongQuery] = useState('');
   const [expanded, setExpanded] = useState(null);
   const [replyText, setReplyText] = useState('');
@@ -93,12 +102,14 @@ export default function NotesBar({ onOpenMessage }) {
       setAudience(myNote.audience || 'followers');
       setSongId(myNote.song?.id || '');
       setSelectedSong(myNote.song || null);
+      setFavLine(lineOf(myNote, user.id));
       setSongs([]);
     } else {
       setMood('none');
       setAudience('followers');
       setSongId('');
       setSelectedSong(null);
+      setFavLine('');
       setSongs([]);
     }
     setFormError('');
@@ -110,11 +121,12 @@ export default function NotesBar({ onOpenMessage }) {
   const submitNote = async (e) => {
     e.preventDefault();
     if (saving || (!text.trim() && !emoji && !songId)) return;
-    const payload = { text: text.trim(), emoji, mood: mood === 'none' ? null : mood, audience, songId: songId || null };
+    const payload = { text: text.trim(), emoji, mood: mood === 'none' ? null : mood, audience, songId: songId || null, favoriteLine: songId ? favLine.trim().slice(0, LINE_MAX) : '' };
     setSaving(true); setFormError('');
     try {
       if (myNote) await api.editNote(payload);
       else await api.createNote(payload);
+      saveLocalLine(user.id, payload.favoriteLine);
       stopAudio();
       setText('');
       setComposing(false);
@@ -209,17 +221,17 @@ export default function NotesBar({ onOpenMessage }) {
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
               <div style={{ fontSize: 11, color: 'var(--text-low)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Music</div>
               {songId && (
-                <button type="button" className="btn-ghost" style={{ padding: '1px 8px', fontSize: 11 }} onClick={() => { setSongId(''); setSelectedSong(null); }}>Remove</button>
+                <button type="button" className="btn-ghost" style={{ padding: '1px 8px', fontSize: 11 }} onClick={() => { setSongId(''); setSelectedSong(null); setFavLine(''); }}>Remove</button>
               )}
             </div>
             <button type="button" className="btn-ghost" style={{ marginBottom: 8, fontSize: 12.5, padding: '6px 12px' }}
               onClick={() => setShowSongPicker(s => !s)}>
-              {songId ? `🎵 ${selectedSong?.title || songs.find(s => s.id === songId)?.title || 'Song selected'}` : '🎵 Search real songs (Tamil & English)'}
+              {songId ? `🎵 ${selectedSong?.title || songs.find(s => s.id === songId)?.title || 'Song selected'}` : '🎵 Search real songs (all languages)'}
             </button>
             {showSongPicker && (
               <div style={{ marginBottom: 10 }}>
                 <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
-                  {[['tamil', 'Tamil'], ['english', 'English']].map(([tab, label]) => (
+                  {[['all', 'All'], ['tamil', 'Tamil'], ['english', 'English']].map(([tab, label]) => (
                     <button key={tab} type="button" className="btn-ghost"
                       style={{ fontSize: 11.5, padding: '4px 10px', background: songTab === tab ? 'var(--surface-hover)' : 'transparent' }}
                       onClick={() => setSongTab(tab)}>
@@ -250,6 +262,32 @@ export default function NotesBar({ onOpenMessage }) {
                 {playing && <div style={{ fontSize: 11, color: 'var(--text-low)', marginTop: 5 }}>Preview: {playing.title} — {playing.artist}</div>}
               </div>
             )}
+            {songId && (
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ fontSize: 11, color: 'var(--text-low)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Favourite line (type your own)</div>
+                <input aria-label="Favourite line" placeholder="The line you love most from this song…" value={favLine} maxLength={LINE_MAX} onChange={e => setFavLine(e.target.value)}
+                  style={{ width: '100%', background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border-soft)', borderRadius: 10, padding: '9px 12px', color: 'var(--text-hi)', outline: 'none', fontSize: 13.5 }} />
+                <div style={{ fontSize: 11, color: 'var(--text-low)', marginTop: 3, textAlign: 'right' }}>{favLine.length}/{LINE_MAX}</div>
+              </div>
+            )}
+            <div style={{ fontSize: 11, color: 'var(--text-low)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Preview of your note</div>
+            <div className="note-preview" aria-label="Note preview" style={{ border: '1px solid var(--border-soft)', borderRadius: 14, padding: 12, marginBottom: 12, background: 'rgba(255,255,255,0.04)', display: 'flex', gap: 10, alignItems: 'flex-start', minWidth: 0 }}>
+              <Avatar user={user} size={36} />
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div style={{ fontWeight: 600, fontSize: 13.5 }}>{user.displayName || user.username}</div>
+                <div style={{ fontSize: 13.5, color: 'var(--text-mid)', overflowWrap: 'anywhere' }}>{[MOOD_ICON[mood], emoji, text.trim()].filter(Boolean).join(' ') || 'Your note appears here'}</div>
+                {selectedSong && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6, fontSize: 12.5, color: 'var(--text-mid)', flexWrap: 'wrap' }}>
+                    <span style={{ minWidth: 0, overflowWrap: 'anywhere' }}>🎵 <strong style={{ color: 'var(--text-hi)' }}>{selectedSong.title}</strong> — {selectedSong.artist}</span>
+                    {selectedSong.previewUrl
+                      ? <button type="button" className="btn-ghost" style={{ padding: '3px 10px', fontSize: 12 }} onClick={() => togglePreview(selectedSong)}>{playing?.id === selectedSong.id ? 'Ⅱ Pause' : '▶ Preview song'}</button>
+                      : <span style={{ color: 'var(--text-low)' }}>Preview unavailable</span>}
+                  </div>
+                )}
+                {selectedSong && favLine.trim() && <div style={{ marginTop: 6, fontSize: 13, fontStyle: 'italic', color: 'var(--text-hi)', overflowWrap: 'anywhere' }}>“{favLine.trim()}”</div>}
+                <div style={{ marginTop: 6, fontSize: 11.5, color: 'var(--text-low)' }}>{AUDIENCE_LABEL[audience]}</div>
+              </div>
+            </div>
             <div style={{ fontSize: 11, color: 'var(--text-low)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Who can see this</div>
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
               {Object.keys(AUDIENCE_LABEL).map(a => (
@@ -288,6 +326,7 @@ export default function NotesBar({ onOpenMessage }) {
               {expanded.song.previewUrl ? <button className="btn-ghost" onClick={() => togglePreview(expanded.song)}>{playing?.id === expanded.song.id ? 'Ⅱ Pause' : '▶ Preview'}</button> : <span>Preview unavailable</span>}
             </div>
           )}
+          {expanded.song && lineOf(expanded, user.id) && <div style={{ marginBottom: 10, fontSize: 13.5, fontStyle: 'italic', color: 'var(--text-hi)', overflowWrap: 'anywhere' }}>“{lineOf(expanded, user.id)}”</div>}
           <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
             <button className="btn-ghost" style={expanded.likedByMe ? { color: 'var(--pink)' } : undefined} onClick={() => toggleLike(expanded)}>{expanded.likedByMe ? '♥ Liked' : '♡ Like'}</button>
           </div>

@@ -46,3 +46,47 @@ export const LOCAL_GAMES = [
 ];
 
 export const playersText = (g) => g.playersLabel || (g.modes.length === 2 ? '1–2 players' : g.modes[0] === 1 ? '1 player' : '2 players');
+
+// ── Game Store list ──────────────────────────────────────────────────────────────────────
+// One row per game. Every built-in game used to be listed twice (once as its online twin and
+// once again as a local "clone" card); the store now shows a single row that carries both the
+// online buttons and the offline play options (`local` is the matching LOCAL_GAMES entry).
+// Order inside a category follows the server catalog so the list reads the same everywhere.
+const ONLINE_INFO = [
+  ['tic-tac-toe', 'Tic-Tac-Toe', 'Board'],
+  ['connect-four', 'Connect Four', 'Board'],
+  ['checkers', 'Checkers', 'Board', '10–20 min'],
+  ['chess', 'Chess', 'Board', '15–40 min'],
+  ['reversi', 'Reversi', 'Board', '10–20 min'],
+  ['dots-and-boxes', 'Dots & Boxes', 'Board'],
+  ['rock-paper-scissors', 'Rock Paper Scissors', 'Party'],
+  ['pig-dice', 'Pig Dice Duel', 'Party'],
+  ['memory-match', 'Memory Match', 'Puzzle'],
+  ['trivia-duel', 'Trivia Duel', 'Party'],
+  ['card-war', 'Card War', 'Card'],
+  ['higher-lower', 'Higher or Lower', 'Card'],
+  ['crazy-eights', 'Crazy Eights', 'Card'],
+  ['duel-blackjack', 'Blackjack Duel', 'Card'],
+  ['circuit-race', 'Circuit Race', 'Racing'],
+  ['drag-race', 'Drag Race', 'Racing'],
+  ['launch-control', 'Launch Control', 'Racing'],
+  ['duel-traffic-dodge', 'Traffic Dodge Duel', 'Racing'],
+  ['pong', 'Pong', 'Arcade'],
+  ['duel-snake', 'Snake Duel', 'Arcade'],
+  ['duel-breakout', 'Breakout Duel', 'Arcade'],
+  ['duel-flappy-hop', 'Flappy Hop Duel', 'Arcade'],
+  ['duel-2048', '2048 Duel', 'Puzzle'],
+  ['duel-slide-puzzle', 'Sliding Puzzle Race', 'Puzzle'],
+  ['duel-lights-out', 'Lights Out Race', 'Puzzle'],
+  ['simon', 'Simon Says Colours', 'Party'],
+  ['truth-dare', 'Truth or Dare', 'Party'],
+];
+
+export const STORE_CATEGORIES = ['Card', 'Racing', 'Arcade', 'Puzzle', 'Party', 'Board'];
+export const CATEGORY_ICON = { Card: '🃏', Racing: '🏁', Arcade: '🎮', Puzzle: '🧩', Party: '🎉', Board: '♟️' };
+
+export const STORE_GAMES = STORE_CATEGORIES.flatMap((category) =>
+  ONLINE_INFO.filter((r) => r[2] === category).map(([id, name, , time]) => {
+    const local = LOCAL_GAMES.find((g) => g.online === id) || null;
+    return { id, name, category, time: local?.time || time, local };
+  }));

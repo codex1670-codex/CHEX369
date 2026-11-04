@@ -86,7 +86,20 @@ addColumnIfMissing('reels', 'edits', 'TEXT');
 // Post audience: 'public' (everyone) or 'followers' (only people who follow the author).
 // Existing posts stay public. Online status: people can hide it from Settings.
 addColumnIfMissing('posts', 'audience', "TEXT NOT NULL DEFAULT 'public' CHECK (audience IN ('public','followers'))");
+// CHEX Coins: fingerprints for repeated / copied posts, and whether a post counts toward the monthly goal.
+addColumnIfMissing('posts', 'caption_hash', 'TEXT');
+addColumnIfMissing('posts', 'media_hash', 'TEXT');
+addColumnIfMissing('posts', 'coin_eligible', 'INTEGER NOT NULL DEFAULT 1');
+addColumnIfMissing('posts', 'coin_skip_reason', 'TEXT');
+db.exec('CREATE INDEX IF NOT EXISTS idx_posts_caption_hash ON posts(caption_hash) WHERE caption_hash IS NOT NULL');
+db.exec('CREATE INDEX IF NOT EXISTS idx_posts_media_hash ON posts(media_hash) WHERE media_hash IS NOT NULL');
+addColumnIfMissing('reels', 'media_hash', 'TEXT');
+addColumnIfMissing('reels', 'coin_eligible', 'INTEGER NOT NULL DEFAULT 1');
+addColumnIfMissing('reels', 'coin_skip_reason', 'TEXT');
+db.exec('CREATE INDEX IF NOT EXISTS idx_reels_media_hash ON reels(media_hash) WHERE media_hash IS NOT NULL');
 addColumnIfMissing('users', 'show_online', 'INTEGER NOT NULL DEFAULT 1');
+// Premium profile frame (id from coins.js PROFILE_FRAMES); only settable after the frames unlock.
+addColumnIfMissing('users', 'profile_frame', 'TEXT');
 // Account privacy: 0 = public (everyone can see followers/following), 1 = private (only people
 // this user follows can see them). Existing accounts stay public.
 addColumnIfMissing('users', 'is_private', 'INTEGER NOT NULL DEFAULT 0');
@@ -164,6 +177,37 @@ if (storiesSql && !storiesSql.includes("'video'")) {
 // deactivated, and logging in with the same username + password reopens them.
 db.exec("UPDATE account_deletions SET status = 'cancelled' WHERE status = 'pending'");
 
+// Migration 6 (+7): life_items.kind gained 'alarm', then 'learn' (CHEX learn progress). Databases made earlier have a
+// CHECK without them, and SQLite can't alter a CHECK in place, so rebuild the table once (rows kept).
+// foreign_keys is off only for the swap.
+const lifeSql = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'life_items'").get()?.sql || '';
+if (lifeSql && !lifeSql.includes("'learn'")) {
+  db.pragma('foreign_keys = OFF');
+  try {
+    db.exec(`
+      BEGIN;
+      CREATE TABLE life_items_new (
+        id         TEXT PRIMARY KEY,
+        user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        kind       TEXT NOT NULL CHECK (kind IN ('planner','timetable','assignment','habit','focus','alarm','learn')),
+        data       TEXT NOT NULL DEFAULT '{}',
+        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+        updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+      );
+      INSERT INTO life_items_new (id, user_id, kind, data, created_at, updated_at) SELECT id, user_id, kind, data, created_at, updated_at FROM life_items;
+      DROP TABLE life_items;
+      ALTER TABLE life_items_new RENAME TO life_items;
+      CREATE INDEX IF NOT EXISTS idx_life_user_kind ON life_items(user_id, kind);
+      COMMIT;
+    `);
+  } catch (err) {
+    try { db.exec('ROLLBACK'); } catch { /* no open transaction */ }
+    throw err;
+  } finally {
+    db.pragma('foreign_keys = ON');
+  }
+}
+
 // Every "author"/"actor"/"user" summary sent to the client (post authors, commenters,
 // notification actors, message participants, game/tournament players, story/note
 // authors, callers, search results, etc.) should carry the same profile-media fields
@@ -171,7 +215,7 @@ db.exec("UPDATE account_deletions SET status = 'cancelled' WHERE status = 'pendi
 // everywhere your identity appears in the app — not just on your own Profile page.
 // SQL snippet to append to any `SELECT ... FROM users u` (or aliased join) to pull in
 // the columns toPublicUser() below expects.
-export const USER_MEDIA_COLUMNS_SQL = 'avatar_photo_url, profile_video_url, profile_video_cover_url, profile_video_muted, profile_display_mode';
+export const USER_MEDIA_COLUMNS_SQL = 'avatar_photo_url, profile_video_url, profile_video_cover_url, profile_video_muted, profile_display_mode, profile_frame';
 
 // Builds the small "who is this" object used throughout the app (as opposed to
 // profileFor() in routes/users.js, which builds the full profile page payload).
@@ -191,6 +235,7 @@ export function toPublicUser(row) {
     profileVideoCoverUrl: row.profile_video_cover_url || null,
     profileVideoMuted: !!row.profile_video_muted,
     displayMode: row.profile_display_mode || 'color',
+    frame: row.profile_frame || null,
   };
 }
 

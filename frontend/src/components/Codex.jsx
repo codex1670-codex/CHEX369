@@ -45,6 +45,7 @@ const HELP = `I can help with things CHEX's backend actually supports right now:
 • "open my saved posts" / "open my saved reels" / "show my reels history"
 • "open the game store" / "show my tournaments" / "show my games" — jumps to that Game Store tab
 • "turn on dark mode" / "turn on light mode"
+• "remind me to call mom at 5pm" / "remind me tomorrow 9am to submit the report" / "sticky note: buy milk in 30 minutes" / "remind me every day at 8am to take medicine" — makes a sticky note I read out loud when it's due · "open my sticky notes"
 • "call rahul" / "video call rahul" — starts a real call if you already have a conversation with them
 • "search rahul" — opens that person's profile · "search reel" — opens Reels · "search reel cats" — plays the best matching reel
 • "what is gravity" / "python enna" / "kya hai AI" — any question, in any language, opens in Google
@@ -538,6 +539,7 @@ export default function Codex({ navigate, goBack, currentUser }) {
     else if (res.openUrl) openExternal(res.openUrl);
     if (res.startCall) requestStartCall(res.startCall.conversationId, res.startCall.type);
     if (res.setTheme) applyTheme(res.setTheme, true);
+    if (res.stickyChanged) window.dispatchEvent(new Event('chex:stickies-changed'));
   };
 
   const runText = async (text, alternatives = []) => {
@@ -746,14 +748,14 @@ export default function Codex({ navigate, goBack, currentUser }) {
       {uiPrompt?.kind === 'confirm' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 4 }}>
           <div style={{ fontSize: 13, color: 'var(--text-hi)' }}>{uiPrompt.text}</div>
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div className="codex-actions">
             <button className="btn-ghost" style={{ padding: '4px 12px', fontSize: 12, width: 'auto' }} onClick={() => answerPrompt(false)}>Cancel</button>
             <button className="btn-primary" style={{ width: 'auto', padding: '4px 14px', fontSize: 12 }} onClick={() => answerPrompt(true)}>Yes, press it</button>
           </div>
         </div>
       )}
       {uiPrompt?.kind === 'pick' && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+        <div className="codex-actions">
           <div style={{ width: '100%', fontSize: 13, color: 'var(--text-hi)' }}>{uiPrompt.text}</div>
           {uiPrompt.candidates.map(c => (
             <button key={c.id} className="btn-ghost" style={{ padding: '4px 10px', fontSize: 12, width: 'auto' }} onClick={() => answerPrompt(c)}>{c.label || '(unlabelled)'}</button>
@@ -766,7 +768,7 @@ export default function Codex({ navigate, goBack, currentUser }) {
           {pending.steps.map((s, i) => (
             <div key={i} style={{ fontSize: 12.5, color: 'var(--text-mid)' }}>{s}</div>
           ))}
-          <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
+          <div className="codex-actions">
             <button className="btn-ghost" style={{ padding: '4px 12px', fontSize: 12, width: 'auto' }} onClick={() => confirmPlan(false)}>Cancel</button>
             <button className="btn-ghost" style={{ padding: '4px 12px', fontSize: 12, width: 'auto' }} onClick={editPlan}>Edit</button>
             <button className="btn-primary" style={{ width: 'auto', padding: '4px 14px', fontSize: 12 }} onClick={() => confirmPlan(true)}>Confirm</button>
@@ -774,13 +776,13 @@ export default function Codex({ navigate, goBack, currentUser }) {
         </div>
       )}
       {pending && !busy && !pending.steps && !pending.candidates && (
-        <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-          <button className="btn-ghost" style={{ padding: '4px 12px', fontSize: 12 }} onClick={() => confirmPending(false)}>Cancel</button>
+        <div className="codex-actions">
+          <button className="btn-ghost" style={{ padding: '4px 12px', fontSize: 12, width: 'auto' }} onClick={() => confirmPending(false)}>Cancel</button>
           <button className="btn-primary" style={{ width: 'auto', padding: '4px 14px', fontSize: 12 }} onClick={() => confirmPending(true)}>Confirm</button>
         </div>
       )}
       {pending && !busy && pending.candidates && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+        <div className="codex-actions">
           {pending.candidates.map(c => (
             <button key={c.username} className="btn-ghost" style={{ padding: '4px 10px', fontSize: 12, width: 'auto' }} onClick={() => pickCandidate(c)}>
               @{c.username} <span style={{ opacity: 1 }}>({c.displayName})</span>
@@ -819,7 +821,7 @@ export default function Codex({ navigate, goBack, currentUser }) {
             <button type="button" className="codex-mini-btn" onClick={toggleListening} disabled={!!pending || !!uiPrompt} aria-label="Talk to Codex"
               style={{ background: listening ? 'var(--pink)' : 'transparent' }}>{listening ? '⏹' : '🎙'}</button>
             <input
-              placeholder={pending || uiPrompt ? 'Answer above first…' : agentRunning ? 'Working…' : listening ? 'Listening…' : 'Ask Codex… (type help)'}
+              placeholder={pending || uiPrompt ? 'Answer above…' : agentRunning ? 'Working…' : listening ? 'Listening…' : 'Ask Codex… (type help)'}
               value={listening && interim ? interim : input} onChange={onMiniChange} disabled={!!pending || !!uiPrompt || agentRunning} aria-label="Ask Codex"
             />
             <select value={voiceLang} onChange={e => setVoiceLang(e.target.value)} aria-label="Voice language" title="Voice language"
@@ -908,7 +910,7 @@ export default function Codex({ navigate, goBack, currentUser }) {
             <button type="button" onClick={toggleListening} disabled={!!pending || !!uiPrompt} style={{ background: listening ? 'var(--pink)' : 'transparent', border: '1px solid var(--border-soft)', borderRadius: '50%', width: 34, height: 34, color: 'var(--text-hi)', cursor: 'pointer', flexShrink: 0 }}>
               {listening ? '⏹' : '🎙'}
             </button>
-            <input placeholder={pending || uiPrompt ? 'Answer above first…' : agentRunning ? 'Working…' : listening ? 'Listening…' : 'Tell Codex what to do…'} value={listening && interim ? interim : input} onChange={e => setInput(e.target.value)} disabled={!!pending || !!uiPrompt || agentRunning} />
+            <input placeholder={pending || uiPrompt ? 'Answer above…' : agentRunning ? 'Working…' : listening ? 'Listening…' : 'Tell Codex what to do…'} value={listening && interim ? interim : input} onChange={e => setInput(e.target.value)} disabled={!!pending || !!uiPrompt || agentRunning} />
           </form>
         </div>
       )}

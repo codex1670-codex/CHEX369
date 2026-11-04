@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import FullscreenMediaViewer from './FullscreenMediaViewer.jsx';
 import { useIsOnline } from '../presence.jsx';
+import { isFrameId } from '../profileFrames.js';
 
 // Renders a user's identity everywhere in the app: a plain color+initial circle by
 // default, or — whenever that user has switched their profile to show a photo or a
@@ -14,7 +15,7 @@ import { useIsOnline } from '../presence.jsx';
 // clicked (used on the Profile page's own header avatar). Clicks are stopped from
 // bubbling so this never fights with a surrounding row's own onClick (e.g. "open this
 // story" / "open this profile").
-export default function Avatar({ name, color = '#7C5CFF', size = 40, photoUrl = null, user = null, fullscreenOnClick = false, showPresence = true, online: onlineProp }) {
+export default function Avatar({ name, color = '#7C5CFF', size = 40, photoUrl = null, user = null, fullscreenOnClick = false, showPresence = true, online: onlineProp, frame: frameProp }) {
   const [viewerOpen, setViewerOpen] = useState(false);
   const liveOnline = useIsOnline(user?.id);
   const online = onlineProp ?? (showPresence && liveOnline);
@@ -44,7 +45,13 @@ export default function Avatar({ name, color = '#7C5CFF', size = 40, photoUrl = 
     />
   );
 
-  const withDot = (node) => (online ? (
+  // Premium animated frame (unlocked in the CHEX Coins store): a ring drawn around the avatar.
+  const frameId = frameProp !== undefined ? frameProp : user?.frame;
+  const framed = (node) => (isFrameId(frameId) ? (
+    <span className={`pf pf-${frameId}`} style={{ '--fs': `${size}px`, width: size, height: size }} data-frame={frameId}>{node}</span>
+  ) : node);
+
+  const withDot = (node) => framed(online ? (
     <span className="avatar-wrap" style={{ width: size, height: size }} title="Online">
       {node}
       <span className="online-dot" style={{ '--d': `${Math.max(9, Math.round(size * 0.28))}px` }} aria-label="Online" />

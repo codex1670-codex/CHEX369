@@ -92,3 +92,19 @@ export function attachPush(io) {
     return op;
   };
 }
+
+// A sticky-note reminder came due: send a home-screen notification (the app itself speaks it when it is open).
+export async function sendStickyPush(userId, note) {
+  const subs = db.prepare('SELECT * FROM push_subscriptions WHERE user_id = ?').all(userId);
+  if (!subs.length) return;
+  const life = String(note.source || '').startsWith('life:');
+  const alarm = String(note.source || '').startsWith('life:alarm:');
+  const payload = JSON.stringify({ title: alarm ? '⏰ Alarm' : life ? `🌟 ${note.label}` : '📌 Reminder', body: note.text, tag: `chex-sticky-${note.id}`, url: life ? '/?open=mylife' : '/?open=stickies', sticky: true });
+  await Promise.all(subs.map(async (s) => {
+    try {
+      await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, payload, { TTL: alarm ? 600 : 3600, urgency: 'high' });   // a late alarm is worse than none, so it expires after 10 minutes
+    } catch (err) {
+      if (err?.statusCode === 404 || err?.statusCode === 410) db.prepare('DELETE FROM push_subscriptions WHERE endpoint = ?').run(s.endpoint);
+    }
+  }));
+}

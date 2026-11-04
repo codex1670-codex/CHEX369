@@ -1,5 +1,6 @@
 // Shared building blocks for the built-in games.
 import { useCallback, useEffect, useRef, useState } from 'react';
+import WinCelebration from '../components/WinCelebration.jsx';
 
 // All game randomness goes through rand() so a Score Duel can seed it: both players then get
 // the identical shuffle / obstacles / puzzle. Without a seed it is just Math.random.
@@ -107,9 +108,13 @@ export function Stat({ label, value }) {
 }
 export function StatBar({ children }) { return <div className="gm-statbar">{children}</div>; }
 
+// Celebrate when the title announces a win for a person (never for "CPU wins" / losses).
+const isWinTitle = (title) => typeof title === 'string' && /\bwins?\b|cleared|made 2048/i.test(title) && !/^cpu\b/i.test(title) && !/\b(lose|lost)\b/i.test(title);
+
 export function Overlay({ title, sub, actions }) {
   return (
     <div className="gm-overlay" role="status">
+      {isWinTitle(title) && <WinCelebration key={title} />}
       <div className="gm-overlay-title">{title}</div>
       {sub && <div className="gm-overlay-sub">{sub}</div>}
       <div className="gm-overlay-actions">{actions}</div>
@@ -121,7 +126,7 @@ export function Overlay({ title, sub, actions }) {
 export function GameCanvas({ w, h, canvasRef, onPointerDown, onPointerMove, onPointerUp, label }) {
   return (
     <canvas ref={canvasRef} width={w} height={h} className="gm-canvas" role="img" aria-label={label}
-      style={{ aspectRatio: `${w} / ${h}`, maxWidth: w }}
+      style={{ aspectRatio: `${w} / ${h}`, maxWidth: w, '--ar': w / h }}
       onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} />
   );
 }

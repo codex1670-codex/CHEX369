@@ -29,7 +29,7 @@ export default function Notifications({ onOpenProfile }) {
   useEffect(() => { load(); }, []);
 
   return (
-    <div>
+    <div className="page-narrow">
       <h2 className="page-title">Notifications</h2>
       {items === null && <div className="empty-state"><span className="loading-dot" /> Loading…</div>}
       {items?.length === 0 && <div className="empty-state"><div className="glyph">🔔</div>Nothing yet.</div>}

@@ -3,6 +3,7 @@ import { v4 as uuid } from 'uuid';
 import db, { toPublicUser, USER_MEDIA_COLUMNS_SQL } from '../db.js';
 import { requireAuth, optionalAuth } from '../middleware/auth.js';
 import { processMentionsAndHashtags } from '../content.js';
+import { safeCheckReel, safeStreakTick } from '../coins.js';
 import { canViewAccountContent, PRIVATE_OK_SQL } from './users.js';
 import { reelUpload, MAX_REEL_UPLOAD_BYTES, MAX_REEL_VIDEO_BYTES, mediaMiddleware, removeLocalUpload, editsToJson, parseEdits } from '../uploads.js';
 
@@ -34,8 +35,10 @@ router.post('/', requireAuth, (req, res) => {
   db.prepare('INSERT INTO reels (id, user_id, video_url, caption) VALUES (?, ?, ?, ?)')
     .run(id, req.userId, videoUrl.trim().slice(0, 2000), typeof caption === 'string' ? caption.slice(0, 2200) : '');
   processMentionsAndHashtags({ text: caption, sourceType: 'reel', sourceId: id, actorId: req.userId, io: req.app.get('io') });
+  const coinStatus = safeCheckReel(id);
+  safeStreakTick(req.userId, req.app.get('io'));
   const row = db.prepare('SELECT * FROM reels WHERE id = ?').get(id);
-  res.status(201).json({ reel: reelDTO(row, req.userId) });
+  res.status(201).json({ reel: reelDTO(row, req.userId), coinStatus });
 });
 
 // Real upload from the user's own device — gallery, camera roll, or a downloaded file —
@@ -49,8 +52,10 @@ router.post('/upload', requireAuth, mediaMiddleware('reels', ['video'], { maxVid
   db.prepare('INSERT INTO reels (id, user_id, video_url, caption, edits) VALUES (?, ?, ?, ?, ?)')
     .run(id, req.userId, req.media.url, typeof caption === 'string' ? caption.slice(0, 2200) : '', editsToJson(req.body.edits));
   processMentionsAndHashtags({ text: caption, sourceType: 'reel', sourceId: id, actorId: req.userId, io: req.app.get('io') });
+  const coinStatus = safeCheckReel(id);
+  safeStreakTick(req.userId, req.app.get('io'));
   const row = db.prepare('SELECT * FROM reels WHERE id = ?').get(id);
-  res.status(201).json({ reel: reelDTO(row, req.userId) });
+  res.status(201).json({ reel: reelDTO(row, req.userId), coinStatus });
 });
 
 router.get('/feed', optionalAuth, (req, res) => {
@@ -114,6 +119,7 @@ router.post('/:id/media', requireAuth, ownReelOr4xx, mediaMiddleware('reels', ['
   db.prepare("UPDATE reels SET video_url = ?, edits = ?, edited_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?")
     .run(req.media.url, editsToJson(req.body.edits), row.id);
   removeLocalUpload(row.video_url);
+  safeCheckReel(row.id, { rehashMedia: true });
   const updated = db.prepare('SELECT * FROM reels WHERE id = ?').get(row.id);
   res.json({ reel: reelDTO(updated, req.userId) });
 });

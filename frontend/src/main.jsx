@@ -6,13 +6,22 @@ import { AuthProvider } from './AuthContext.jsx';
 import './styles.css';
 import './mobile.css';
 import './royal.css';
+import './premium.css';
+import './frames.css';
+import './stickies.css';
+import './life.css';
+import './learn/learn.css';
+import './responsive.css';
+import './games/games3d.css';
 import { getStoredTheme, applyTheme } from './theme.js';
+import { initPremium } from './premiumThemes.js';
 import { apply3D } from './ui3d.js';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
 import { initKeyboardAware } from './keyboard.js';
 
 // Applied before first paint so there's no flash of the wrong theme.
 applyTheme(getStoredTheme());
+initPremium();
 apply3D();
 initKeyboardAware();
 

@@ -562,3 +562,82 @@ CREATE TABLE IF NOT EXISTS story_highlight_items (
   PRIMARY KEY (highlight_id, story_id)
 );
 CREATE INDEX IF NOT EXISTS idx_highlight_items_story ON story_highlight_items(story_id);
+
+-- CHEX Coins: every change to a wallet is one row (earn = +, spend = -); balance = SUM(amount).
+-- The unique (user_id, ref) index makes rewards idempotent, e.g. one monthly reward per month.
+CREATE TABLE IF NOT EXISTS coin_ledger (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  amount     INTEGER NOT NULL,
+  reason     TEXT NOT NULL,
+  ref        TEXT,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_coin_ledger_ref ON coin_ledger(user_id, ref) WHERE ref IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_coin_ledger_user ON coin_ledger(user_id, id);
+
+-- CHEX learn: levels a person has finished, recorded by the server (not the browser) so section coins can't be faked.
+CREATE TABLE IF NOT EXISTS learn_levels (
+  user_id      TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  lang         TEXT NOT NULL,
+  level        INTEGER NOT NULL,
+  completed_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  PRIMARY KEY (user_id, lang, level)
+);
+
+-- Store purchases (what a person has unlocked).
+CREATE TABLE IF NOT EXISTS coin_unlocks (
+  user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  item_id    TEXT NOT NULL,
+  price      INTEGER NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  PRIMARY KEY (user_id, item_id)
+);
+
+-- Daily posting streak (post or reel every day for 30 days in a row). One row per person.
+CREATE TABLE IF NOT EXISTS coin_streaks (
+  user_id        TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  status         TEXT NOT NULL CHECK (status IN ('active','broken','completed')),
+  start_day      TEXT NOT NULL,                    -- 'YYYY-MM-DD' in the person's own time zone = Day 1
+  tz             TEXT NOT NULL DEFAULT 'UTC',      -- IANA zone captured when they pressed Start
+  count_from     TEXT,                             -- only posts/reels made after this instant count (set after a completed run)
+  broken_on      TEXT,                             -- the day that was missed
+  best           INTEGER NOT NULL DEFAULT 0,       -- longest run of days reached
+  completed_runs INTEGER NOT NULL DEFAULT 0,
+  completed_at   TEXT,
+  started_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+
+-- Sticky notes / reminders. A note with remind_at is spoken aloud (and pushed) when it comes due.
+--   fired     = the current remind_at already rang      ringing = rang and is waiting for Done / Snooze
+--   snooze_until = rings again at this instant (kept apart from remind_at so repeating notes keep their schedule)
+CREATE TABLE IF NOT EXISTS sticky_notes (
+  id            TEXT PRIMARY KEY,
+  user_id       TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  text          TEXT NOT NULL,
+  color         TEXT NOT NULL DEFAULT 'yellow',
+  remind_at     TEXT,
+  repeat        TEXT NOT NULL DEFAULT 'none' CHECK (repeat IN ('none','daily','weekly')),
+  tz            TEXT NOT NULL DEFAULT 'UTC',
+  fired         INTEGER NOT NULL DEFAULT 0,
+  ringing       INTEGER NOT NULL DEFAULT 0,
+  snooze_until  TEXT,
+  done          INTEGER NOT NULL DEFAULT 0,
+  source        TEXT NOT NULL DEFAULT 'manual',
+  last_fired_at TEXT,
+  created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE INDEX IF NOT EXISTS idx_sticky_user ON sticky_notes(user_id, done);
+CREATE INDEX IF NOT EXISTS idx_sticky_due ON sticky_notes(remind_at) WHERE done = 0;
+
+-- "My life" hub: planner tasks, timetable slots, assignments, habits, focus sessions, alarms and language-learning progress.
+-- One small table; `data` is a JSON object whose shape depends on `kind` (validated in routes/life.js).
+CREATE TABLE IF NOT EXISTS life_items (
+  id         TEXT PRIMARY KEY,
+  user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  kind       TEXT NOT NULL CHECK (kind IN ('planner','timetable','assignment','habit','focus','alarm','learn')),
+  data       TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE INDEX IF NOT EXISTS idx_life_user_kind ON life_items(user_id, kind);

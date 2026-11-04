@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+<defs>
+<linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1fa65a"/><stop offset="1" stop-color="#07502a"/></linearGradient>
+<linearGradient id="gold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff7b0"/><stop offset=".4" stop-color="#ffc400"/><stop offset=".75" stop-color="#ff9100"/><stop offset="1" stop-color="#ffe55c"/></linearGradient>
+<linearGradient id="gloss" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".45"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+<clipPath id="tile"><rect x="6" y="6" width="108" height="108" rx="26"/></clipPath>
+</defs>
+<rect x="3" y="3" width="114" height="114" rx="29" fill="url(#gold)"/>
+<rect x="6" y="6" width="108" height="108" rx="26" fill="url(#bg)"/>
+<g clip-path="url(#tile)">
+<path d="M20 90 L20 70 C20 56 34 56 44 56 L76 56 C86 56 86 40 76 40 L50 40" fill="none" stroke="#0a3d1c" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/><path d="M20 90 L20 70 C20 56 34 56 44 56 L76 56 C86 56 86 40 76 40 L50 40" fill="none" stroke="#7dff6a" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/><circle cx="46" cy="36" r="4.5" fill="#fff"/><circle cx="46" cy="36" r="2" fill="#111"/><circle cx="54" cy="44" r="4.5" fill="#fff"/><circle cx="55" cy="45" r="2" fill="#111"/><path d="M38 40 L28 36 M38 40 L28 44" stroke="#ff3b3b" stroke-width="2.5" stroke-linecap="round"/><circle cx="92" cy="86" r="11" fill="#ff3b3b" stroke="#7a0a10" stroke-width="2.5"/><path d="M92 76 Q96 68 102 70" stroke="#5a3a1a" stroke-width="3" fill="none" stroke-linecap="round"/><ellipse cx="97" cy="71" rx="5" ry="3" fill="#35e06b" transform="rotate(-25 97 71)"/>
+<ellipse cx="60" cy="14" rx="62" ry="34" fill="url(#gloss)"/>
+</g>
+<rect x="6" y="6" width="108" height="108" rx="26" fill="none" stroke="#fff3a0" stroke-opacity=".55" stroke-width="1.5"/>
+</svg>

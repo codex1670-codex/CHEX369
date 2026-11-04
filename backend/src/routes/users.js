@@ -76,6 +76,7 @@ function profileFor(user, viewerId) {
     profileVideoCoverUrl: user.profile_video_cover_url,
     profileVideoMuted: !!user.profile_video_muted,
     displayMode: user.profile_display_mode,
+    frame: user.profile_frame || null,
     studio: parseStudio(user.profile_studio),
     followerCount, followingCount, postCount,
     isFollowing, isSelf,

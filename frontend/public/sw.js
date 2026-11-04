@@ -44,6 +44,8 @@ self.addEventListener('push', (e) => {
       badge: '/icon-192.png',
       tag: data.tag || 'chex',
       renotify: true,
+      requireInteraction: !!data.sticky,
+      vibrate: data.sticky ? [250, 120, 250, 120, 250] : undefined,
       data: { url: data.url || '/' },
     });
   })());

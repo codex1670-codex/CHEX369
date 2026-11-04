@@ -12,6 +12,7 @@ import { REEL_URL_RE } from './reels.js';
 import { findReels } from './search.js';
 import { findApp, launchInfo } from '../appCatalog.js';
 import { processMentionsAndHashtags } from '../content.js';
+import { parseReminder, createSticky, friendlyWhen, validTz } from '../reminders.js';
 import {
   saveProfileNickname, updateProfileNickname, deleteProfileNickname,
   listProfileNicknames, resolveProfileNickname, userRowForNickname,
@@ -31,7 +32,7 @@ const TOOLS = [
     input_schema: { type: 'object', properties: { username: { type: 'string', description: 'The username, display name, or the caller\'s private nickname for this person, exactly as the user typed it.' } }, required: ['username'] } },
   { name: 'navigate', description: "Move the user to a different screen inside NEXA, optionally a specific sub-view (e.g. \"open my saved reels\" -> screen 'saved-reels'; \"show my reels history\"/\"reels I've watched\" -> screen 'reels-history'; \"open profile studio\"/\"change my profile video or photo\" -> screen 'profile-studio'; \"open tournaments\" -> screen 'games' with tab 'tournaments').",
     input_schema: { type: 'object', properties: {
-      screen: { type: 'string', enum: ['feed', 'messages', 'profile', 'notifications', 'reels', 'games', 'search', 'settings', 'saved-posts', 'saved-reels', 'reels-history', 'profile-studio'] },
+      screen: { type: 'string', enum: ['feed', 'messages', 'profile', 'notifications', 'reels', 'games', 'search', 'settings', 'saved-posts', 'saved-reels', 'reels-history', 'profile-studio', 'stickies', 'mylife'] },
       username: { type: 'string', description: 'only for the profile/messages screens' },
       tab: { type: 'string', enum: ['discover', 'friends', 'mine', 'tournaments'], description: 'only for the games screen' },
     }, required: ['screen'] } },
@@ -43,6 +44,8 @@ const TOOLS = [
     input_schema: { type: 'object', properties: { appName: { type: 'string' }, searchFor: { type: 'string' } }, required: ['appName'] } },
   { name: 'create_note', description: "Post to the user's Note (shown above Messages), which expires in 24h.",
     input_schema: { type: 'object', properties: { text: { type: 'string' }, emoji: { type: 'string' } }, required: ['text'] } },
+  { name: 'create_reminder', description: "Make a sticky-note reminder that CHEX speaks out loud (and notifies) at the time given — e.g. \"remind me to call mom at 5pm\", \"remind me tomorrow 9am to submit the report\", \"sticky note: buy milk in 30 minutes\", \"remind me every day at 8am to take medicine\". With no time it is saved as a plain sticky note.",
+    input_schema: { type: 'object', properties: { text: { type: 'string', description: 'What to be reminded about, in the user\'s words (may also contain the time).' }, when: { type: 'string', description: 'The time phrase exactly as the user said it, e.g. \"tomorrow at 5pm\", \"in 20 minutes\", \"every monday 7am\". Leave out if none was given.' } }, required: ['text'] } },
   { name: 'create_story', description: 'Post a text Story that expires in 24h.',
     input_schema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] } },
   { name: 'search', description: 'Search NEXA. An exact username ("search rahul") opens that person\'s profile; a #hashtag or any other words open the Search screen. With scope "reels" ("search reel cats") the best matching reel is played.',
@@ -265,6 +268,7 @@ function describeStep(name, input) {
     case 'set_theme': return `🎨 Switch to ${input.theme} mode`;
     case 'start_call': return `${input.video ? '🎥' : '📞'} ${input.video ? 'Video' : 'Voice'} call ${at(input.username)}`;
     case 'open_app': return `🔗 Open ${input.appName}${input.searchFor ? ` and search "${input.searchFor}"` : ''}`;
+    case 'create_reminder': return `📌 Reminder: "${String([input.text, input.when].filter(Boolean).join(' ')).slice(0, 80)}"`;
     case 'create_note': return `📝 Post a note: "${input.text}"`;
     case 'create_story': return `📸 Post a story: "${input.text}"`;
     case 'search': return `🔍 Search ${input.scope === 'reels' ? 'reels for ' : ''}"${input.query}"`;
@@ -430,7 +434,7 @@ router.post('/act', requireAuth, async (req, res) => {
   }
 
   const messages = [];
-  let lastNavigate, lastOpenUrl, lastOpenApp, lastStartCall, lastSetTheme;
+  let lastNavigate, lastOpenUrl, lastOpenApp, lastStartCall, lastSetTheme, stickyChanged = false;
   // Everything the browser must do, in the order the user asked for it. Only sent when a UI step
   // is involved (the browser then runs its observe→act loop); otherwise the legacy fields below suffice.
   const sequence = [];
@@ -456,6 +460,7 @@ router.post('/act', requireAuth, async (req, res) => {
       if (result.navigate) { lastNavigate = result.navigate; sequence.push({ kind: 'navigate', ...result.navigate }); }
       if (result.openUrl) { lastOpenUrl = result.openUrl; lastOpenApp = result.openApp || null; sequence.push(result.openApp ? { kind: 'openApp', app: result.openApp, url: result.openUrl } : { kind: 'openUrl', url: result.openUrl }); }
       if (result.startCall) { lastStartCall = result.startCall; sequence.push({ kind: 'startCall', ...result.startCall }); }
+      if (result.stickyChanged) stickyChanged = true;
       if (result.setTheme) { lastSetTheme = result.setTheme; sequence.push({ kind: 'theme', theme: result.setTheme }); }
       if (result.uiStep) { hasUiStep = true; sequence.push({ kind: 'ui', step: result.uiStep }); }
       audit({ userId: req.userId, inputText: inputTextForAudit, actionName: name, actionInput: input, status: 'executed', resultSummary: result.message });
@@ -480,7 +485,7 @@ router.post('/act', requireAuth, async (req, res) => {
     }
   }
 
-  return res.json({ handled: true, message: messages.filter(Boolean).join(' '), navigate: lastNavigate, openUrl: lastOpenUrl, openApp: lastOpenApp, startCall: lastStartCall, setTheme: lastSetTheme, sequence: hasUiStep ? sequence : undefined });
+  return res.json({ handled: true, message: messages.filter(Boolean).join(' '), navigate: lastNavigate, openUrl: lastOpenUrl, openApp: lastOpenApp, startCall: lastStartCall, setTheme: lastSetTheme, stickyChanged: stickyChanged || undefined, sequence: hasUiStep ? sequence : undefined });
 });
 
 // ───────────────────────── live-screen control resolution ─────────────────────────
@@ -572,7 +577,7 @@ function executeAction(name, input, { req, io, context }) {
       return { message: `${name === 'follow_user' ? 'Followed' : 'Unfollowed'} @${input.username}.`, navigate: { screen: 'profile', username: input.username } };
     }
     case 'navigate': {
-      const label = input.screen === 'saved-posts' ? 'your saved posts' : input.screen === 'saved-reels' ? 'your saved reels' : input.screen === 'reels-history' ? 'your reels history' : input.screen === 'profile-studio' ? 'your Profile Studio' : input.screen;
+      const label = input.screen === 'saved-posts' ? 'your saved posts' : input.screen === 'saved-reels' ? 'your saved reels' : input.screen === 'reels-history' ? 'your reels history' : input.screen === 'profile-studio' ? 'your Profile Studio' : input.screen === 'stickies' ? 'your sticky notes' : input.screen === 'mylife' ? 'My life' : input.screen;
       return { message: `Opening ${label}.`, navigate: { screen: input.screen, username: input.username, tab: input.tab } };
     }
     case 'set_theme': {
@@ -598,6 +603,18 @@ function executeAction(name, input, { req, io, context }) {
       const launch = app ? launchInfo(app, input.searchFor)
         : { id: null, name, android: null, ios: null, webUrl: null, searchUrl: null, fallbackUrl: `https://www.google.com/search?q=${encodeURIComponent(input.searchFor ? `${name} ${input.searchFor}` : `${name} app`)}` };
       return { message: app ? `Opening ${name}${input.searchFor ? ` and searching "${input.searchFor}"` : ''}…` : `${name} isn't in my app list, so I'm searching Google for it…`, openUrl: launch.webUrl || launch.fallbackUrl, openApp: launch };
+    }
+    case 'create_reminder': {
+      // Sticky note that rings out loud. The time phrase is read in the person's own time zone (sent by the app).
+      const tz = validTz(context?.clientTz);
+      const parsed = parseReminder([input.text, input.when].filter(Boolean).join(' '), { tz });
+      if (parsed.error) throw new Error(parsed.error);
+      const out = createSticky(req.userId, { text: parsed.text, remindAt: parsed.remindAt, repeat: parsed.repeat, tz, source: 'codex' });
+      if (out.error) throw new Error(out.error.message);
+      const every = parsed.repeat === 'daily' ? ', every day' : parsed.repeat === 'weekly' ? ', every week' : '';
+      return { stickyChanged: true, message: parsed.remindAt
+        ? `Reminder set for ${friendlyWhen(parsed.remindAt, { tz })}${every}: ${parsed.text}. I'll say it out loud when it's time.`
+        : `Sticky note saved: ${parsed.text}. Open Sticky notes to add a time.` };
     }
     case 'create_note': {
       const id = uuid();

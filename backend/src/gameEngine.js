@@ -1,4 +1,5 @@
 import db from './db.js';
+import { awardGameWin } from './coins.js';
 import { roomDTO } from './routes/games.js';
 import { recordTournamentResultIfApplicable } from './routes/tournaments.js';
 import { chessInit, chessApplyMove } from './gameEngines/chess.js';
@@ -190,6 +191,12 @@ function broadcastRoom(io, roomId) {
   for (const p of getPlayers(roomId)) io.to(`user:${p.user_id}`).emit('game:state', roomDTO(room, p.user_id));
 }
 
+// Pays the winner 1 CHEX coin (rules in coins.js) and tells their screen so it can show "+1 coin".
+function announceCoinWin(io, roomId, winner) {
+  const amount = awardGameWin(roomId, winner);
+  if (amount) io.to(`user:${winner}`).emit('coins:earned', { amount, reason: 'Game win' });
+}
+
 export function finishRoom(io, roomId, winner, patch = {}) {
   const room = getRoom(roomId);
   if (!room || room.status === 'finished') return;
@@ -198,6 +205,7 @@ export function finishRoom(io, roomId, winner, patch = {}) {
     .run(JSON.stringify(state), roomId);
   stopRealtime(roomId);
   recordTournamentResultIfApplicable(roomId, winner);
+  announceCoinWin(io, roomId, winner);
   broadcastRoom(io, roomId);
 }
 
@@ -271,6 +279,7 @@ export function registerGameHandlers(io, socket) {
       db.prepare("UPDATE game_rooms SET status = 'finished', ended_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'), state = ? WHERE id = ?")
         .run(JSON.stringify(state), roomId);
       recordTournamentResultIfApplicable(roomId, result.winner);
+      announceCoinWin(io, roomId, result.winner);
     } else {
       if (!result.keepTurn && !engine.simultaneous) {
         const players = getPlayers(roomId);

@@ -9,7 +9,7 @@ import MediaPicker from '../components/MediaPicker.jsx';
 import CameraCapture, { cameraSupported } from '../components/CameraCapture.jsx';
 import { defaultEdits, fileKind, MAX_IMAGE_BYTES, MAX_VIDEO_BYTES } from '../editSettings.js';
 
-export default function Feed({ onOpenProfile }) {
+export default function Feed({ onOpenProfile, onOpenStickies, onOpenLearn }) {
   const { user } = useAuth();
   const [tab, setTab] = useState('following');
   const [posts, setPosts] = useState(null);
@@ -18,6 +18,7 @@ export default function Feed({ onOpenProfile }) {
   const [caption, setCaption] = useState('');
   const [posting, setPosting] = useState(false);
   const [error, setError] = useState('');
+  const [coinNote, setCoinNote] = useState('');
   const [media, setMedia] = useState(null);       // { file, kind, edits, … } from MediaPicker
   const [showMedia, setShowMedia] = useState(false);
   const [audience, setAudience] = useState('public'); // 'public' | 'followers'
@@ -60,6 +61,11 @@ export default function Feed({ onOpenProfile }) {
       setShowMedia(false);
       setComposerOpen(false);
       if (tab === 'following') setPosts(p => [res.post, ...(p || [])]);
+      const note = res.coinsEarned ? `🪙 You earned ${res.coinsEarned} CHEX coins for sharing 30 public posts this month!`
+        : res.post?.audience === 'public' && res.coinStatus?.reason === 'repeat' ? 'This post repeats something you already shared, so it won’t count toward your 30-post coin goal.'
+        : res.post?.audience === 'public' && res.coinStatus?.reason === 'copy' ? 'This post matches something already shared on CHEX, so it won’t count toward your 30-post coin goal.'
+        : '';
+      if (note) { setCoinNote(note); setTimeout(() => setCoinNote(''), 9000); }
     } catch (err) {
       setError(err.message);
     } finally {
@@ -68,7 +74,7 @@ export default function Feed({ onOpenProfile }) {
   };
 
   return (
-    <div>
+    <div className="page-narrow">
       <StoriesBar />
       <div className="feed-tabs">
         <button className={tab === 'following' ? 'active' : ''} onClick={() => setTab('following')}>Following</button>
@@ -76,9 +82,13 @@ export default function Feed({ onOpenProfile }) {
       </div>
 
       {!composerOpen && (
-        <button type="button" className="btn-primary composer-toggle" onClick={() => setComposerOpen(true)} aria-expanded="false" aria-label="Write a new post">
-          <span aria-hidden="true">＋</span> Post
-        </button>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          <button type="button" className="btn-primary composer-toggle" onClick={() => setComposerOpen(true)} aria-expanded="false" aria-label="Write a new post">
+            <span aria-hidden="true">＋</span> Post
+          </button>
+          {onOpenStickies && <button type="button" className="btn-ghost" style={{ width: 'auto', padding: '9px 16px' }} onClick={onOpenStickies} aria-label="Open sticky notes">📌 Sticky notes</button>}
+          {onOpenLearn && <button type="button" className="btn-ghost" style={{ width: 'auto', padding: '9px 16px' }} onClick={onOpenLearn} aria-label="Open CHEX learn">🌍 CHEX learn</button>}
+        </div>
       )}
 
       {composerOpen && <form className="glass-card composer" onSubmit={submitPost}>
@@ -97,6 +107,7 @@ export default function Feed({ onOpenProfile }) {
           </div>
         )}
         {error && <div className="error-banner" style={{ marginTop: 10 }}>{error}</div>}
+        {coinNote && <div className="coin-toast" role="status">{coinNote}</div>}
         <div className="audience-picker" role="radiogroup" aria-label="Who can see this post">
           <span className="audience-label">Who can see this?</span>
           <button type="button" role="radio" aria-checked={audience === 'public'} className={audience === 'public' ? 'on' : ''} onClick={() => setAudience('public')}>

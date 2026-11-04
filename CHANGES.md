@@ -1,3 +1,142 @@
+## v85 – Responsive pass (phones, tablets, desktop)
+- New `frontend/src/responsive.css` (loaded last): nothing scrolls sideways, long words wrap, media/dialogs/sheets always fit the screen, fluid text sizes, reduced-motion support.
+- Touch screens: buttons, chips, selects and links are at least 36-40px so they are easy to tap (post actions, game chips, sticky chips, Codex mini-bar, profile stats, login link, emoji picker).
+- The floating "Ask Codex" bar is now wide enough to type in on phones; hidden on landscape phones.
+- Very small phones (<=360px): tighter padding, smaller menu labels, no edge overflow.
+- Desktop: Home, Notifications, Coins and Settings keep a readable width, centered.
+- Checked at 320 / 360 / 390 / 768 / 1280 px on Home, Search, Reels, Notifications, Games, Settings, Coins, Stickies, My Life, Messages, Profile and Login: no horizontal overflow, no undersized phone tap targets.
+
+## v84 – Glossy 3D emoji (like the reference)
+- New `components/Emoji3D.jsx`: hand-drawn glossy "inflated" 3D emoji (shaded sphere, rim shadow, gloss highlight) – 14 faces (😀 😄 😍 🥰 😂 😋 😎 😉 🤩 🥳 😭 😢 😠 😮) and 9 objects (💖 ⭐ 🔥 🔔 ✨ 💎 🪙 🎈 🏆).
+- Any other emoji the user types is shown on a matching glossy 3D pearl bubble, so every emoji looks 3D.
+- Used in the falling/floating effect (gentle 3D wobble, sway, soft glow) and in Settings → Emoji effects (palette + chips). New default set: 😍 💖 ⭐ 🥳.
+
+## v83 – Premium solid 3D emoji
+- The falling/floating emoji are now small solid 3D objects (stacked, shaded depth layers that slowly turn), with a soft colored glow and smooth sway. Smaller and slower for a more premium feel.
+
+## v82 – 3D emoji effects (Settings → Emoji effects)
+- New Settings card: 3D emoji fall from the top and float up the screen when a new notification arrives. Switch it on/off, optionally keep gentle emoji floating in the background, and choose Falling / Floating / Both.
+- Emoji are customizable: tap any from the palette, remove chips, or type/paste your own (up to 10). Preview button and Reset included. Saved on this device.
+- Respects the phone's "reduce motion" setting.
+
+## v81 – Full-screen games + 3D win animation
+- While a game is being played (online room active/finished, and every built-in game) it now fills the whole screen. The room code / Copy code / Share invite block is hidden once the match starts; it only shows in the waiting lobby.
+- New 3D win celebration (spinning trophy, extruded "YOU WIN!", tumbling confetti) for online wins and for every built-in game's win screen. Not shown for losses or "CPU wins".
+
+## v80 – Game Store redesign
+- Game Store rows now use one layout for every game: logo tile, title, details, **Start tournament** and **Play online**, grouped under Card / Racing / Arcade / Puzzle / Party / Board headers.
+- Added 27 game logos in `frontend/public/game-logos/` (the 24 built-in games plus Checkers, Chess, Reversi).
+- Removed the duplicate "clone" cards: each game appears once. Offline play (vs CPU / 2 players on one device) is kept as small chips under each row.
+
+# My life: Alarm without a song (v79)
+
+- The alarm song picker and song playback are removed. An alarm is now a notification: a phone / desktop notification when
+  CHEX is closed, and a Stop / Snooze alarm card (chime + spoken alert) when CHEX is open.
+
+# My life: Alarm notifications while the app is closed (v78)
+
+- Every enabled alarm now has a server-side alert, so a **phone / desktop notification** goes out at the alarm time even
+  when CHEX is closed (same Web Push as sticky reminders; tap it to open CHEX). Repeating alarms re-arm for their next day
+  automatically; one-time alarms switch themselves off after they fire. The notification expires after 10 minutes so a
+  late alarm never arrives hours afterwards.
+- When CHEX is open the song plays as before and no duplicate notification or voice alert is shown.
+- The Alarm tab shows whether notifications are on and has an **Enable notifications** button.
+- A notification cannot play your chosen song itself (browsers don't allow it); it uses the device's notification sound
+  and vibration. If you tap it and CHEX opens within 2 minutes of the alarm time, the song then starts playing.
+
+# My life: Alarm (v77)
+
+- New **Alarm** tab in My life. Set a time, a label and repeat days (once / weekdays / every day / custom), then pick
+  **any song** from the same Tamil + English search used in Notes (trending list, song / lyrics / artist / movie search,
+  ▶ preview before choosing). At the alarm time the song plays on a loop with a full-screen **Stop** / **Snooze 5 min**
+  card, anywhere in the app. No song chosen (or the song cannot play) → chime + spoken alert.
+- One-time alarms switch themselves off after ringing; each alarm has an On/Off switch.
+- Backend: `life_items.kind` accepts `alarm` (30 per person, https-only song links). Existing databases are migrated
+  automatically on boot (table rebuilt once, rows kept).
+- The song is a ~30 s catalog preview, looped. The app must be open (or installed) for the alarm to ring.
+
+# My life: alerts on every tab + Home button removed (v76)
+
+- **Every tab now notifies, with voice.** Anything with a time becomes a linked reminder on the same scheduler as sticky notes, so it is read aloud, shown as a ringing card (Done / Snooze / replay / Dismiss) and sent as a phone notification, even with the app closed:
+  - 📅 Planner task with a time → at that time.
+  - 🗓️ Class → **10 minutes before it starts**, repeating every week.
+  - 📚 Assignment with a due date → **8:00 am on the due date** (not if already done).
+  - 🔥 Habit with a new "remind me every day at" time → daily; if already ticked today, it waits until tomorrow.
+  - 🎯 Focus timer → alert when the session ends (cancelled when you stop; the open app speaks it itself).
+  - ⏰ Smart reminders / 📌 Sticky notes → unchanged.
+  Editing, ticking done or deleting an item moves or removes its alert. Alert cards show the tab name (Planner, Class, Assignment, Habit, Focus timer); notifications open My life.
+- **Home:** the "🌟 My life" button is gone from the Home page. My life is still in the ＋ menu, Settings and via Codex ("open my life").
+- Server: new `backend/src/lifeAlerts.js`; `POST/DELETE /api/life/focus-alert`; habits gain `remindTime`; linked alerts are hidden from the Sticky notes board and don't count towards its 100-note limit. Tests extended in `life.test.mjs` and `myLife.test.jsx`.
+
+# My life hub (v75)
+
+- **🌟 My life** (Home → "🌟 My life", the ＋ menu, Settings, or tell Codex "open my life" / "planner" / "habit tracker"): one page with seven sections.
+  - **⏰ Smart reminders** – reminders with a time (Once / Every day / Every week), spoken aloud with a phone notification, as before; Codex still makes them from "remind me to … at 5pm".
+  - **📌 Sticky notes** – the existing coloured note board.
+  - **📅 Daily planner** – tasks per day with optional time and priority, tick-off, progress bar, "Move to today" for missed tasks.
+  - **🗓️ Study timetable** – weekly grid (Monday first, today highlighted) with subject, start/end, room and colour.
+  - **📚 Assignments** – To do / In progress / Done columns, due dates with Overdue / Due today / Due soon labels.
+  - **🎯 Focus timer** – 25 / 45 / 5 / 15 min presets or custom, ring progress, chime + voice at the end; keeps counting if you leave the page or reload; finished focus sessions add up to "today".
+  - **🔥 Habit tracker** – tick the last 7 days, current and best streak.
+- **Server:** new table `life_items` (kind + JSON), API `GET/POST /api/life`, `PATCH/DELETE /api/life/:id`; all input validated, private per user, per-kind limits. Codex navigate screen `mylife`.
+- New: `backend/src/routes/life.js`, `frontend/src/pages/MyLife.jsx`, `lifeUtils.js`, `life.css`; tests `backend/test/life.test.mjs`, `frontend/test/myLife.test.jsx`. `Stickies` gained `embedded` and `mode` props; the old Sticky notes page still works.
+
+# Sticky notes with voice reminders + Codex (v74)
+
+- **📌 Sticky notes** page (Home → "📌 Sticky notes", Settings, the ＋ menu, or ask Codex): coloured notes with an optional reminder time, **Once / Every day / Every week**, quick chips (In 10 min · In 1 hour · Tonight 8 pm · Tomorrow 9 am), edit, done/undo, delete and a Done list.
+- **Voice:** when a reminder comes due CHEX plays a chime and **reads it out loud** ("Reminder. Call mom"), shows a ringing note card with **Done · Snooze 10 min · 🔊 replay · Dismiss**, and repeats it every 45 s (up to 4 times) until you act. Own **🔊 Voice reminders on/off** switch and a **Test voice** button, independent of the "AI alerts" switch. Tamil/Hindi text picks a matching voice when the phone has one.
+- **Phone notification:** a due reminder also goes out as a Web Push (stays on screen until tapped, opens the notes page); skipped while the app is open and speaking. Reminders that rang while the app was closed are read out the moment you open it.
+- **Codex makes them for you** — "remind me to call mom at 5pm", "remind me tomorrow 9am to submit the report", "sticky note: buy milk in 30 minutes", "remind me every day at 8am to take medicine", "remind me every monday 7am to water the plants", "remind me to pay rent on 5 nov at 10am". Understands in 10 minutes / an hour / half an hour, at 5pm / 17:30 / "at 5", noon, midnight, tonight, morning/evening, weekdays, dates, daily/weekly. No time = a plain sticky note. "open my sticky notes" opens the board. Times are read in the **device's time zone** (sent with every Codex command). Works with or without an AI key.
+- **Server:** a scheduler checks every 10 s, rings each note once, advances repeating notes, honours snooze without losing the repeat schedule, and catches up after a restart. API: `GET/POST /api/stickies`, `PATCH/DELETE /api/stickies/:id`, `POST /api/stickies/:id/snooze|dismiss`, `GET /api/stickies/ringing`; socket event `sticky:due`; Codex tool `create_reminder`. Max 100 active notes, 200 characters each; notes are private to their owner. New table `sticky_notes`.
+- New: `backend/src/reminders.js`, `routes/stickies.js`, `frontend/src/pages/Stickies.jsx`, `components/StickyAlerts.jsx`, `stickyVoice.js`, `stickies.css`; tests `backend/test/reminders.test.mjs`, `frontend/test/stickies.test.jsx`.
+
+# Premium animated profile frames (v73)
+
+- **12 animated profile frames** — Golden Halo, Aurora Spin, Neon Pulse, Royal Crown, Emerald Flame, Rainbow Orbit, Diamond Sparkle, Inferno, Ocean Wave, Cherry Blossom, Cyber Glitch, Galaxy Orbit. Pure CSS (transform/opacity only), so they stay light on phones; they stop when **Animations off** or the phone's reduce-motion is on.
+- **Prices:** frames are a one-time **2,000 CHEX coins** unlock (all 12); premium themes stay a one-time **1,000 CHEX coins** unlock (all 9). Both are charged on the server, atomically, and can't be bought twice.
+- **Pick a frame:** Settings → Appearance → 🖼️ Premium profile frames (locked cards open the CHEX Coins store). "Remove my frame" clears it.
+- **Shown everywhere your avatar appears** — posts, comments, stories, messages, search, notifications, game rooms — and around the big picture on your profile page, for every viewer.
+- API: `POST /api/coins/frame` `{ frame: id | null }`; `GET /api/coins/me` now includes `frame`; new store item `premium-frames`; users gain `profile_frame` and public user objects carry `frame`. Frame ids live in `PROFILE_FRAMES` (`backend/src/coins.js`) and `src/profileFrames.js`; artwork in `src/frames.css`.
+- New test in `backend/test/coins.test.mjs`.
+
+# 30-day posting streak (v72)
+
+- **Settings → 🔥 30-day posting streak** with a **Start** button. Pressing it makes today **Day 1**. Share a post or a reel every day for 30 days in a row → **100 CHEX coins** (paid the moment day 30 is done; you can run it again afterwards).
+- **One missed day ends it** and the card shows "Start again" — it restarts from Day 1. A post/reel you already shared earlier on the start day counts for Day 1.
+- Days follow the time zone of the device when Start was pressed. Repeated or copied posts/reels, and deleted ones, don't count.
+- Reels now get the same repeat/copy check as posts (same video again, or a video someone else posted first); a post and a reel with the same video also match.
+- The card shows 30 dots (done / today / ahead), today's status and best run; the CHEX Coins store mentions it too. A toast appears when the streak is completed.
+- API: `POST /api/coins/streak/start`; `GET /api/coins/me` now includes `streak`. New table `coin_streaks`; reels gain `media_hash`, `coin_eligible`, `coin_skip_reason`. Rules in `COIN_RULES` (`streakDays`, `streakReward`).
+
+# Game-win coins + repeated/copied post rules (v71)
+
+- **Game wins pay 1 CHEX coin** (every game that ends with a real winner, including tournament matches). Once per game, up to **20 a day**; draws, solo rooms and walk-over wins (opponent left) don't pay. The winner sees a "🪙 +1 CHEX coin" toast instantly.
+- **Repeated / copied posts don't count toward the 30-public-posts goal.** The post is still published; the poster is told why. Rules: the same picture/video again (or, for text posts, the same words again) = *repeat*; the same picture/video, or a long identical text (25+ letters), that someone else posted first = *copy*. Case, spacing, emoji and links are ignored for text. Only exact matches are caught, and only against content already on CHEX — real copyright checking against the outside world isn't possible here.
+- Existing posts are fingerprinted in the background on first start, so older posts count as originals.
+- Tunable in `backend/src/coins.js` → `COIN_RULES` (`gameWinReward`, `gameWinDailyCap`, `copiedCaptionMinLength`, monthly goal/reward).
+- New: `backend/src/contentHash.js`; posts gain `caption_hash`, `media_hash`, `coin_eligible`, `coin_skip_reason`; new tests in `backend/test/coins.test.mjs`.
+
+# CHEX Coins store (v70.1)
+
+- **Fix:** "CHEX hit an unexpected problem" screen after login. The coin-unlock check hook sat below App's early splash/login returns, so React saw a different number of hooks once you were signed in. Moved above them; `test/appHooksOrder.test.jsx` now guards against it.
+
+- **CHEX Coins store** (Settings → Appearance → "Open CHEX Coins store"): balance, progress to this month's reward, the store, and recent activity.
+- **Premium themes & animations are locked** until unlocked once for **1,000 CHEX coins** (all 9 themes). Locked cards show a 🔒 and open the store. The unlock is charged on the server (atomic, can't be bought twice, can't go below zero) and is tied to the account.
+- **Earning**: share **30 public posts in a calendar month (UTC)** → **100 CHEX coins**, once per month. Followers-only posts and deleted posts don't count. A "🪙 You earned 100 CHEX coins" note shows after the post that reaches 30. Tunable in `backend/src/coins.js` (`COIN_RULES`, `STORE_ITEMS`).
+- **Removed** from Appearance: Colour combinations, Make your own (colour pickers, gradient direction), the contrast checker and "Reset to … default". Light/Dark, premium themes, Animations on/off and 3D/Flat stay.
+- Logging in on a browser that still has a premium theme saved from an account that hasn't unlocked it drops back to plain Light/Dark.
+- API: `GET /api/coins/me`, `POST /api/coins/unlock`; new tables `coin_ledger`, `coin_unlocks`; test `backend/test/coins.test.mjs`.
+
+# Premium animated themes (v69)
+
+- **Amber Noir** and **Teal Slate** themes, styled after the supplied references: warm black-brown glow with frosted cards and a floating rounded dock; soft slate raised surfaces with teal→blue gradient bubbles, pill search/input and rounded send button. Styling only: no buttons, text or components added or removed.
+
+- **Settings → Appearance → ✨ Premium themes**: 7 one-tap themes — Aurora, Obsidian Gold, Neon Noir, Emerald Velvet (dark) and Sunset Glass, Rose Quartz, Ocean Pearl (light). Each card shows a live animated preview.
+- **Motion**: drifting colour-orb background with light sheen and film grain, Instagram-style **rotating gradient story rings**, flowing-gradient buttons and active tabs, glass cards with gradient hairlines and hover lift, animated gradient wordmark/titles, springy mobile nav, glowing heart-like pop, pulsing online/unread dots, staggered page entrance and scroll-reveal for posts.
+- **Animations on/off** switch in Settings; also honours the phone's "reduce motion". Motion uses transforms/opacity only.
+- Light / Dark / custom colours are unchanged; tapping Dark, Light or a colour combination leaves the premium theme.
+- New: `src/premiumThemes.js`, `src/premium.css`; changed: `AppBackground.jsx`, `theme.js`, `main.jsx`, `pages/Settings.jsx`.
+
 # Compact home composer and Game Store join (v66)
 
 - Home: the post box is collapsed into a **＋ Post** button; tap it to open the composer (a Close button collapses it again, and it closes after posting).

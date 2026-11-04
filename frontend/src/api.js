@@ -125,6 +125,9 @@ function requestFormProgress(path, formData, onProgress, { retry = true } = {}) 
 }
 export const MAX_CHAT_MEDIA_BYTES = 500 * 1024 * 1024;
 
+// Codex reads times like "at 5pm" in the person's own time zone.
+const withClock = (context) => ({ ...(context || {}), clientTz: Intl.DateTimeFormat().resolvedOptions().timeZone });
+
 export const api = {
   signup: (payload) => request('/auth/signup', { method: 'POST', body: payload }),
   login: (payload) => request('/auth/login', { method: 'POST', body: payload }),
@@ -146,6 +149,10 @@ export const api = {
   setNickname: (username, nickname) => request(`/users/${username}/nickname`, { method: 'PUT', body: { nickname } }),
   removeNickname: (username) => request(`/users/${username}/nickname`, { method: 'DELETE' }),
 
+  coins: () => request('/coins/me'),
+  startStreak: (timezone) => request('/coins/streak/start', { method: 'POST', body: { timezone } }),
+  setProfileFrame: (frame) => request('/coins/frame', { method: 'POST', body: { frame } }),
+  unlockCoinItem: (itemId) => request('/coins/unlock', { method: 'POST', body: { itemId } }),
   createPost: (payload) => request('/posts', { method: 'POST', body: payload }),
   // `edits` is only sent when given, so a caption-only edit never touches video settings.
   deletePost: (id) => request(`/posts/${id}`, { method: 'DELETE' }),
@@ -323,11 +330,27 @@ export const api = {
 
   bioAI: (action, currentBio, targetLanguage) => request('/users/me/bio/ai', { method: 'POST', body: { action, currentBio, targetLanguage } }),
 
+  stickies: () => request('/stickies'),
+  ringingStickies: () => request('/stickies/ringing'),
+  addSticky: (body) => request('/stickies', { method: 'POST', body: { ...body, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone } }),
+  updateSticky: (id, body) => request(`/stickies/${id}`, { method: 'PATCH', body: { ...body, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone } }),
+  snoozeSticky: (id, minutes = 10) => request(`/stickies/${id}/snooze`, { method: 'POST', body: { minutes } }),
+  dismissSticky: (id) => request(`/stickies/${id}/dismiss`, { method: 'POST' }),
+  deleteSticky: (id) => request(`/stickies/${id}`, { method: 'DELETE' }),
+  // "My life" hub: planner / timetable / assignment / habit / focus items
+  lifeItems: (kind) => request(`/life?kind=${encodeURIComponent(kind)}`),
+  addLifeItem: (kind, data) => request('/life', { method: 'POST', body: { kind, data, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone } }),
+  updateLifeItem: (id, data) => request(`/life/${id}`, { method: 'PATCH', body: { data, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone } }),
+  startFocusAlert: (minutes, label) => request('/life/focus-alert', { method: 'POST', body: { minutes, label, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone } }),
+  stopFocusAlert: () => request('/life/focus-alert', { method: 'DELETE' }),
+  deleteLifeItem: (id) => request(`/life/${id}`, { method: 'DELETE' }),
+  learnLevel: (lang, level) => request('/life/learn/level', { method: 'POST', body: { lang, level } }),   // records a finished level; pays 1 CHEX coin per section
+  learnBoard: () => request('/life/learn-board'),   // CHEX learn leaderboard (you + people you follow)
   codexStatus: () => request('/codex/status'),
-  codexAct: (text, context, history) => request('/codex/act', { method: 'POST', body: { text, context, history } }),
-  codexConfirm: (pendingAction, remainingActions, context) => request('/codex/act', { method: 'POST', body: { confirmedAction: pendingAction, remainingActions, context } }),
-  codexResolve: (resolvedAction, remainingActions, context) => request('/codex/act', { method: 'POST', body: { resolvedAction, remainingActions, context } }),
-  codexConfirmPlan: (plan, context) => request('/codex/act', { method: 'POST', body: { confirmedPlan: plan, context } }),
+  codexAct: (text, context, history) => request('/codex/act', { method: 'POST', body: { text, context: withClock(context), history } }),
+  codexConfirm: (pendingAction, remainingActions, context) => request('/codex/act', { method: 'POST', body: { confirmedAction: pendingAction, remainingActions, context: withClock(context) } }),
+  codexResolve: (resolvedAction, remainingActions, context) => request('/codex/act', { method: 'POST', body: { resolvedAction, remainingActions, context: withClock(context) } }),
+  codexConfirmPlan: (plan, context) => request('/codex/act', { method: 'POST', body: { confirmedPlan: plan, context: withClock(context) } }),
   codexHistory: () => request('/codex/history'),
   codexUiResolve: (payload) => request('/codex/ui-resolve', { method: 'POST', body: payload }),
   codexUiReport: (payload) => request('/codex/ui-report', { method: 'POST', body: payload }).catch(() => {}),

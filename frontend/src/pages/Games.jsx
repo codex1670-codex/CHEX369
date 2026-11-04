@@ -4,13 +4,14 @@ import Avatar from '../components/Avatar.jsx';
 import { useAuth } from '../AuthContext.jsx';
 import { connectSocket } from '../socket.js';
 import ErrorBoundary from '../components/ErrorBoundary.jsx';
+import WinCelebration from '../components/WinCelebration.jsx';
 import { DotsBoxesBoard, RpsBoard, PigDiceBoard, MemoryBoard, TriviaBoard, WarBoard, HiLoBoard, SimonBoard, TodBoard, EightsBoard } from '../games/onlineBoards.jsx';
 
 // Heavier boards (canvas / real-time / solo-game duels) load only when a room needs them.
 const live = (name) => lazy(() => import('../games/onlineLive.jsx').then((m) => ({ default: m[name] })));
 const PongLive = live('PongLive'), DragLive = live('DragLive'), LaunchLive = live('LaunchLive'), CircuitLive = live('CircuitLive');
 const DuelBoard = lazy(() => import('../games/DuelBoard.jsx'));
-import { LOCAL_GAMES, LOCAL_CATEGORIES, playersText } from '../games/catalog.js';
+import { LOCAL_GAMES, STORE_GAMES, STORE_CATEGORIES, CATEGORY_ICON } from '../games/catalog.js';
 
 const TABS = ['discover', '2players', 'friends', 'mine', 'tournaments'];
 
@@ -34,8 +35,7 @@ for (const g of LOCAL_GAMES) {
   if (g.online && !GAME_META[g.online]) GAME_META[g.online] = { icon: g.icon, category: g.category, estTime: g.time, name: g.name };
 }
 const LIVE_IDS = new Set(['pong', 'drag-race', 'launch-control', 'circuit-race']);
-const kindLabel = (id) => (id.startsWith('duel-') ? 'Score duel · same run on your own devices' : LIVE_IDS.has(id) ? 'Live head-to-head' : 'Turn-based · 2 players');
-const ONLINE_ORDER = ['Card', 'Racing', 'Arcade', 'Puzzle', 'Party', 'Board'];
+const kindLabel = (id) => (id.startsWith('duel-') ? 'Score duel • same run on your own devices' : LIVE_IDS.has(id) ? 'Live head-to-head' : 'Turn-based • 2 players');
 function gameName(gameId) { return GAME_META[gameId]?.name || gameId; }
 
 function TicTacToeBoard({ room, myId, onMove }) {
@@ -210,7 +210,7 @@ function LocalGameView({ game, players, onExit }) {
   const [round, setRound] = useState(0);
   const C = game.Component;
   return (
-    <div>
+    <div className="gx-fullscreen">
       <button className="btn-ghost" style={{ marginBottom: 16 }} onClick={onExit}>← Back to Game Store</button>
       <div className="glass-card gm-frame">
         <div className="gm-head">
@@ -230,19 +230,35 @@ function LocalGameView({ game, players, onExit }) {
   );
 }
 
-function LocalGameCard({ g, onPlay, onOnline }) {
-  const solo = g.modes.includes(1), duo = g.modes.includes(2);
+// Game logo tile (public/game-logos/<online id>.svg). Falls back to the emoji if the image is missing.
+function GameLogo({ id, size = 64, emoji }) {
+  const [bad, setBad] = useState(false);
+  if (bad) return <span className="gx-logo gx-logo-fallback" style={{ width: size, height: size, fontSize: size * 0.55 }} aria-hidden="true">{emoji || '🎮'}</span>;
+  return <img className="gx-logo" src={`/game-logos/${id}.svg`} alt="" width={size} height={size} loading="lazy" draggable="false" onError={() => setBad(true)} />;
+}
+
+// One game, one row: logo, title, details, and the buttons. Offline play (vs CPU / same device)
+// sits under the details as small chips so nothing is lost by merging the old duplicate cards.
+function GameRow({ g, openRooms, onPlay, onTournament, onOnline }) {
+  const local = g.local;
+  const solo = local?.modes.includes(1), duo = local?.modes.includes(2);
   return (
-    <div className="glass-card gm-listing">
-      <div className="gm-listing-icon" aria-hidden="true">{g.icon}</div>
-      <div style={{ flex: 1, minWidth: 170 }}>
-        <div style={{ fontFamily: 'var(--font-display)', fontSize: 15.5 }}>{g.name}</div>
-        <div style={{ fontSize: 12.5, color: 'var(--text-mid)', margin: '2px 0' }}>{g.blurb}</div>
-        <div style={{ fontSize: 11.5, color: 'var(--text-low)' }}>{playersText(g)} · {g.time}</div>
+    <div className="gx-row">
+      <GameLogo id={g.id} emoji={local?.icon} />
+      <div className="gx-info">
+        <div className="gx-title">{g.name}</div>
+        <div className="gx-meta">{kindLabel(g.id)} • {g.time} • {openRooms} open room{openRooms === 1 ? '' : 's'}</div>
+        {local && (
+          <div className="gx-chips">
+            {solo && <button type="button" className="gx-chip" onClick={() => onPlay(local, 1)}>▶ {duo ? (local.soloLabel || '1 Player') : 'Play solo'}</button>}
+            {duo && <button type="button" className="gx-chip" onClick={() => onPlay(local, 2)}>👥 {local.playersLabel || '2 Players'}</button>}
+          </div>
+        )}
       </div>
-      {solo && <button className="btn-primary" style={{ width: 'auto', padding: '9px 16px' }} onClick={() => onPlay(g, 1)}>{duo ? (g.soloLabel || '1 Player') : 'Play'}</button>}
-      {g.online && onOnline && <button className="btn-ghost" onClick={() => onOnline(g.online)} title="Create a room and send the code to a friend">🌐 Online</button>}
-      {duo && <button className={solo ? 'btn-ghost' : 'btn-primary'} style={solo ? undefined : { width: 'auto', padding: '9px 16px' }} onClick={() => onPlay(g, 2)}>{solo ? '2 Players' : 'Play'}</button>}
+      <div className="gx-actions">
+        {g.id !== 'truth-dare' && <button type="button" className="gx-btn gx-btn-light" onClick={() => onTournament(g.id, g.name)}>Start tournament</button>}
+        <button type="button" className="gx-btn gx-btn-gold" onClick={() => onOnline(g.id)}><span aria-hidden="true">▶</span> Play online</button>
+      </div>
     </div>
   );
 }
@@ -305,18 +321,27 @@ function RoomView({ room: initialRoom, onLeave }) {
   const me = room.players.find(p => p.user.id === user.id);
   const isFull = room.players.length === room.capacity;
   const meta = GAME_META[room.gameId] || {};
+  // While a match is running (or just finished) the game takes the whole screen and the
+  // room-code / invite controls are tucked away; they are only needed in the waiting lobby.
+  const playing = room.status === 'active' || room.status === 'finished';
+  const iWon = playing && room.state?.winner === user.id;
 
   return (
-    <div>
+    <div className={playing ? 'gx-fullscreen' : undefined}>
+      {iWon && <WinCelebration key={room.id} />}
       <button className="btn-ghost" style={{ marginBottom: 16 }} onClick={leave}>← Leave game</button>
       <div className="glass-card" style={{ padding: 24, textAlign: 'center' }}>
-        <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, marginBottom: 4 }}>{meta.icon} {gameName(room.gameId)}</div>
+        <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, marginBottom: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}><GameLogo id={room.gameId} size={36} emoji={meta.icon} /> {gameName(room.gameId)}</div>
+        {!playing && (
+          <>
         <div style={{ fontSize: 12.5, color: 'var(--text-low)', marginBottom: 6 }}>Room code</div>
         <div className="gm-code" aria-label={`Room code ${room.inviteCode.split('').join(' ')}`}>{room.inviteCode}</div>
         <div className="gm-row" style={{ marginBottom: 18 }}>
           <button type="button" className="btn-ghost" onClick={copyCode}>{copied === 'code' ? '✓ Copied' : 'Copy code'}</button>
           <button type="button" className="btn-ghost" onClick={shareRoom}>{copied === 'link' ? '✓ Link copied' : 'Share invite'}</button>
         </div>
+          </>
+        )}
 
         <div style={{ display: 'flex', justifyContent: 'center', gap: 20, marginBottom: 20, flexWrap: 'wrap' }}>
           {room.players.map(p => (
@@ -513,20 +538,6 @@ export default function Games({ initialTab, onConsumeInitialTab, initialJoinCode
     } catch (err) { setError(err.message); }
   };
 
-  const renderOnline = (g) => {
-    const meta = GAME_META[g.id] || {};
-    return (
-      <div key={g.id} className="glass-card gm-listing">
-        <div className="gm-listing-icon" aria-hidden="true">{meta.icon}</div>
-        <div style={{ flex: 1, minWidth: 160 }}>
-          <div style={{ fontFamily: 'var(--font-display)', fontSize: 15.5 }}>{g.name}</div>
-          <div style={{ fontSize: 12.5, color: 'var(--text-mid)' }}>{kindLabel(g.id)} · {meta.estTime} · {g.openRooms} open room{g.openRooms === 1 ? '' : 's'}</div>
-        </div>
-        {g.id !== 'truth-dare' && <button className="btn-ghost" onClick={() => createTournamentFor(g.id, g.name)}>Start tournament</button>}
-        <button className="btn-primary" style={{ width: 'auto', padding: '9px 18px' }} onClick={() => create(g.id)}>Play online</button>
-      </div>
-    );
-  };
   // Opened from an invite link (/?join=CODE): join that room as soon as the app is ready.
   useEffect(() => {
     if (!initialJoinCode) return;
@@ -538,9 +549,15 @@ export default function Games({ initialTab, onConsumeInitialTab, initialJoinCode
     // eslint-disable-next-line
   }, [initialJoinCode]);
 
-  const renderOnlineGroups = () => ONLINE_ORDER.map((cat) => {
-    const list = (games || []).filter((g) => g.category === cat);
-    return list.length ? <div key={cat}><div className="gm-subtitle">{cat}</div>{list.map(renderOnline)}</div> : null;
+  const openRoomsOf = (id) => (games || []).find((x) => x.id === id)?.openRooms ?? 0;
+  const renderStore = (list) => STORE_CATEGORIES.map((cat) => {
+    const rows = list.filter((g) => g.category === cat);
+    return rows.length ? (
+      <div key={cat}>
+        <div id={`cat-${cat}`} className="gx-cat"><span className="gx-cat-pill"><span aria-hidden="true">{CATEGORY_ICON[cat]}</span> {cat}</span><span className="gx-cat-line" /></div>
+        {rows.map((g) => <GameRow key={g.id} g={g} openRooms={openRoomsOf(g.id)} onPlay={playLocal} onTournament={createTournamentFor} onOnline={create} />)}
+      </div>
+    ) : null;
   });
   const playLocal = (game, players) => setLocal({ game, players });
   if (local) return <LocalGameView game={local.game} players={local.players} onExit={() => setLocal(null)} />;
@@ -563,7 +580,7 @@ export default function Games({ initialTab, onConsumeInitialTab, initialJoinCode
         <>
           <div className="gm-cats gm-topbar">
             <button type="button" className="btn-primary gm-join-toggle" aria-expanded={joinOpen} onClick={() => setJoinOpen(o => !o)}>🔑 Join</button>
-            {['Online', ...LOCAL_CATEGORIES].map(cat => (
+            {STORE_CATEGORIES.map(cat => (
               <button key={cat} type="button" className="gm-chipbtn" onClick={() => document.getElementById(`cat-${cat}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>{cat}</button>
             ))}
           </div>
@@ -581,27 +598,16 @@ export default function Games({ initialTab, onConsumeInitialTab, initialJoinCode
 
           {loadError && <div className="error-banner" style={{ marginBottom: 12 }}>{loadError}</div>}
 
-          <div id="cat-Online" className="gm-cat-title">Online · play with friends</div>
-          {games === null && <div className="empty-state"><span className="loading-dot" /></div>}
-          {games?.length === 0 && <div className="empty-state" style={{ padding: 20 }}>Online games are unavailable right now. The built-in games below still work.</div>}
-          {renderOnlineGroups()}
-
-          {LOCAL_CATEGORIES.map(cat => (
-            <div key={cat}>
-              <div id={`cat-${cat}`} className="gm-cat-title">{cat} <span>· {LOCAL_GAMES.filter(g => g.category === cat).length} games</span></div>
-              {LOCAL_GAMES.filter(g => g.category === cat).map(g => <LocalGameCard key={g.id} g={g} onPlay={playLocal} onOnline={create} />)}
-            </div>
-          ))}
+          {games?.length === 0 && <div className="empty-state" style={{ padding: 16, marginBottom: 8 }}>Online rooms are unavailable right now. Offline play (vs CPU or same device) still works.</div>}
+          {renderStore(STORE_GAMES)}
         </>
       )}
 
       {tab === '2players' && (
         <>
-          <div className="gm-cat-title" style={{ marginTop: 0 }}>Online · each on your own device</div>
-          {games === null && <div className="empty-state"><span className="loading-dot" /></div>}
-          {renderOnlineGroups()}
-          <div className="gm-cat-title">Same device · pass the keyboard or phone</div>
-          {LOCAL_GAMES.filter(g => g.modes.includes(2)).map(g => <LocalGameCard key={g.id} g={g} onPlay={playLocal} onOnline={create} />)}
+          <div className="gx-note">Online on your own devices, or pass the phone / keyboard on one screen.</div>
+          {error && <div className="error-banner" style={{ margin: '8px 0 12px' }}>{error}</div>}
+          {renderStore(STORE_GAMES.filter((g) => !g.local || g.local.modes.includes(2)))}
         </>
       )}
 
@@ -617,7 +623,7 @@ export default function Games({ initialTab, onConsumeInitialTab, initialJoinCode
               <div key={r.id} className="glass-card" style={{ padding: 16, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 12 }}>
                 <Avatar user={host} size={38} />
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 14 }}>{host?.displayName}'s {meta.icon} {gameName(r.gameId)}</div>
+                  <div style={{ fontSize: 14, display: 'flex', alignItems: 'center', gap: 8 }}>{host?.displayName}'s <GameLogo id={r.gameId} size={24} emoji={meta.icon} /> {gameName(r.gameId)}</div>
                   <div style={{ fontSize: 12, color: 'var(--text-low)' }}>Waiting for a player</div>
                 </div>
                 <button className="btn-ghost" onClick={async () => { setError(''); try { const res = await api.joinGameRoom(r.inviteCode); setRoom(res.room); } catch (err) { setError(err.message); } }}>Join</button>
@@ -635,7 +641,7 @@ export default function Games({ initialTab, onConsumeInitialTab, initialJoinCode
             const meta = GAME_META[r.gameId] || {};
             return (
               <div key={r.id} className="glass-card convo-item" style={{ padding: 14, marginBottom: 8 }} onClick={() => setRoom(r)}>
-                <div className="last">{meta.icon} {gameName(r.gameId)} · room {r.inviteCode} · {r.status}</div>
+                <div className="last" style={{ display: 'flex', alignItems: 'center', gap: 8 }}><GameLogo id={r.gameId} size={26} emoji={meta.icon} /> {gameName(r.gameId)} · room {r.inviteCode} · {r.status}</div>
               </div>
             );
           })}

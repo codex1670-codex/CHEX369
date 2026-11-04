@@ -11,6 +11,12 @@ import rateLimit from 'express-rate-limit';
 import authRoutes from './routes/auth.js';
 import userRoutes from './routes/users.js';
 import postRoutes from './routes/posts.js';
+import coinRoutes from './routes/coins.js';
+import stickyRoutes from './routes/stickies.js';
+import lifeRoutes from './routes/life.js';
+import { startReminderScheduler } from './reminders.js';
+import { rearmAlarms } from './lifeAlerts.js';
+import { backfillContentHashes } from './coins.js';
 import feedRoutes from './routes/feed.js';
 import messageRoutes from './routes/messages.js';
 import notificationRoutes from './routes/notifications.js';
@@ -26,7 +32,7 @@ import appRoutes from './routes/apps.js';
 import callRoutes from './routes/calls.js';
 import codexRoutes from './routes/codex.js';
 import pushRoutes from './routes/push.js';
-import { attachPush } from './push.js';
+import { attachPush, sendStickyPush } from './push.js';
 import { registerGameHandlers } from './gameEngine.js';
 import { registerCallHandlers } from './callEngine.js';
 import { ACCESS_SECRET, REFRESH_SECRET } from './middleware/auth.js';
@@ -84,6 +90,9 @@ const AUTH_GUARDED = ['/login', '/signup', '/deactivate', '/delete-account', '/2
 app.use('/api/auth', (req, res, next) => (AUTH_GUARDED.includes(req.path) ? authLimiter(req, res, next) : next()), authRoutes);
 app.use('/api/users', apiLimiter, userRoutes);
 app.use('/api/posts', apiLimiter, postRoutes);
+app.use('/api/coins', apiLimiter, coinRoutes);
+app.use('/api/stickies', apiLimiter, stickyRoutes);
+app.use('/api/life', apiLimiter, lifeRoutes);
 app.use('/api/feed', apiLimiter, feedRoutes);
 app.use('/api/messages', apiLimiter, messageRoutes);
 app.use('/api/notifications', apiLimiter, notificationRoutes);
@@ -174,6 +183,8 @@ if (IS_PROD && process.env.RENDER && !persistence.enabled && !(process.env.NEXA_
   console.warn('[nexa] WARNING: on Render with no MONGODB_URI and no persistent disk — every restart/redeploy erases all accounts. Set MONGODB_URI (see README).');
 }
 server.listen(PORT, () => {
+  startReminderScheduler(io, (uid, note) => sendStickyPush(uid, note).catch(() => {}), () => rearmAlarms()); // rings sticky-note reminders when due
+  backfillContentHashes(); // background: fingerprint older posts for the repeat/copy check
   console.log(`NEXA backend listening on http://localhost:${PORT}`);
   persistence.start({ getDb: () => db, uploadsRoot: UPLOADS_ROOT });
 });

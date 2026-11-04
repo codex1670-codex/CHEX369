@@ -1,70 +1,105 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { useAuth } from '../AuthContext.jsx';
 import { getStoredTheme, applyTheme } from '../theme.js';
 import { get3D, set3D } from '../ui3d.js';
+import Emoji3D from '../components/Emoji3D.jsx';
+import { getEmojiFx, setEmojiFx, splitEmojis, burstEmoji, DEFAULT_EMOJIS, EMOJI_PALETTE, MAX_EMOJIS } from '../emojiFx.js';
 import PermissionsPanel from '../components/PermissionsPanel.jsx';
 import SafetyLists from '../components/SafetyLists.jsx';
 import HistoryPanel from '../components/HistoryPanel.jsx';
 import HighlightsRow from '../components/HighlightsRow.jsx';
-import { PRESETS, getActiveColors, getCustomColors, saveColors, resetColors, worstContrast, autoText } from '../colors.js';
 
-function Appearance() {
+import { PROFILE_FRAMES } from '../profileFrames.js';
+import Avatar from '../components/Avatar.jsx';
+import { PREMIUM_THEMES, getPremiumId, applyPremium, clearPremium, getMotion, setMotion } from '../premiumThemes.js';
+
+function Appearance({ onOpenCoins }) {
+  const { user, setUser } = useAuth();
+  const [frameBusy, setFrameBusy] = useState(false);
+  const [premium, setPremium] = useState(getPremiumId());
+  const [motion, setMotionState] = useState(getMotion());
   const [theme, setThemeState] = useState(getStoredTheme());
   const [look3d, setLook3d] = useState(get3D());
-  const [colors, setColors] = useState(getActiveColors());
-  const [custom, setCustom] = useState(!!getCustomColors());
-  const pickMode = (t) => { setThemeState(applyTheme(t, true)); setColors(getActiveColors()); setCustom(!!getCustomColors()); };
-  const update = (patch) => { setColors(saveColors({ ...colors, ...patch })); setCustom(true); };
-  const reset = () => { setColors(resetColors()); setCustom(false); };
-  const ratio = worstContrast(colors);
-  const ok = ratio >= 4.5;
-  const Pick = ({ label, k }) => (
-    <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13.5, fontWeight: 700 }}>
-      <input type="color" value={colors[k]} onChange={e => update({ [k]: e.target.value })} style={{ width: 46, height: 36, padding: 0, background: 'none', cursor: 'pointer' }} />
-      {label} <span style={{ color: 'var(--text-mid)', fontWeight: 600 }}>{colors[k]}</span>
-    </label>
-  );
+  const [wallet, setWallet] = useState(null);
+  useEffect(() => { api.coins().then(setWallet).catch(() => {}); }, []);
+  const unlocked = !!wallet?.unlocked?.includes('premium-themes');
+  const item = wallet?.items?.find(i => i.id === 'premium-themes');
+  const framesOwned = !!wallet?.unlocked?.includes('premium-frames');
+  const frameItem = wallet?.items?.find(i => i.id === 'premium-frames');
+  const currentFrame = wallet?.frame ?? user?.frame ?? null;
+  const pickFrame = async (id) => {
+    if (!framesOwned) { onOpenCoins(); return; }
+    setFrameBusy(true);
+    try {
+      const w = await api.setProfileFrame(id);
+      setWallet(w);
+      if (user) setUser({ ...user, frame: w.frame });
+    } catch { /* keep the old frame */ }
+    finally { setFrameBusy(false); }
+  };
+
+  const pickMode = (t) => { setPremium(''); setThemeState(applyTheme(t, true)); };
+  const pickPremium = (id) => {
+    if (!unlocked) { onOpenCoins(); return; }
+    applyPremium(id); setPremium(id); setThemeState(getStoredTheme());
+  };
+  const leavePremium = () => { setThemeState(applyTheme(getStoredTheme(), true)); setPremium(''); };
+
   return (
     <div className="glass-card" style={{ padding: 20, marginBottom: 20 }}>
       <div style={{ fontFamily: 'var(--font-display)', fontSize: 16, marginBottom: 4 }}>Appearance</div>
-      <p style={{ fontSize: 13, color: 'var(--text-mid)', marginBottom: 14 }}>Pick the colours for the app background, the letters, and the boxes. Changes apply instantly and are saved on this device.</p>
+      <p style={{ fontSize: 13, color: 'var(--text-mid)', marginBottom: 14 }}>Choose Light or Dark, or unlock the premium animated themes with CHEX coins. Changes apply instantly and are saved on this device.</p>
 
       <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
         <button className="btn-ghost" style={{ width: 'auto', padding: '9px 18px', background: theme === 'dark' ? 'var(--violet)' : undefined, borderColor: theme === 'dark' ? 'var(--violet)' : undefined, color: theme === 'dark' ? '#fff' : undefined }} onClick={() => pickMode('dark')}>🌙 Dark</button>
         <button className="btn-ghost" style={{ width: 'auto', padding: '9px 18px', background: theme === 'light' ? 'var(--violet)' : undefined, borderColor: theme === 'light' ? 'var(--violet)' : undefined, color: theme === 'light' ? '#fff' : undefined }} onClick={() => pickMode('light')}>☀️ Light</button>
       </div>
 
-      <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>Colour combinations</div>
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 18 }}>
-        {PRESETS.map(p => (
-          <button key={p.name} title={p.name} aria-label={p.name} onClick={() => update(p)}
-            style={{ width: 92, padding: 0, border: '2px solid var(--border-soft)', borderRadius: 14, overflow: 'hidden', cursor: 'pointer', background: 'none' }}>
-            <div style={{ height: 44, background: `linear-gradient(${p.angle}deg, ${p.bgA}, ${p.bgB})`, display: 'grid', placeItems: 'center' }}>
-              <div style={{ background: p.box, color: p.text, fontWeight: 800, fontSize: 13, padding: '3px 10px', borderRadius: 8 }}>Aa</div>
-            </div>
-            <div style={{ fontSize: 11.5, fontWeight: 700, padding: '4px 0', color: 'var(--text-hi)' }}>{p.name}</div>
+      <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>
+        ✨ Premium themes <span style={{ color: 'var(--text-mid)', fontWeight: 600 }}>· animated · {unlocked ? '🔓 unlocked' : '🔒 locked'}</span>
+      </div>
+      {wallet && !unlocked && (
+        <div className="coin-lockbar">
+          <span>🔒 Unlock all premium themes &amp; animations for <b>{(item?.price || 1000).toLocaleString()}</b> CHEX coins. You have <b>{wallet.balance.toLocaleString()}</b>.</span>
+          <button className="btn-primary" style={{ width: 'auto', padding: '8px 16px' }} onClick={onOpenCoins}>🪙 Open CHEX Coins store</button>
+        </div>
+      )}
+      <div className="pt-grid">
+        {PREMIUM_THEMES.map(t => (
+          <button key={t.id} className={`pt-card${premium === t.id ? ' on' : ''}${unlocked ? '' : ' locked'}`} aria-pressed={premium === t.id}
+            aria-label={unlocked ? t.name : `${t.name} (locked — unlock in the CHEX Coins store)`} onClick={() => pickPremium(t.id)}
+            style={{ '--a': t.a, '--b': t.b, '--c': t.c, '--bgA': t.bgA, '--bgB': t.bgB }}>
+            <div className="pt-prev"><i className="p1" /><i className="p2" /><i className="ring" /><i className="pill" />{!unlocked && <span className="pt-lock">🔒</span>}</div>
+            <div className="pt-name"><b>{t.name}</b><span>{t.tag}</span></div>
           </button>
         ))}
       </div>
-
-      <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>Make your own</div>
-      <div style={{ display: 'grid', gap: 10 }}>
-        <Pick label="Background colour 1" k="bgA" />
-        <Pick label="Background colour 2" k="bgB" />
-        <label style={{ display: 'grid', gridTemplateColumns: '150px 1fr', alignItems: 'center', gap: 10, fontSize: 13.5, fontWeight: 700 }}>
-          Gradient direction
-          <input type="range" min="0" max="360" value={colors.angle} onChange={e => update({ angle: +e.target.value })} style={{ accentColor: 'var(--violet)', border: 0 }} />
-        </label>
-        <Pick label="Letters" k="text" />
-        <Pick label="Boxes and tables" k="box" />
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 18 }}>
+        <button className={`btn-ghost${motion ? ' sel' : ''}`} style={{ width: 'auto', padding: '9px 18px' }} role="switch" aria-checked={motion} onClick={() => setMotionState(setMotion(!motion))}>{motion ? '🎬 Animations on' : '⏸ Animations off'}</button>
+        {premium && <button className="btn-ghost" style={{ width: 'auto', padding: '9px 18px' }} onClick={leavePremium}>Leave premium theme</button>}
       </div>
 
-      <div style={{ marginTop: 14, padding: '10px 12px', borderRadius: 12, border: `2px solid ${ok ? 'var(--teal)' : 'var(--pink)'}`, fontSize: 13, fontWeight: 700 }}>
-        {ok ? `✓ Letters are easy to read (contrast ${ratio.toFixed(1)}:1)` : `⚠ Letters are hard to read (contrast ${ratio.toFixed(1)}:1, aim for 4.5 or more)`}
-        {!ok && <button className="btn-ghost" style={{ width: 'auto', padding: '4px 12px', fontSize: 12, marginLeft: 10 }} onClick={() => update({ text: autoText(colors) })}>Fix letters automatically</button>}
+      <div style={{ fontSize: 13, fontWeight: 700, margin: '4px 0 8px' }}>
+        🖼️ Premium profile frames <span style={{ color: 'var(--text-mid)', fontWeight: 600 }}>· animated · {framesOwned ? '🔓 unlocked' : '🔒 locked'}</span>
       </div>
-      {custom && <button className="btn-ghost" style={{ width: 'auto', padding: '7px 14px', marginTop: 12 }} onClick={reset}>Reset to {theme} default</button>}
+      {wallet && !framesOwned && (
+        <div className="coin-lockbar">
+          <span>🔒 Unlock all {PROFILE_FRAMES.length} animated profile frames for <b>{(frameItem?.price || 2000).toLocaleString()}</b> CHEX coins. You have <b>{wallet.balance.toLocaleString()}</b>.</span>
+          <button className="btn-primary" style={{ width: 'auto', padding: '8px 16px' }} onClick={onOpenCoins}>🪙 Open CHEX Coins store</button>
+        </div>
+      )}
+      <div className="pf-grid">
+        {PROFILE_FRAMES.map(f => (
+          <button key={f.id} className={`pf-card${currentFrame === f.id ? ' on' : ''}${framesOwned ? '' : ' locked'}`} aria-pressed={currentFrame === f.id} disabled={frameBusy}
+            aria-label={framesOwned ? f.name : `${f.name} (locked — unlock in the CHEX Coins store)`} onClick={() => pickFrame(f.id)}>
+            {!framesOwned && <span className="pf-lock">🔒</span>}
+            <span className="pf-sample-wrap"><Avatar user={user ? { ...user, frame: f.id } : null} name={user?.displayName} size={44} showPresence={false} /></span>
+            <span className="pf-name"><b>{f.name}</b><span>{f.tag}</span></span>
+          </button>
+        ))}
+      </div>
+      {framesOwned && currentFrame && <div style={{ marginBottom: 18 }}><button className="btn-ghost" style={{ width: 'auto', padding: '9px 18px' }} disabled={frameBusy} onClick={() => pickFrame(null)}>Remove my frame</button></div>}
 
       <div style={{ fontSize: 13.5, fontWeight: 700, margin: '18px 0 8px' }}>Navigation &amp; buttons</div>
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 6 }}>
@@ -72,6 +107,115 @@ function Appearance() {
         <button className={`btn-ghost${!look3d ? ' sel' : ''}`} style={{ width: 'auto', padding: '9px 18px' }} aria-pressed={!look3d} onClick={() => setLook3d(set3D(false))}>▭ Flat</button>
       </div>
       <p style={{ fontSize: 12.5, color: 'var(--text-mid)', margin: 0 }}>3D gives the menu and buttons depth, tilt and a press-down effect. Flat is the simple classic look.</p>
+    </div>
+  );
+}
+
+function EmojiEffects() {
+  const [fx, setFx] = useState(getEmojiFx());
+  const [custom, setCustom] = useState('');
+  const save = (patch) => setFx(setEmojiFx(patch));
+  const full = fx.emojis.length >= MAX_EMOJIS;
+  const toggleEmoji = (e) => {
+    if (fx.emojis.includes(e)) { if (fx.emojis.length > 1) save({ emojis: fx.emojis.filter((x) => x !== e) }); }
+    else if (!full) save({ emojis: [...fx.emojis, e] });
+  };
+  const addCustom = (ev) => {
+    ev.preventDefault();
+    const add = splitEmojis(custom).filter((e) => !fx.emojis.includes(e));
+    if (add.length) save({ emojis: [...fx.emojis, ...add].slice(0, MAX_EMOJIS) });
+    setCustom('');
+  };
+  const sw = (on, label, onClick) => (
+    <button type="button" role="switch" aria-checked={on} className={`btn-ghost${on ? ' sel' : ''}`} style={{ width: 'auto', padding: '9px 18px' }} onClick={onClick}>{on ? '✓ ' : ''}{label}</button>
+  );
+  return (
+    <div className="glass-card" style={{ padding: 20, marginBottom: 20 }}>
+      <h3 style={{ margin: '0 0 4px', fontFamily: 'var(--font-display)', fontSize: 16 }}>✨ Emoji effects</h3>
+      <p style={{ fontSize: 12.5, color: 'var(--text-mid)', margin: '0 0 12px' }}>Glossy 3D emoji fall from the top and float up the screen when a new notification arrives. <b>The emoji are yours to customize</b> — pick from the list or type any emoji you like.</p>
+
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
+        {sw(fx.onNotify, 'Show on new notifications', () => save({ onNotify: !fx.onNotify }))}
+        {sw(fx.ambient, 'Floating in the background', () => save({ ambient: !fx.ambient }))}
+      </div>
+
+      <div style={{ fontSize: 13.5, fontWeight: 700, margin: '4px 0 8px' }}>Animation style</div>
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 14 }}>
+        {[['falling', '⬇️ Falling'], ['floating', '⬆️ Floating'], ['both', '🌀 Both']].map(([id, label]) => (
+          <button key={id} type="button" className={`btn-ghost${fx.style === id ? ' sel' : ''}`} style={{ width: 'auto', padding: '9px 18px' }} aria-pressed={fx.style === id} onClick={() => save({ style: id })}>{label}</button>
+        ))}
+      </div>
+
+      <div style={{ fontSize: 13.5, fontWeight: 700, margin: '4px 0 2px' }}>My emoji ({fx.emojis.length}/{MAX_EMOJIS})</div>
+      <div className="ef-chips">
+        {fx.emojis.map((e) => (
+          <span key={e} className="ef-chip"><Emoji3D char={e} size={28} /><button type="button" aria-label={`Remove ${e}`} disabled={fx.emojis.length <= 1} onClick={() => toggleEmoji(e)}>✕</button></span>
+        ))}
+      </div>
+      <div className="ef-palette" role="group" aria-label="Pick emoji">
+        {EMOJI_PALETTE.map((e) => (
+          <button key={e} type="button" className={`ef-pick${fx.emojis.includes(e) ? ' on' : ''}`} aria-pressed={fx.emojis.includes(e)} disabled={!fx.emojis.includes(e) && full} onClick={() => toggleEmoji(e)}><Emoji3D char={e} size={28} /></button>
+        ))}
+      </div>
+      <form onSubmit={addCustom} style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+        <input value={custom} onChange={(e) => setCustom(e.target.value)} placeholder="Type or paste your own emoji" aria-label="Add your own emoji" disabled={full}
+          style={{ flex: 1, minWidth: 0, background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border-soft)', borderRadius: 10, padding: '9px 12px', color: 'var(--text-hi)', outline: 'none', fontSize: 15 }} />
+        <button className="btn-ghost" type="submit" disabled={full || !custom.trim()}>Add</button>
+      </form>
+
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+        <button type="button" className="btn-primary" style={{ width: 'auto', padding: '9px 18px' }} onClick={() => burstEmoji({ force: true })}>▶ Preview</button>
+        <button type="button" className="btn-ghost" onClick={() => save({ emojis: DEFAULT_EMOJIS })}>Reset emoji</button>
+      </div>
+    </div>
+  );
+}
+
+function PostingStreak() {
+  const [st, setSt] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  useEffect(() => { api.coins().then(w => setSt(w.streak)).catch(e => setError(e.message)); }, []);
+  const start = async () => {
+    setBusy(true); setError('');
+    try {
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+      setSt((await api.startStreak(tz)).streak);
+    } catch (e) { setError(e.message); } finally { setBusy(false); }
+  };
+  const active = st?.status === 'active';
+  return (
+    <div className="glass-card" style={{ padding: 20, marginBottom: 20 }}>
+      <div style={{ fontFamily: 'var(--font-display)', fontSize: 16, marginBottom: 4 }}>🔥 {st?.goal || 30}-day posting streak</div>
+      <p style={{ fontSize: 13, color: 'var(--text-mid)', margin: '0 0 12px' }}>
+        Share a post or a reel every day for {st?.goal || 30} days in a row and earn <b>{st?.reward || 100} CHEX coins</b>. Miss a single day and the streak ends — start again from Day 1. Repeated or copied posts and reels don’t count.
+      </p>
+      {error && <div className="error-banner" style={{ marginBottom: 10 }}>{error}</div>}
+      {!st && !error && <div style={{ fontSize: 13 }}>Loading…</div>}
+
+      {st && active && (
+        <>
+          <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 8 }}>Day {Math.min(st.dayNumber, st.goal)} of {st.goal} · {st.done} done</div>
+          <div className="streak-dots" role="img" aria-label={`${st.done} of ${st.goal} days done`}>
+            {st.marks.map((m, i) => <span key={i} className={`streak-dot ${m}`}>{i + 1}</span>)}
+          </div>
+          <div style={{ fontSize: 13, fontWeight: 700, marginTop: 10 }}>
+            {st.todayDone ? '✓ Today is done — see you tomorrow!' : '⏳ Share a post or a reel before the day ends to keep your streak.'}
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text-mid)', marginTop: 4 }}>Started {st.startDay} · days follow your device time zone ({st.tz})</div>
+        </>
+      )}
+
+      {st && !active && (
+        <>
+          {st.status === 'broken' && <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>💔 Your streak ended — you missed {st.brokenOn} (best: {st.best} {st.best === 1 ? 'day' : 'days'}). Start again from Day 1.</div>}
+          {st.status === 'completed' && <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>🎉 You finished a {st.goal}-day streak and earned {st.reward} coins! Completed {st.completedRuns}×. Want another round?</div>}
+          <button className="btn-primary" style={{ width: 'auto', padding: '10px 22px' }} disabled={busy} onClick={start}>
+            {busy ? 'Starting…' : st.status === 'idle' ? '▶ Start streak' : '▶ Start again'}
+          </button>
+          <div style={{ fontSize: 12, color: 'var(--text-mid)', marginTop: 8 }}>Today becomes Day 1. A post or reel you already shared today counts.</div>
+        </>
+      )}
     </div>
   );
 }
@@ -200,7 +344,7 @@ function BioAI() {
   );
 }
 
-export default function Settings({ onBack, onOpenProfile }) {
+export default function Settings({ onBack, onOpenProfile, onOpenCoins, onOpenStickies, onOpenMyLife }) {
   const { user, clearSession, logout } = useAuth();
   const [setup, setSetup] = useState(null);
   const [totpCode, setTotpCode] = useState('');
@@ -261,7 +405,7 @@ export default function Settings({ onBack, onOpenProfile }) {
   };
 
   return (
-    <div>
+    <div className="page-narrow">
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
         <button className="btn-ghost" onClick={onBack}>← Back to profile</button>
         <button className="btn-ghost settings-logout" onClick={logout}>⏻ Log out</button>
@@ -275,7 +419,26 @@ export default function Settings({ onBack, onOpenProfile }) {
         <p style={{ fontSize: 13, color: 'var(--text-mid)', marginBottom: 14 }}>Notifications, microphone, camera, location and more. Tap Allow to get the phone's own permission box.</p>
         <PermissionsPanel />
       </div>
-      <Appearance />
+      <PostingStreak />
+      {onOpenMyLife && (
+        <div className="glass-card" style={{ padding: 20, marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+          <div>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 16, marginBottom: 4 }}>🌟 My life</div>
+            <div style={{ fontSize: 13, color: 'var(--text-mid)' }}>Smart reminders, sticky notes, daily planner, study timetable, assignments, focus timer and habits.</div>
+          </div>
+          <button className="btn-primary" style={{ width: 'auto', padding: '8px 18px' }} onClick={onOpenMyLife}>Open My life</button>
+        </div>
+      )}
+      <div className="glass-card" style={{ padding: 20, marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+        <div>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 16, marginBottom: 4 }}>📌 Sticky notes &amp; voice reminders</div>
+          <div style={{ fontSize: 13, color: 'var(--text-mid)' }}>Jot a note with a time — CHEX reads it out loud when it’s due. Try “remind me to call mom at 5pm” in Codex.</div>
+        </div>
+        <button className="btn-primary" style={{ width: 'auto', padding: '8px 18px' }} onClick={onOpenStickies}>Open sticky notes</button>
+      </div>
+
+      <Appearance onOpenCoins={onOpenCoins} />
+      <EmojiEffects />
       <AccountPrivacy />
       <SafetyLists onOpenProfile={onOpenProfile} />
       <div className="glass-card" style={{ padding: 20, marginBottom: 20 }} data-testid="highlights-card">

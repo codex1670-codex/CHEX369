@@ -1,3 +1,4 @@
+import { isFrameId } from '../profileFrames.js';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api.js';
 import FullscreenMediaViewer from './FullscreenMediaViewer.jsx';
@@ -205,6 +206,9 @@ export default function ProfileStudio({ profile, isSelf, onUpdated, openSheet, o
     : hasPhoto ? <Media kind="image" src={profile.avatarPhotoUrl} />
     : <span style={{ color: 'var(--ps-ac)' }}>{initial}</span>;
 
+  // Premium animated frame (CHEX Coins store) drawn around the big profile picture.
+  const frameCls = isFrameId(profile.frame) ? ` pf pf-${profile.frame}` : '';
+
   const bgSel = (k, v) => studio.bg.kind === k && (v === undefined || studio.bg.value === v);
 
   return (
@@ -224,7 +228,7 @@ export default function ProfileStudio({ profile, isSelf, onUpdated, openSheet, o
 
         <div className="ps-card">
           {isSelf ? (
-            <div className="ps-av" role="button" tabIndex={0}
+            <div className={`ps-av${frameCls}`} role="button" tabIndex={0}
               aria-label={hasVideo || hasPhoto ? 'Open profile picture full screen' : 'Change profile photo or video'}
               onClick={() => (hasVideo || hasPhoto ? setFullscreen(true) : setSheet('video'))}
               onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); (hasVideo || hasPhoto ? setFullscreen(true) : setSheet('video')); } }}>
@@ -232,7 +236,7 @@ export default function ProfileStudio({ profile, isSelf, onUpdated, openSheet, o
               <button type="button" className="ps-badge" onClick={e => { e.stopPropagation(); setSheet('video'); }} aria-label="Change profile photo or video">Edit</button>
             </div>
           ) : (
-            <div className="ps-av ps-static" role={hasVideo || hasPhoto ? 'button' : undefined} tabIndex={hasVideo || hasPhoto ? 0 : undefined}
+            <div className={`ps-av ps-static${frameCls}`} role={hasVideo || hasPhoto ? 'button' : undefined} tabIndex={hasVideo || hasPhoto ? 0 : undefined}
               aria-label={hasVideo || hasPhoto ? 'Open profile picture full screen' : undefined}
               onClick={() => { if (hasVideo || hasPhoto) setFullscreen(true); }}
               style={hasVideo || hasPhoto ? { cursor: 'pointer' } : undefined}>

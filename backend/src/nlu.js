@@ -501,6 +501,7 @@ export const HELP_TEXT = `I understand typos, mixed languages (Tanglish, Hinglis
 • follow, unfollow, mute, unmute, block, unblock, restrict — e.g. "priya ah follow pannu", "unfollow arjun"
 • like this / save this / comment nice! / send this to priya (acts on the Reel or Post on screen)
 • post: <text>, note: <text>, story: <text>
+• remind me to call mom at 5pm / remind me tomorrow 9am to submit the report / sticky note: buy milk in 30 minutes / remind me every day at 8am to take medicine — I'll say it out loud when it's time; "open my sticky notes" shows them
 • call rahul / video call rahul
 • play chess with priya / join game ABC123
 • open spotify / youtube la <search> / search #hashtag
@@ -826,9 +827,18 @@ export const SPLIT_RE = /\s+(?:and then|and|then|&|aprom|apram|apuram|appuram|au
 //   { kind:'reply',   message, navigate? }       — conversational answer, nothing to execute
 //   { kind:'clarify', message }                  — understood the intent but an argument is missing
 //   { kind:'none' }                              — not understood (caller should try the LLM / say so)
+// Sticky-note reminders ("remind me to … at 5pm", "sticky note: …", "set a reminder …") are handed over whole:
+// the body can contain "and" / commas and the time phrase is read later in the person's own time zone.
+const REMIND_LEAD = /^\s*(?:please\s+)?(?:(?:can|could|will)\s+you\s+)?(?:remind\s+me\b|set\s+(?:a\s+|an\s+)?(?:reminder|alarm)\b|(?:add|make|create|new|write)(?:\s+me)?(?:\s+a|\s+an)?\s+(?:sticky|reminder)\b|sticky\b|reminder\b)/i;
+const SHOW_MY_LIFE = /^\s*(?:please\s+)?(?:open|show|see|view|go\s+to|take\s+me\s+to)?\s*(?:my\s+|the\s+)?(?:my\s+life|life\s+hub|(?:daily\s+)?planner|(?:study\s+)?timetable|assignments?(?:\s+tracker)?|focus\s+timer|habits?(?:\s+tracker)?)\s*$/i;
+const SHOW_STICKIES = /^\s*(?:please\s+)?(?:open|show|see|view|go\s+to|list)?\s*(?:my\s+|the\s+)?(?:sticky(?:\s*notes?)?|reminders?)\s*$/i;
+
 export function parseCommand(text, env = {}) {
   const raw = String(text ?? '').trim();
   if (!raw) return NONE;
+  if (SHOW_MY_LIFE.test(raw)) return { kind: 'actions', actions: [{ name: 'navigate', input: { screen: 'mylife' } }] };
+  if (SHOW_STICKIES.test(raw)) return { kind: 'actions', actions: [{ name: 'navigate', input: { screen: 'stickies' } }] };
+  if (REMIND_LEAD.test(raw)) return { kind: 'actions', actions: [{ name: 'create_reminder', input: { text: raw } }] };
   const cache = new Map();
   const wrapped = { ...env, person: env.person ? (w) => { if (!cache.has(w)) cache.set(w, env.person(w)); return cache.get(w); } : undefined };
 
