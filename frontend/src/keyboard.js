@@ -25,6 +25,7 @@ export function initKeyboardAware() {
   const update = () => {
     const h = vv ? vv.height : window.innerHeight;
     root.style.setProperty('--vvh', `${Math.round(h)}px`);
+    root.style.setProperty('--kb-inset', `${Math.max(0, Math.round(window.innerHeight - h - (vv?.offsetTop || 0)))}px`);
     // Rotation or a taller URL bar changes the "closed" height: only trust it while nothing is focused.
     if (!isTextField(document.activeElement)) baseHeight = Math.max(window.innerHeight, h);
     const shrunk = baseHeight - h > 120;                 // keyboards are 200px+; URL-bar wobble is ~60px

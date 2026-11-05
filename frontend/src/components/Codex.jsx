@@ -658,6 +658,11 @@ export default function Codex({ navigate, goBack, currentUser }) {
 
   useEffect(() => { runTextRef.current = runText; });
 
+  // Send button: enabled once there is something to send. Pressing it must NOT steal focus from the
+  // text box — on a phone that would close the keyboard, shift the layout and swallow the tap.
+  const canSend = !!input.trim() && !busy && !pending && !uiPrompt && !agentRunning;
+  const keepFocus = (e) => e.preventDefault();
+
   const submit = async (e) => {
     e.preventDefault();
     const text = input.trim();
@@ -816,14 +821,16 @@ export default function Codex({ navigate, goBack, currentUser }) {
               {interactiveJsx}
             </div>
           )}
-          <form className="glass-card codex-mini" onSubmit={submit}>
+          <form className={`glass-card codex-mini ${input.trim() ? 'has-text' : ''}`} onSubmit={submit}>
             <button type="button" className="codex-grip" aria-label="Drag Codex to move it" title="Drag to move" onPointerDown={onGripDown} onPointerMove={onGripMove} onPointerUp={onGripUp} onPointerCancel={onGripUp}>⠿</button>
             <button type="button" className="codex-mini-btn" onClick={toggleListening} disabled={!!pending || !!uiPrompt} aria-label="Talk to Codex"
               style={{ background: listening ? 'var(--pink)' : 'transparent' }}>{listening ? '⏹' : '🎙'}</button>
             <input
               placeholder={pending || uiPrompt ? 'Answer above…' : agentRunning ? 'Working…' : listening ? 'Listening…' : 'Ask Codex… (type help)'}
               value={listening && interim ? interim : input} onChange={onMiniChange} disabled={!!pending || !!uiPrompt || agentRunning} aria-label="Ask Codex"
+              enterKeyHint="send" autoComplete="off" autoCorrect="on" autoCapitalize="sentences"
             />
+            <button type="submit" className="codex-send" disabled={!canSend} aria-label="Send to Codex" title="Send" onMouseDown={keepFocus} onTouchStart={keepFocus}>➤</button>
             <select value={voiceLang} onChange={e => setVoiceLang(e.target.value)} aria-label="Voice language" title="Voice language"
               style={{ background: 'transparent', border: 'none', color: 'var(--text-mid)', fontSize: 11, maxWidth: 52, cursor: 'pointer' }}>
               <option value="auto">Auto</option><option value="en-US">EN</option><option value="en-IN">EN-IN</option>
@@ -833,7 +840,7 @@ export default function Codex({ navigate, goBack, currentUser }) {
               <option value="de-DE">DE</option><option value="pt-BR">PT</option><option value="ja-JP">JA</option>
               <option value="ko-KR">KO</option><option value="ru-RU">RU</option>
             </select>
-            <button type="button" className="codex-mini-btn" onClick={() => setAlertsEnabled(!alertsOn)} aria-label={alertsOn ? 'Mute AI alerts' : 'Unmute AI alerts'} aria-pressed={!alertsOn} title={alertsOn ? 'Mute alerts' : 'Alerts muted — tap to unmute'}>{alertsOn ? '🔔' : '🔕'}</button>
+            <button type="button" className="codex-mini-btn codex-bell" onClick={() => setAlertsEnabled(!alertsOn)} aria-label={alertsOn ? 'Mute AI alerts' : 'Unmute AI alerts'} aria-pressed={!alertsOn} title={alertsOn ? 'Mute alerts' : 'Alerts muted — tap to unmute'}>{alertsOn ? '🔔' : '🔕'}</button>
             <button type="button" className="codex-mini-btn" onClick={() => setOpen(true)} aria-label="Open full Codex" title="Open full Codex">⤢</button>
           </form>
         </div>
@@ -910,7 +917,9 @@ export default function Codex({ navigate, goBack, currentUser }) {
             <button type="button" onClick={toggleListening} disabled={!!pending || !!uiPrompt} style={{ background: listening ? 'var(--pink)' : 'transparent', border: '1px solid var(--border-soft)', borderRadius: '50%', width: 34, height: 34, color: 'var(--text-hi)', cursor: 'pointer', flexShrink: 0 }}>
               {listening ? '⏹' : '🎙'}
             </button>
-            <input placeholder={pending || uiPrompt ? 'Answer above…' : agentRunning ? 'Working…' : listening ? 'Listening…' : 'Tell Codex what to do…'} value={listening && interim ? interim : input} onChange={e => setInput(e.target.value)} disabled={!!pending || !!uiPrompt || agentRunning} />
+            <input placeholder={pending || uiPrompt ? 'Answer above…' : agentRunning ? 'Working…' : listening ? 'Listening…' : 'Tell Codex what to do…'} value={listening && interim ? interim : input} onChange={e => setInput(e.target.value)} disabled={!!pending || !!uiPrompt || agentRunning}
+              enterKeyHint="send" autoComplete="off" />
+            <button type="submit" className="codex-send" disabled={!canSend} aria-label="Send to Codex" title="Send" onMouseDown={keepFocus} onTouchStart={keepFocus}>➤</button>
           </form>
         </div>
       )}
