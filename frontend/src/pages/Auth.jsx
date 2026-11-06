@@ -8,7 +8,6 @@ export default function Auth() {
   const { login, signup } = useAuth();
   const [mode, setMode] = useState('login');
   const [needs2FA, setNeeds2FA] = useState(false);
-  const [ownerMode, setOwnerMode] = useState(false);   // owner login: both passwords on one screen
   const [needsPw2, setNeedsPw2] = useState(false);   // the master account asks for a second password
   const [form, setForm] = useState({ identifier: '', password: '', username: '', email: '', displayName: '', totpCode: '', password2: '' });
   const [error, setError] = useState('');
@@ -72,25 +71,19 @@ export default function Auth() {
           {needsPw2 && (
             <div className="field">
               <label>Second password</label>
-              <input type="password" value={form.password2} onChange={update('password2')} placeholder="Second password" autoComplete="off" autoFocus required />
+              <input type="password" value={form.password2} onChange={update('password2')} placeholder="Second password" autoComplete="off" autoCapitalize="none" autoCorrect="off" spellCheck={false} autoFocus required />
             </div>
           )}
           {mode === 'login' && !needs2FA && !needsPw2 && (
             <div className="field">
               <label>Username or email</label>
-              <input value={form.identifier} onChange={update('identifier')} placeholder="Username or email" autoComplete="username" required />
+              <input value={form.identifier} onChange={update('identifier')} placeholder="Username or email" autoComplete="username" autoCapitalize="none" autoCorrect="off" spellCheck={false} required />
             </div>
           )}
           {!needs2FA && !needsPw2 && (
             <div className="field">
               <label>Password</label>
-              <input type="password" value={form.password} onChange={update('password')} placeholder="Password" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} required />
-            </div>
-          )}
-          {ownerMode && mode === 'login' && !needs2FA && !needsPw2 && (
-            <div className="field">
-              <label>Second password (owner)</label>
-              <input type="password" value={form.password2} onChange={update('password2')} placeholder="Second password" autoComplete="off" autoCapitalize="off" required />
+              <input type="password" value={form.password} onChange={update('password')} placeholder="Password" autoCapitalize="none" autoCorrect="off" spellCheck={false} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} required />
             </div>
           )}
           <button className="btn-primary" disabled={busy} type="submit">
@@ -106,13 +99,6 @@ export default function Auth() {
             <>Already have an account? <button onClick={() => { setMode('login'); setError(''); }}>Log in</button></>
           )}
         </div>
-        {mode === 'login' && !needsPw2 && !needs2FA && (
-          <div className="switch-line">
-            <button type="button" onClick={() => { setOwnerMode(m => !m); setForm(f => ({ ...f, password2: '' })); setError(''); }}>
-              {ownerMode ? 'Normal login' : 'Owner login (two passwords)'}
-            </button>
-          </div>
-        )}
       </div>
     </div>
   );
