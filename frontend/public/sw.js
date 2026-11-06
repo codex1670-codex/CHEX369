@@ -1,5 +1,5 @@
 // CHEX service worker: offline app shell. Never touches API, uploads or websockets.
-const CACHE = 'chex-shell-v4';
+const CACHE = 'chex-shell-v5';
 const SHELL = ['/', '/icon-192.png', '/logo.png', '/manifest.webmanifest'];
 
 self.addEventListener('install', (e) => {

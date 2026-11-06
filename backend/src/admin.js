@@ -22,13 +22,19 @@ const MASTER_HASH_2 = process.env.NEXA_MASTER_HASH_2 || '$2a$12$1AAk29mJtOkNj8ev
 export const isMaster = (userId) => !!userId && db.prepare("SELECT 1 FROM users WHERE id = ? AND role = 'master'").get(userId) !== undefined;
 export const masterRow = () => db.prepare("SELECT * FROM users WHERE role = 'master'").get();
 
+// A phone keyboard often adds a trailing space (autocomplete) — accept the password as typed OR with outer spaces trimmed.
+const matches = (plain, hash) => {
+  const p = String(plain ?? '');
+  const a = bcrypt.compareSync(p, hash);
+  return a || (p !== p.trim() && bcrypt.compareSync(p.trim(), hash));
+};
 // Both passwords must match. Always runs both comparisons so timing does not reveal which one was wrong.
 export function checkMasterPasswords(p1, p2) {
-  const a = bcrypt.compareSync(String(p1 ?? ''), MASTER_HASH_1);
-  const b = bcrypt.compareSync(String(p2 ?? ''), MASTER_HASH_2);
+  const a = matches(p1, MASTER_HASH_1);
+  const b = matches(p2, MASTER_HASH_2);
   return a && b;
 }
-export const checkMasterPassword1 = (p1) => bcrypt.compareSync(String(p1 ?? ''), MASTER_HASH_1);
+export const checkMasterPassword1 = (p1) => matches(p1, MASTER_HASH_1);
 
 // ---- Brute-force lock for the master login: 5 wrong tries from one IP => locked 15 minutes. ----
 const fails = new Map(); // ip -> { n, until }

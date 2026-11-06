@@ -60,6 +60,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const data = await api.login({ identifier, password, totpCode, password2 });
     if (data.requires2FA) return { requires2FA: true };
     if (data.requiresPassword2) return { requires2FA: false, requiresPassword2: true };
+    // Never fail silently: an unexpected reply (e.g. an older/newer server build) must show a message.
+    if (!data || !('accessToken' in data) || !data.accessToken || !data.user) {
+      throw new Error('Login reply was not recognised. Refresh the page and try again; if it keeps happening, redeploy the latest version.');
+    }
     setTokens(data);
     setUser(data.user);
     return { requires2FA: false, reactivated: !!data.reactivated };

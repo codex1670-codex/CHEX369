@@ -87,7 +87,7 @@ const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 30, standardHeade
 const apiLimiter = rateLimit({ windowMs: 60 * 1000, max: 300, standardHeaders: true, legacyHeaders: false,
   message: { error: { code: 'RATE_LIMITED', message: 'Too many requests. Please slow down.' } } });
 
-app.get('/api/health', (_req, res) => res.json({ ok: true, service: 'nexa-backend', time: new Date().toISOString() }));
+app.get('/api/health', (_req, res) => res.json({ ok: true, service: 'nexa-backend', build: 'v109-owner-login', time: new Date().toISOString() }));
 // Readiness: proves the database actually answers (used by Docker/orchestrator health checks).
 app.get('/api/ready', async (_req, res) => {
   try {
