@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { v4 as uuid } from 'uuid';
 import db from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
+import { notifyMasterOfReport, isMaster } from '../admin.js';
 
 const router = Router();
 const VALID_TYPES = ['post', 'comment', 'reel', 'reel_comment', 'story', 'note', 'user', 'message'];
@@ -15,18 +16,19 @@ router.post('/', requireAuth, (req, res) => {
   const id = uuid();
   db.prepare('INSERT INTO reports (id, reporter_id, target_type, target_id, reason) VALUES (?, ?, ?, ?, ?)')
     .run(id, req.userId, targetType, targetId, cleanReason);
+  notifyMasterOfReport(id, req.app.get('io'));   // lands in sanjiv's DM inbox
   res.status(201).json({ ok: true, reportId: id, message: "Thanks — we've logged this report." });
 });
 
-// A lightweight moderation queue. In this slice, anyone can view/resolve reports
-// (there's no separate admin role) — a real deployment would gate this behind one.
-router.get('/', requireAuth, (req, res) => {
+// The moderation queue is for the master account only (full tools live under /api/admin).
+const masterOnly = (req, res, next) => (isMaster(req.userId) ? next() : res.status(403).json({ error: { code: 'FORBIDDEN', message: 'Only the master account can review reports.' } }));
+router.get('/', requireAuth, masterOnly, (req, res) => {
   const status = ['open', 'reviewing', 'actioned', 'dismissed'].includes(req.query.status) ? req.query.status : 'open';
   const rows = db.prepare('SELECT * FROM reports WHERE status = ? ORDER BY created_at DESC LIMIT 100').all(status);
   res.json({ reports: rows });
 });
 
-router.post('/:id/resolve', requireAuth, (req, res) => {
+router.post('/:id/resolve', requireAuth, masterOnly, (req, res) => {
   const { status } = req.body || {};
   if (!['actioned', 'dismissed', 'reviewing'].includes(status)) {
     return res.status(400).json({ error: { code: 'INVALID_INPUT', message: 'status must be actioned, dismissed, or reviewing.' } });

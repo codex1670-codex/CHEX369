@@ -1,5 +1,6 @@
 const BASE = '/api';
 
+export const CLIENT_ID = Math.random().toString(36).slice(2) + Date.now().toString(36);
 let accessToken = null;
 let refreshToken = null;
 let onAuthLost = () => {};
@@ -16,7 +17,7 @@ export function getStoredRefreshToken() { return localStorage.getItem('nexa_refr
 export function onAuthFailure(fn) { onAuthLost = fn; }
 
 async function request(path, { method = 'GET', body, retry = true } = {}) {
-  const headers = { 'Content-Type': 'application/json' };
+  const headers = { 'Content-Type': 'application/json', 'X-Client-Id': CLIENT_ID };
   if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
 
   const res = await fetch(BASE + path, {
@@ -68,7 +69,7 @@ async function tryRefresh() {
 // correct multipart boundary itself for a FormData body), but the same auth/refresh-retry
 // behavior as the JSON path above.
 async function requestForm(path, formData, { retry = true } = {}) {
-  const headers = {};
+  const headers = { 'X-Client-Id': CLIENT_ID };
   if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
 
   const res = await fetch(BASE + path, { method: 'POST', headers, body: formData });
@@ -204,6 +205,8 @@ export const api = {
 
   pushKey: () => request('/push/key'),
   pushSubscribe: (subscription) => request('/push/subscribe', { method: 'POST', body: { subscription } }),
+  pushUnsubscribe: (endpoint) => request('/push/unsubscribe', { method: 'POST', body: { endpoint } }),
+  pushTest: () => request('/push/test', { method: 'POST' }),
 
   notesFeed: () => request('/notes/feed'),
   noteMoods: () => request('/notes/moods'),
@@ -296,6 +299,18 @@ export const api = {
   setStudio: (studio) => request('/users/me/studio', { method: 'PATCH', body: studio }),
   setProfileDisplayMode: (mode) => request('/users/me/display-mode', { method: 'PATCH', body: { mode } }),
 
+  giftOptions: () => request('/coins/gift-options'),
+  sendGift: (body) => request('/coins/gift', { method: 'POST', body }),
+  // Master account ("sanjiv") only — the server rejects everyone else.
+  adminOverview: () => request('/admin/overview'),
+  adminReports: (status = 'open') => request(`/admin/reports?status=${encodeURIComponent(status)}`),
+  adminResolveReport: (id, body) => request(`/admin/reports/${id}/resolve`, { method: 'POST', body }),
+  adminDeleteContent: (type, id) => request(`/admin/content/${encodeURIComponent(type)}/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  adminUsers: (q = '') => request(`/admin/users?q=${encodeURIComponent(q)}`),
+  adminDeleteUser: (id) => request(`/admin/users/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  adminGiftCoins: (username, amount) => request('/admin/gift/coins', { method: 'POST', body: { username, amount } }),
+  adminGiftItem: (username, itemId, frame) => request('/admin/gift/item', { method: 'POST', body: { username, itemId, frame } }),
+
   report: (targetType, targetId, reason) => request('/reports', { method: 'POST', body: { targetType, targetId, reason } }),
 
   reactMessage: (id, emoji) => request(`/messages/${id}/react`, { method: 'POST', body: { emoji } }),
@@ -345,6 +360,9 @@ export const api = {
   stopFocusAlert: () => request('/life/focus-alert', { method: 'DELETE' }),
   deleteLifeItem: (id) => request(`/life/${id}`, { method: 'DELETE' }),
   learnLevel: (lang, level) => request('/life/learn/level', { method: 'POST', body: { lang, level } }),   // records a finished level; pays 1 CHEX coin per section
+  learnLanguages: () => request('/life/learn/languages'),   // which languages you own, levels done per language, and whether you can unlock another
+  learnChooseLanguage: (lang) => request('/life/learn/language', { method: 'POST', body: { lang } }),   // pick your one free first language
+  learnUnlockLanguage: (lang) => request('/life/learn/unlock', { method: 'POST', body: { lang } }),   // premium: 100 finished levels + 100 CHEX coins
   learnBoard: () => request('/life/learn-board'),   // CHEX learn leaderboard (you + people you follow)
   codexStatus: () => request('/codex/status'),
   codexAct: (text, context, history) => request('/codex/act', { method: 'POST', body: { text, context: withClock(context), history } }),

@@ -585,6 +585,16 @@ CREATE TABLE IF NOT EXISTS learn_levels (
   PRIMARY KEY (user_id, lang, level)
 );
 
+-- CHEX learn: which languages a person may study. The first one is free; every other language is premium and
+-- is unlocked with CHEX coins after 100 finished levels. Kept by the server so it can't be changed from the browser.
+CREATE TABLE IF NOT EXISTS learn_langs (
+  user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  lang       TEXT NOT NULL,
+  kind       TEXT NOT NULL CHECK (kind IN ('first','unlocked','earlier')),
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  PRIMARY KEY (user_id, lang)
+);
+
 -- Store purchases (what a person has unlocked).
 CREATE TABLE IF NOT EXISTS coin_unlocks (
   user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,

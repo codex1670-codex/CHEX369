@@ -3,6 +3,7 @@ import { connectSocket } from '../socket.js';
 import { onStartCallRequest } from '../callBus.js';
 import { api } from '../api.js';
 import Avatar from './Avatar.jsx';
+import { captureMedia, rtcConfig, makeOffer, makeAnswer, tuneSenders, startQualityMonitor, keepAwake } from '../callQuality.js';
 
 const FALLBACK_ICE = [{ urls: 'stun:stun.l.google.com:19302' }];
 
@@ -45,6 +46,11 @@ export default function CallLayer() {
   const [cameraOff, setCameraOff] = useState(false);
   const [seconds, setSeconds] = useState(0);
   const [, force] = useState(0);
+  const [net, setNet] = useState({ level: 'good', tier: 'HD' });     // live connection quality
+  const [reconnecting, setReconnecting] = useState(false);
+  const [needTap, setNeedTap] = useState(false);                     // browser blocked autoplay of the other person's sound
+  const [facing, setFacing] = useState('user');
+  const [fullscreen, setFullscreen] = useState(false);
 
   const phaseRef = useRef('idle');
   const callIdRef = useRef(null);
@@ -59,10 +65,19 @@ export default function CallLayer() {
   const localVideoRef = useRef(null);
   const remoteMediaRef = useRef(null);
   const socketRef = useRef(null);
+  const stopMonitorRef = useRef(null);
+  const stopAwakeRef = useRef(null);
+  const restartsRef = useRef(0);
+  const discoTimerRef = useRef(null);
+  const rootRef = useRef(null);
 
   const go = (p) => { phaseRef.current = p; setPhase(p); };
 
   const cleanup = useCallback((message) => {
+    stopMonitorRef.current?.(); stopMonitorRef.current = null; stopAwakeRef.current?.(); stopAwakeRef.current = null;
+    clearTimeout(discoTimerRef.current); restartsRef.current = 0;
+    setReconnecting(false); setNeedTap(false); setNet({ level: 'good', tier: 'HD' }); setFacing('user');
+    if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
     pcRef.current?.close(); pcRef.current = null;
     localStreamRef.current?.getTracks().forEach(t => t.stop()); localStreamRef.current = null;
     remoteStreamRef.current = null; pendingIceRef.current = []; incomingRef.current = null; callIdRef.current = null;
@@ -75,7 +90,7 @@ export default function CallLayer() {
   useEffect(() => {
     if (localVideoRef.current && localStreamRef.current && localVideoRef.current.srcObject !== localStreamRef.current) localVideoRef.current.srcObject = localStreamRef.current;
     const r = remoteMediaRef.current;
-    if (r && remoteStreamRef.current && r.srcObject !== remoteStreamRef.current) { r.srcObject = remoteStreamRef.current; r.play?.().catch(() => {}); }
+    if (r && remoteStreamRef.current && r.srcObject !== remoteStreamRef.current) { r.srcObject = remoteStreamRef.current; r.play?.().then(() => setNeedTap(false)).catch(() => setNeedTap(true)); }
   });
 
   // Ring tone while ringing; call timer while active.
@@ -93,10 +108,7 @@ export default function CallLayer() {
 
   const getMedia = async (type) => {
     if (!navigator.mediaDevices?.getUserMedia) throw new Error('unsupported');
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: true, noiseSuppression: true },
-      video: type === 'video' ? { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } } : false,
-    });
+    const stream = await captureMedia(type, 'user');   // HD video + clean voice (echo/noise/gain control)
     localStreamRef.current = stream;
     force(n => n + 1);
     return stream;
@@ -106,17 +118,51 @@ export default function CallLayer() {
     try { const r = await api.callIce(); if (r.iceServers?.length) iceServersRef.current = r.iceServers; } catch { /* keep fallback */ }
   };
 
+  // Caller-side ICE restart: builds a brand-new network path without hanging up (used when wifi/mobile data
+  // switches or drops for a moment). The callee asks for one with a 'restart' signal.
+  const restartIce = async () => {
+    const pc = pcRef.current, socket = socketRef.current;
+    if (!pc || !callIdRef.current) return;
+    if (!isCallerRef.current) { socket.emit('call:signal', { callId: callIdRef.current, data: { kind: 'restart' } }); return; }
+    try {
+      pc.restartIce?.();
+      const sdp = await makeOffer(pc, { iceRestart: true });
+      socket.emit('call:signal', { callId: callIdRef.current, data: { kind: 'offer', sdp } });
+    } catch { /* next attempt will retry */ }
+  };
+
   const createPc = () => {
     const socket = socketRef.current;
-    const pc = new RTCPeerConnection({ iceServers: iceServersRef.current });
+    const pc = new RTCPeerConnection(rtcConfig(iceServersRef.current));
     localStreamRef.current?.getTracks().forEach(track => pc.addTrack(track, localStreamRef.current));
-    pc.ontrack = (e) => { remoteStreamRef.current = e.streams[0] || new MediaStream([e.track]); force(n => n + 1); };
+    pc.ontrack = (e) => {
+      remoteStreamRef.current = e.streams[0] || new MediaStream([e.track]);
+      try { if (e.track.kind === 'audio' && 'jitterBufferTarget' in e.receiver) e.receiver.jitterBufferTarget = 80; } catch { /* ignore */ }
+      force(n => n + 1);
+    };
     pc.onicecandidate = (e) => { if (e.candidate) socket.emit('call:signal', { callId: callIdRef.current, data: { kind: 'ice', candidate: e.candidate } }); };
     pc.onconnectionstatechange = () => {
-      if (pc.connectionState === 'connected') go('active');
-      if (pc.connectionState === 'failed') {
-        socket.emit('call:end', { callId: callIdRef.current });
-        cleanup("Couldn't connect the call. Make sure both phones are online (same wifi works best).");
+      const st = pc.connectionState;
+      if (st === 'connected') {
+        clearTimeout(discoTimerRef.current); restartsRef.current = 0; setReconnecting(false);
+        go('active');
+        tuneSenders(pc, 0);
+        if (!stopMonitorRef.current) stopMonitorRef.current = startQualityMonitor(pc, setNet);
+        if (!stopAwakeRef.current) keepAwake().then(stop => { if (phaseRef.current === 'idle') stop(); else stopAwakeRef.current = stop; });
+      } else if (st === 'disconnected') {
+        // A short blip often heals itself; if it doesn't within 2.5 s, rebuild the path (no hang-up).
+        setReconnecting(true);
+        clearTimeout(discoTimerRef.current);
+        discoTimerRef.current = setTimeout(() => { if (pcRef.current === pc && pc.connectionState !== 'connected') restartIce(); }, 2500);
+      } else if (st === 'failed') {
+        if (restartsRef.current < 4 && phaseRef.current !== 'idle') {
+          restartsRef.current += 1; setReconnecting(true); restartIce();
+          clearTimeout(discoTimerRef.current);
+          discoTimerRef.current = setTimeout(() => { if (pcRef.current === pc && pc.connectionState !== 'connected') pc.onconnectionstatechange?.(); }, 4000);
+        } else {
+          socket.emit('call:end', { callId: callIdRef.current });
+          cleanup("The connection was lost. Check your internet and try calling again.");
+        }
       }
     };
     pcRef.current = pc;
@@ -146,9 +192,8 @@ export default function CallLayer() {
       if (!isCallerRef.current) return; // the person who picked up waits for the offer
       try {
         const pc = createPc();
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
-        socket.emit('call:signal', { callId, data: { kind: 'offer', sdp: pc.localDescription } });
+        const sdp = await makeOffer(pc);
+        socket.emit('call:signal', { callId, data: { kind: 'offer', sdp } });
       } catch (err) { socket.emit('call:end', { callId }); cleanup('Could not start the call: ' + err.message); }
     };
     const onSignal = async ({ callId, data }) => {
@@ -158,12 +203,13 @@ export default function CallLayer() {
           const pc = pcRef.current || createPc();
           await pc.setRemoteDescription(data.sdp);
           await flushIce(pc);
-          const answer = await pc.createAnswer();
-          await pc.setLocalDescription(answer);
-          socket.emit('call:signal', { callId, data: { kind: 'answer', sdp: pc.localDescription } });
+          const sdp = await makeAnswer(pc);
+          socket.emit('call:signal', { callId, data: { kind: 'answer', sdp } });
         } else if (data.kind === 'answer') {
           const pc = pcRef.current;
           if (pc) { await pc.setRemoteDescription(data.sdp); await flushIce(pc); }
+        } else if (data.kind === 'restart') {
+          if (isCallerRef.current) restartIce();
         } else if (data.kind === 'ice') {
           const pc = pcRef.current;
           if (pc?.remoteDescription) { try { await pc.addIceCandidate(data.candidate); } catch { /* ignore */ } }
@@ -176,6 +222,17 @@ export default function CallLayer() {
     const onEnded = closing('');
     const onMissed = closing('No answer.');
     const onCallError = (e) => { cleanup(e.message); };
+
+    // If the socket dropped and came back mid-call, re-enter the call room (the server forgot us) and
+    // rebuild the media path.
+    const onReconnect = () => {
+      if (!callIdRef.current || phaseRef.current === 'idle') return;
+      socket.emit('call:rejoin', { callId: callIdRef.current });
+      if (pcRef.current && pcRef.current.connectionState !== 'connected') setTimeout(restartIce, 600);
+    };
+    const onOnline = () => { if (pcRef.current && phaseRef.current !== 'idle') setTimeout(restartIce, 400); };
+    socket.on('connect', onReconnect);
+    window.addEventListener('online', onOnline);
 
     socket.on('call:incoming', onIncoming);
     socket.on('call:ringing', onRinging);
@@ -199,13 +256,14 @@ export default function CallLayer() {
       socket.off('call:incoming', onIncoming); socket.off('call:ringing', onRinging); socket.off('call:accepted', onAccepted);
       socket.off('call:signal', onSignal); socket.off('call:declined', onDeclined); socket.off('call:ended', onEnded);
       socket.off('call:missed', onMissed); socket.off('call:error', onCallError);
+      socket.off('connect', onReconnect); window.removeEventListener('online', onOnline);
       unsubscribeStart();
     };
     // eslint-disable-next-line
   }, []);
 
   // Leaving the app mid-call hangs up.
-  useEffect(() => () => { if (callIdRef.current) socketRef.current?.emit('call:end', { callId: callIdRef.current }); pcRef.current?.close(); localStreamRef.current?.getTracks().forEach(t => t.stop()); }, []);
+  useEffect(() => () => { stopMonitorRef.current?.(); stopAwakeRef.current?.(); if (callIdRef.current) socketRef.current?.emit('call:end', { callId: callIdRef.current }); pcRef.current?.close(); localStreamRef.current?.getTracks().forEach(t => t.stop()); }, []);
 
   const acceptIncoming = async () => {
     const inc = incomingRef.current; if (!inc) return;
@@ -230,6 +288,30 @@ export default function CallLayer() {
     if (t) { t.enabled = !t.enabled; setCameraOff(!t.enabled); }
   };
 
+  const flipCamera = async () => {
+    const pc = pcRef.current; if (!pc) return;
+    const next = facing === 'user' ? 'environment' : 'user';
+    try {
+      const fresh = await captureMedia('video', next);
+      const track = fresh.getVideoTracks()[0];
+      const sender = pc.getSenders().find(x => x.track?.kind === 'video');
+      if (sender) await sender.replaceTrack(track);      // swaps cameras live — no renegotiation, no break
+      localStreamRef.current.getVideoTracks().forEach(t => { t.stop(); localStreamRef.current.removeTrack(t); });
+      localStreamRef.current.addTrack(track);
+      fresh.getAudioTracks().forEach(t => t.stop());
+      track.enabled = !cameraOff;
+      setFacing(next); force(n => n + 1);
+      if (localVideoRef.current) localVideoRef.current.srcObject = localStreamRef.current;
+      tuneSenders(pc, 0);
+    } catch { /* camera busy or only one camera */ }
+  };
+  const toggleFullscreen = () => {
+    const el = rootRef.current; if (!el) return;
+    if (document.fullscreenElement) document.exitFullscreen?.().then(() => setFullscreen(false)).catch(() => {});
+    else el.requestFullscreen?.().then(() => setFullscreen(true)).catch(() => {});
+  };
+  const tapToPlay = () => { remoteMediaRef.current?.play?.().then(() => setNeedTap(false)).catch(() => {}); };
+
   if (phase === 'idle' && !error) return null;
 
   const isVideo = callType === 'video';
@@ -238,7 +320,7 @@ export default function CallLayer() {
   const status = phase === 'ringing-in' ? `Incoming ${callType} call…` : phase === 'ringing-out' ? 'Ringing…' : phase === 'starting' ? 'Starting…' : phase === 'connecting' ? 'Connecting…' : fmt(seconds);
 
   return (
-    <div className="call-screen" role="dialog" aria-label="Call" data-noswipe>
+    <div className="call-screen" role="dialog" aria-label="Call" data-noswipe ref={rootRef}>
       {error && phase === 'idle' ? (
         <div className="glass-card" style={{ width: 360, maxWidth: '92vw', padding: 24, textAlign: 'center' }}>
           <div className="error-banner" style={{ marginBottom: 14 }}>{error}</div>
@@ -249,7 +331,7 @@ export default function CallLayer() {
           {isVideo && inCall && (
             <video ref={remoteMediaRef} className="call-remote" autoPlay playsInline />
           )}
-          {!isVideo && inCall && <audio ref={remoteMediaRef} autoPlay />}
+          {!isVideo && inCall && <audio ref={remoteMediaRef} autoPlay playsInline />}
 
           {(!isVideo || !inCall) && (
             <div className="call-center">
@@ -261,6 +343,15 @@ export default function CallLayer() {
           {isVideo && inCall && (
             <div className="call-topbar"><span className="call-name" style={{ fontSize: 16 }}>{name}</span><span className="call-status">{status}</span></div>
           )}
+          {phase === 'active' && (
+            <div className={`call-net ${net.level}`} title={net.rtt != null ? `${net.rtt} ms · ${net.loss}% loss` : 'Connection'}>
+              <span className="bars"><i /><i /><i /></span>
+              {isVideo ? <b>{net.tier}</b> : <b>HD voice</b>}
+            </div>
+          )}
+          {reconnecting && inCall && <div className="call-banner">Reconnecting… your call will continue</div>}
+          {!reconnecting && phase === 'active' && net.level === 'poor' && <div className="call-banner warn">Weak connection — {isVideo ? 'lowering video quality to keep your voice clear' : 'optimising voice'}</div>}
+          {needTap && inCall && <button className="call-tap" onClick={tapToPlay}>🔊 Tap to turn on sound</button>}
 
           {isVideo && inCall && localStreamRef.current && (
             <video ref={localVideoRef} className={`call-local${cameraOff ? ' off' : ''}`} autoPlay playsInline muted />
@@ -275,6 +366,8 @@ export default function CallLayer() {
             ) : (
               <>
                 {inCall && <button className={`call-btn${muted ? ' on' : ''}`} onClick={toggleMute} aria-label={muted ? 'Unmute' : 'Mute'}>{muted ? '🔇' : '🎙'}<small>{muted ? 'Unmute' : 'Mute'}</small></button>}
+                {inCall && isVideo && <button className="call-btn" onClick={flipCamera} aria-label="Flip camera">🔄<small>Flip</small></button>}
+                {inCall && isVideo && document.fullscreenEnabled && <button className="call-btn call-fs" onClick={toggleFullscreen} aria-label="Full screen">{fullscreen ? '🗗' : '⛶'}<small>{fullscreen ? 'Exit' : 'Full'}</small></button>}
                 {inCall && isVideo && <button className={`call-btn${cameraOff ? ' on' : ''}`} onClick={toggleCamera} aria-label="Camera">{cameraOff ? '🚫' : '📷'}<small>{cameraOff ? 'Camera on' : 'Camera off'}</small></button>}
                 <button className="call-btn decline" onClick={endCall} aria-label={phase === 'ringing-out' ? 'Cancel call' : 'End call'}>✕<small>{inCall ? 'End' : 'Cancel'}</small></button>
               </>

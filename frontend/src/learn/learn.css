@@ -296,3 +296,16 @@
 .lx-start { white-space: nowrap; }
 @media (max-width: 860px) { .lx-hero { min-height: 330px; } .lx-hero-owl { bottom: 0; } .lx-hero-owl svg { width: min(240px, 46vw); } }
 @media (max-width: 480px) { .lx-bubble { width: 60%; } .lx-bubble h2 { font-size: 28px; } .lx-start { padding: 11px 14px; font-size: 15px; } .lx-hero-owl { right: -2%; } .lx-hero-owl svg { width: 44vw; } }
+
+/* ───────── Languages: first free pick + Premium lock ───────── */
+.lx-firstlang { display: grid; gap: 14px; }
+.lx-firstlang h2 { margin: 8px 0 4px; font-size: clamp(22px, 5vw, 30px); font-weight: 900; color: var(--lx-ink); }
+.lx-firstgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.lx-firstgrid .learn-opt { display: flex; align-items: center; gap: 10px; min-width: 0; text-align: left; }
+.lx-firstgrid .learn-opt b { overflow-wrap: anywhere; }
+.lx-premnote { display: grid; gap: 4px; }
+.lx-langrow .learn-grow { min-width: 0; overflow-wrap: anywhere; }
+.lx-langrow.locked .learn-flag { filter: grayscale(.85); opacity: .7; }
+.lx-premtag { display: inline-block; margin-left: 8px; padding: 2px 9px; border-radius: 999px; background: linear-gradient(180deg, #ffe08a, var(--lx-gold)); color: #6b4a00; font-size: 12px; font-weight: 900; vertical-align: middle; }
+.lx-lvcount { white-space: nowrap; }
+@media (max-width: 480px) { .lx-firstgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

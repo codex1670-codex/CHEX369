@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useLive } from '../live.js';
 import { api } from '../api.js';
 import Avatar from '../components/Avatar.jsx';
 import ProfileMediaEditor from '../components/ProfileMediaEditor.jsx';
@@ -6,6 +7,7 @@ import ProfileStudio from '../components/ProfileStudio.jsx';
 import FullscreenMediaViewer from '../components/FullscreenMediaViewer.jsx';
 import FollowList from '../components/FollowList.jsx';
 import HighlightsRow from '../components/HighlightsRow.jsx';
+import GiftModal from '../components/GiftModal.jsx';
 import PostGrid from '../components/PostGrid.jsx';
 import PostModal from '../components/PostModal.jsx';
 import { useAuth } from '../AuthContext.jsx';
@@ -36,6 +38,7 @@ export default function Profile({ username, initialView, onConsumeInitialView, o
   const [history, setHistory] = useState(null);
   // Section 127/128 — Profile Photo & Profile Video editor.
   const [mediaEditorOpen, setMediaEditorOpen] = useState(false);
+  const [gifting, setGifting] = useState(false);   // the Send-a-gift sheet
   // Followers / Following popup: null | 'followers' | 'following'.
   const [connections, setConnections] = useState(null);
   // Profile Studio: which sheet to pop open on arrival ('video' when Codex says "open profile studio").
@@ -66,6 +69,12 @@ export default function Profile({ username, initialView, onConsumeInitialView, o
     updateCodexContext({ screen: 'profile', profileUsername: username });
     return () => { alive = false; };
   }, [username]);
+
+  // Live: follower counts, bio/photo changes and new / edited / deleted posts show up without a refresh.
+  useLive(['users', 'posts', 'reels', 'highlights'], () => {
+    api.getUser(username).then(res => setProfile(res.user)).catch(() => {});
+    api.userPosts(username).then(res => { setUserPosts(res.posts); setPostsCursor(res.nextCursor); }).catch(() => {});
+  });
 
   // Deep-link support: Codex's `navigate` action (and the nav rail) can send us straight
   // into "saved posts" or "saved reels" via initialView, e.g. from "open my saved reels".
@@ -239,6 +248,7 @@ export default function Profile({ username, initialView, onConsumeInitialView, o
               {profile.isFollowing ? 'Following' : 'Follow'}
             </button>
             <button className="btn-ghost" onClick={() => onOpenMessage(profile.username)}>Message</button>
+            <button className="btn-ghost" onClick={() => setGifting(true)} aria-label={`Send a gift to ${profile.username}`}>🎁 Gift</button>
             <button className="btn-ghost" aria-haspopup="menu" aria-expanded={menuOpen} aria-label="More options" onClick={() => setMenuOpen(o => !o)}>•••</button>
             {menuOpen && (
               <div className="glass-card" role="menu" style={{ position: 'absolute', top: '100%', right: 0, marginTop: 6, padding: 8, zIndex: 10, minWidth: 180 }}>
@@ -252,6 +262,7 @@ export default function Profile({ username, initialView, onConsumeInitialView, o
         )}
       </ProfileStudio>
 
+      {gifting && <GiftModal username={profile.username} onClose={() => setGifting(false)} />}
       {connections && (
         <FollowList
           username={profile.username}

@@ -155,6 +155,8 @@ addColumnIfMissing('reels', 'coin_eligible', 'INTEGER NOT NULL DEFAULT 1');
 addColumnIfMissing('reels', 'coin_skip_reason', 'TEXT');
 db.exec('CREATE INDEX IF NOT EXISTS idx_reels_media_hash ON reels(media_hash) WHERE media_hash IS NOT NULL');
 addColumnIfMissing('users', 'show_online', 'INTEGER NOT NULL DEFAULT 1');
+// 'user' (everyone), 'master' (the permanent owner account "sanjiv", see admin.js) or 'system' (the "CHEX Reports" inbox bot).
+addColumnIfMissing('users', 'role', "TEXT NOT NULL DEFAULT 'user'");
 // Premium profile frame (id from coins.js PROFILE_FRAMES); only settable after the frames unlock.
 addColumnIfMissing('users', 'profile_frame', 'TEXT');
 // Account privacy: 0 = public (everyone can see followers/following), 1 = private (only people

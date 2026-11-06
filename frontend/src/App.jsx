@@ -2,6 +2,8 @@ import { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuth } from './AuthContext.jsx';
 import Auth from './pages/Auth.jsx';
+import PageTransition from './motion/PageTransition';
+import Skeleton from './ui/Skeleton';
 import Feed from './pages/Feed.jsx';
 import Profile from './pages/Profile.jsx';
 import Messages from './pages/Messages.jsx';
@@ -11,6 +13,7 @@ import Games from './pages/Games.jsx';
 import Search from './pages/Search.jsx';
 import Settings from './pages/Settings.jsx';
 import CoinStore from './pages/CoinStore.jsx';
+import Admin from './pages/Admin.jsx';
 import Stickies from './pages/Stickies.jsx';
 import MyLife from './pages/MyLife.jsx';
 const LearnPage = lazy(() => import('./pages/LearnPage.jsx'));   // CHEX learn: loaded only when opened
@@ -32,7 +35,7 @@ import { announcementForBatch, notifyOnce, alertsEnabled, setAlertsEnabled } fro
 import { burstEmoji } from './emojiFx.js';
 import EmojiRain from './components/EmojiRain.jsx';
 import PermissionsPrompt from './components/PermissionsPrompt.jsx';
-import { syncPushIfAllowed } from './push.js';
+import { syncPushIfAllowed, watchPush } from './push.js';
 
 const NAV = [
   { key: 'feed', label: 'Home', icon: '🏠' },
@@ -119,6 +122,7 @@ export default function App() {
     if (!user) return;
     connectSocket();
     syncPushIfAllowed(); // keep this phone subscribed for home-screen notifications
+    const stopWatchingPush = watchPush(); // …and re-check whenever the app comes back to the front
     announcedRef.current = null;
     let timer = null;
     // Reload the badge counts; for anything new, have the AI say who it is from.
@@ -145,7 +149,7 @@ export default function App() {
     ['notification:new', 'message:new', 'message_request:new'].forEach(ev => socket?.on(ev, onEvent));
     const onCoins = (e) => {
       const n = e?.amount || 1;
-      setCoinToast(`🪙 +${n} CHEX coin${n === 1 ? '' : 's'} — ${e?.reason || 'nice one!'}`);
+      setCoinToast(e?.text || `🪙 +${n} CHEX coin${n === 1 ? '' : 's'} — ${e?.reason || 'nice one!'}`);
       clearTimeout(coinTimer.current);
       coinTimer.current = setTimeout(() => setCoinToast(''), 4500);
     };
@@ -155,6 +159,7 @@ export default function App() {
       socket?.off('coins:earned', onCoins);
       clearTimeout(coinTimer.current);
       clearTimeout(timer);
+      stopWatchingPush();
       ['notification:new', 'message:new', 'message_request:new'].forEach(ev => socket?.off(ev, onEvent));
       window.removeEventListener('chex:refresh-counts', onCounts);
       disconnectSocket();
@@ -276,7 +281,12 @@ export default function App() {
                 <button role="menuitem" style={{ '--i': NAV.length + 2 }} onPointerMove={tiltMove} onPointerLeave={tiltLeave} className={route === 'stickies' ? 'active' : ''} onClick={() => { setFabOpen(false); navigate('stickies'); }}>
                   <span className="ico">📌</span><span className="lbl">Sticky notes</span>
                 </button>
-                <button role="menuitemcheckbox" aria-checked={aiAlerts} className="alerts-toggle" style={{ '--i': NAV.length + 3 }} onPointerMove={tiltMove} onPointerLeave={tiltLeave} onClick={() => setAlertsEnabled(!aiAlerts)}>
+                {user.isAdmin && (
+                  <button role="menuitem" style={{ '--i': NAV.length + 3 }} onPointerMove={tiltMove} onPointerLeave={tiltLeave} className={route === 'admin' ? 'active' : ''} onClick={() => { setFabOpen(false); navigate('admin'); }}>
+                    <span className="ico">🛡️</span><span className="lbl">Admin</span>
+                  </button>
+                )}
+                <button role="menuitemcheckbox" aria-checked={aiAlerts} className="alerts-toggle" style={{ '--i': NAV.length + (user.isAdmin ? 4 : 3) }} onPointerMove={tiltMove} onPointerLeave={tiltLeave} onClick={() => setAlertsEnabled(!aiAlerts)}>
                   <span className="ico">{aiAlerts ? '🔊' : '🔇'}</span><span className="lbl">AI alerts: {aiAlerts ? 'On' : 'Off'}</span>
                 </button>
               </div>
@@ -295,14 +305,14 @@ export default function App() {
           <button key={n.key} type="button" className={route === n.key ? 'active' : ''} aria-label={n.label} aria-current={route === n.key ? 'page' : undefined}
             onClick={() => navigate(n.key, n.key === 'profile' ? user.username : undefined)}>
             <span className="nb-ico" aria-hidden>{n.icon}{badgeFor(n.key) > 0 && <span className="count-badge nb-badge">{fmtCount(badgeFor(n.key))}</span>}</span>
-            <span className="nb-lbl">{n.key === 'notifications' ? 'Alerts' : n.label}</span>
+            <span className="nb-lbl">{n.key === 'notifications' ? 'Alerts' : n.key === 'messages' ? 'Chats' : n.label}</span>
           </button>
         ))}
       </nav>
 
       {coinToast && <div className="coin-toast coin-toast-fixed" role="status">{coinToast}</div>}
-      <main className={`main-col ${route === 'messages' ? 'fixed-page' : ''}`} onTouchStart={onSwipeStart} onTouchEnd={onSwipeEnd}>
-        {route === 'feed' && <Feed onOpenProfile={(u) => navigate('profile', u)} onOpenStickies={() => navigate('stickies')} onOpenLearn={() => navigate('learn')} />}
+      <PageTransition routeKey={route} className={`main-col ${route === 'messages' ? 'fixed-page' : ''}`} onTouchStart={onSwipeStart} onTouchEnd={onSwipeEnd}>
+        {route === 'feed' && <Feed onOpenProfile={(u) => navigate('profile', u)} onOpenStickies={() => navigate('stickies')} onOpenLearn={() => navigate('learn')} onOpenAdmin={() => navigate('admin')} />}
         {route === 'search' && <Search onOpenProfile={(u) => navigate('profile', u)} onOpenReel={(id) => navigate('reels', { reelId: id })} initialQuery={searchQuery} initialScope={searchScope} onConsumeQuery={() => setSearchQuery(null)} />}
         {route === 'reels' && <Reels startReelId={startReelId} onConsumeStart={() => setStartReelId(null)} />}
         {route === 'notifications' && <Notifications onOpenProfile={(u) => navigate('profile', u)} />}
@@ -310,7 +320,8 @@ export default function App() {
         {route === 'settings' && <Settings onBack={() => navigate('profile', user.username)} onOpenProfile={(u) => navigate('profile', u)} onOpenCoins={() => navigate('coins')} onOpenStickies={() => navigate('stickies')} onOpenMyLife={() => navigate('mylife')} />}
         {route === 'stickies' && <Stickies onBack={() => navigate('feed')} />}
         {route === 'mylife' && <MyLife onBack={() => navigate('feed')} initialTab={myLifeTab} />}
-        {route === 'learn' && <Suspense fallback={<div className="glass-card life-empty">Loading…</div>}><LearnPage onBack={() => navigate('feed')} onOpenProfile={(u) => navigate('profile', u)} /></Suspense>}
+        {route === 'learn' && <Suspense fallback={<Skeleton label="Loading Learn" />}><LearnPage onBack={() => navigate('feed')} onOpenProfile={(u) => navigate('profile', u)} /></Suspense>}
+        {route === 'admin' && user.isAdmin && <Admin onBack={() => navigate('feed')} onOpenProfile={(u) => navigate('profile', u)} />}
         {route === 'coins' && <CoinStore onBack={() => navigate('settings')} onOpenSettings={() => navigate('settings')} />}
         {route === 'profile' && (
           <Profile
@@ -325,7 +336,7 @@ export default function App() {
         {route === 'messages' && (
           <Messages startWithUsername={messageStart} onConsumeStart={() => setMessageStart(null)} onOpenReel={(id) => navigate('reels', { reelId: id })} />
         )}
-      </main>
+      </PageTransition>
 
       <Codex navigate={navigate} goBack={goBack} currentUser={user} />
       <StickyAlerts onOpen={() => navigate('mylife', { tab: 'reminders' })} />

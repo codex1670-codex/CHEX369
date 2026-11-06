@@ -4,6 +4,7 @@ import { useAuth } from '../AuthContext.jsx';
 import { getStoredTheme, applyTheme } from '../theme.js';
 import { get3D, set3D } from '../ui3d.js';
 import Emoji3D from '../components/Emoji3D.jsx';
+import { floatingAiEnabled, setFloatingAi } from '../floatingAi.js';
 import { getEmojiFx, setEmojiFx, splitEmojis, burstEmoji, DEFAULT_EMOJIS, EMOJI_PALETTE, MAX_EMOJIS } from '../emojiFx.js';
 import PermissionsPanel from '../components/PermissionsPanel.jsx';
 import SafetyLists from '../components/SafetyLists.jsx';
@@ -61,7 +62,7 @@ function Appearance({ onOpenCoins }) {
       </div>
       {wallet && !unlocked && (
         <div className="coin-lockbar">
-          <span>🔒 Unlock all premium themes &amp; animations for <b>{(item?.price || 1000).toLocaleString()}</b> CHEX coins. You have <b>{wallet.balance.toLocaleString()}</b>.</span>
+          <span>🔒 Unlock all premium themes &amp; animations for <b>{(item?.price || 1000).toLocaleString()}</b> CHEX coins. You have <b>{wallet.unlimited ? '∞' : wallet.balance.toLocaleString()}</b>.</span>
           <button className="btn-primary" style={{ width: 'auto', padding: '8px 16px' }} onClick={onOpenCoins}>🪙 Open CHEX Coins store</button>
         </div>
       )}
@@ -85,7 +86,7 @@ function Appearance({ onOpenCoins }) {
       </div>
       {wallet && !framesOwned && (
         <div className="coin-lockbar">
-          <span>🔒 Unlock all {PROFILE_FRAMES.length} animated profile frames for <b>{(frameItem?.price || 2000).toLocaleString()}</b> CHEX coins. You have <b>{wallet.balance.toLocaleString()}</b>.</span>
+          <span>🔒 Unlock all {PROFILE_FRAMES.length} animated profile frames for <b>{(frameItem?.price || 2000).toLocaleString()}</b> CHEX coins. You have <b>{wallet.unlimited ? '∞' : wallet.balance.toLocaleString()}</b>.</span>
           <button className="btn-primary" style={{ width: 'auto', padding: '8px 16px' }} onClick={onOpenCoins}>🪙 Open CHEX Coins store</button>
         </div>
       )}
@@ -107,6 +108,18 @@ function Appearance({ onOpenCoins }) {
         <button className={`btn-ghost${!look3d ? ' sel' : ''}`} style={{ width: 'auto', padding: '9px 18px' }} aria-pressed={!look3d} onClick={() => setLook3d(set3D(false))}>▭ Flat</button>
       </div>
       <p style={{ fontSize: 12.5, color: 'var(--text-mid)', margin: 0 }}>3D gives the menu and buttons depth, tilt and a press-down effect. Flat is the simple classic look.</p>
+    </div>
+  );
+}
+
+function FloatingAI() {
+  const [on, setOn] = useState(floatingAiEnabled());
+  const toggle = () => setOn(setFloatingAi(!on));
+  return (
+    <div className="glass-card" style={{ padding: 20, marginBottom: 20 }} data-testid="floating-ai-card">
+      <h3 style={{ margin: '0 0 4px', fontFamily: 'var(--font-display)', fontSize: 16 }}>🤖 Floating AI bar</h3>
+      <p style={{ fontSize: 12.5, color: 'var(--text-mid)', margin: '0 0 12px' }}>The Codex AI bar that floats on every page so you can talk or type to it anywhere. It is <b>off by default</b> — switch it on to show it, and off to hide it again.</p>
+      <button type="button" role="switch" aria-checked={on} className={`btn-ghost${on ? ' sel' : ''}`} style={{ width: 'auto', padding: '9px 18px' }} onClick={toggle}>{on ? '✓ Floating AI bar is ON' : 'Floating AI bar is OFF'}</button>
     </div>
   );
 }
@@ -438,6 +451,7 @@ export default function Settings({ onBack, onOpenProfile, onOpenCoins, onOpenSti
       </div>
 
       <Appearance onOpenCoins={onOpenCoins} />
+      <FloatingAI />
       <EmojiEffects />
       <AccountPrivacy />
       <SafetyLists onOpenProfile={onOpenProfile} />

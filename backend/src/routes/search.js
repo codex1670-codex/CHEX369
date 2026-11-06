@@ -30,7 +30,7 @@ router.get('/', requireAuth, (req, res) => {
   if (!q) return res.json({ users: [], hashtags: [], reels: [] });
 
   const users = db.prepare(`
-    SELECT * FROM users WHERE account_status = 'active' AND (username LIKE ? OR display_name LIKE ?)
+    SELECT * FROM users WHERE account_status = 'active' AND role != 'system' AND (username LIKE ? OR display_name LIKE ?)
     AND id != ? LIMIT 8
   `).all(`%${q}%`, `%${q}%`, req.userId);
 

@@ -4,6 +4,7 @@ import db, { toPublicUser, USER_MEDIA_COLUMNS_SQL } from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
 import { isBlocked, isRestricted, canViewAccountContent } from './users.js';
 import { canViewPost } from './posts.js';
+import { notifyMasterOfReport } from '../admin.js';
 import { mediaMiddleware, removeLocalUpload, MAX_MESSAGE_MEDIA_BYTES, MAX_VOICE_NOTE_BYTES } from '../uploads.js';
 
 const router = Router();
@@ -164,6 +165,11 @@ router.post('/requests/:id/report', requireAuth, (req, res) => {
   const reqRow = db.prepare('SELECT * FROM message_requests WHERE id = ?').get(req.params.id);
   if (!reqRow || reqRow.receiver_id !== req.userId) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Request not found.' } });
   db.prepare("UPDATE message_requests SET status = 'reported', updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?").run(reqRow.id);
+  // Also file it as a report on the sender, so it reaches the master account's inbox / queue.
+  const reportId = uuid();
+  db.prepare('INSERT INTO reports (id, reporter_id, target_type, target_id, reason) VALUES (?, ?, ?, ?, ?)')
+    .run(reportId, req.userId, 'user', reqRow.sender_id, `Reported a message request: "${String(reqRow.first_text).slice(0, 200)}"`);
+  notifyMasterOfReport(reportId, req.app.get('io'));
   res.json({ ok: true });
 });
 

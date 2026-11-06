@@ -7,6 +7,10 @@
     "dev:frontend": "npm --prefix frontend run dev",
     "build": "npm --prefix frontend run build",
     "start": "npm run build && NODE_ENV=production npm --prefix backend start",
-    "test": "npm --prefix backend test && npm --prefix frontend test"
+    "test": "npm --prefix backend test && npm --prefix frontend test",
+    "dev:ai": "cd ai-service && uvicorn app.main:app --reload --port 8000",
+    "typecheck": "npm --prefix backend run typecheck && npm --prefix frontend run typecheck",
+    "test:ai": "cd ai-service && python3 -m pytest -q",
+    "stack": "docker compose up --build"
   }
 }

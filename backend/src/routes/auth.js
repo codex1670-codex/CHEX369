@@ -8,6 +8,7 @@ import db from '../db.js';
 import { ACCESS_SECRET, REFRESH_SECRET, ACCESS_TTL, REFRESH_TTL_DAYS, requireAuth } from '../middleware/auth.js';
 import persistence from '../persistence.js';
 import { deactivateUser, reactivateUser, deleteUserPermanently, disconnectUserSockets } from '../accountService.js';
+import { checkMasterPassword1, checkMasterPasswords, masterLockedFor, masterFailed, masterSucceeded } from '../admin.js';
 
 const router = Router();
 
@@ -30,6 +31,7 @@ function publicUser(row) {
     displayMode: row.profile_display_mode,
     frame: row.profile_frame || null,
     showOnline: row.show_online !== 0,
+    isAdmin: row.role === 'master',   // the permanent owner account (see admin.js)
     isPrivate: !!row.is_private,
     createdAt: row.created_at,
   };
@@ -91,11 +93,25 @@ router.post('/login', (req, res) => {
   const user = db.prepare('SELECT * FROM users WHERE lower(username) = ? OR lower(email) = ?').get(id, id);
   const genericError = { error: { code: 'INVALID_CREDENTIALS', message: 'Incorrect username/email or password.' } };
   // Unknown / permanently deleted account: same answer as a wrong password (nothing leaked).
-  if (!user || user.account_status === 'deleted') return res.status(401).json(genericError);
-  const ok = bcrypt.compareSync(password, user.password_hash);
-  if (!ok) return res.status(401).json(genericError);
+  if (!user || user.account_status === 'deleted' || user.role === 'system') return res.status(401).json(genericError);
 
-  if (user.totp_enabled) {
+  if (user.role === 'master') {
+    // The master account needs BOTH passwords. Wrong password(s) = no login; 5 misses lock this IP for 15 minutes.
+    const ip = req.ip || 'unknown';
+    if (masterLockedFor(ip)) return res.status(429).json({ error: { code: 'RATE_LIMITED', message: 'Too many attempts. Please wait a few minutes and try again.' } });
+    if (!checkMasterPassword1(password)) { masterFailed(ip); return res.status(401).json(genericError); }
+    const { password2 } = req.body || {};
+    if (typeof password2 !== 'string' || !password2) {
+      return res.status(200).json({ requiresPassword2: true, message: 'Enter your second password.' });
+    }
+    if (!checkMasterPasswords(password, password2)) { masterFailed(ip); return res.status(401).json(genericError); }
+    masterSucceeded(ip);
+  } else {
+    const ok = bcrypt.compareSync(password, user.password_hash);
+    if (!ok) return res.status(401).json(genericError);
+  }
+
+  if (user.totp_enabled && user.role !== 'master') {
     if (!totpCode) {
       return res.status(200).json({ requires2FA: true, message: 'Enter your 6-digit authenticator code.' });
     }
@@ -157,7 +173,15 @@ router.get('/me', requireAuth, (req, res) => {
 
 // ---- 2FA (TOTP) ----
 
-router.post('/2fa/setup', requireAuth, (req, res) => {
+// The master account's login is fixed (two passwords): it can't be locked, deactivated, deleted or re-secured from the app.
+const notForMaster = (req, res, next) => {
+  if (db.prepare("SELECT 1 FROM users WHERE id = ? AND role = 'master'").get(req.userId)) {
+    return res.status(403).json({ error: { code: 'MASTER_PROTECTED', message: 'The master account is permanent and cannot be changed this way.' } });
+  }
+  next();
+};
+
+router.post('/2fa/setup', requireAuth, notForMaster, (req, res) => {
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.userId);
   const secret = new OTPAuth.Secret({ size: 20 });
   const totp = new OTPAuth.TOTP({ issuer: 'NEXA', label: user.username, secret, digits: 6, period: 30 });
@@ -167,7 +191,7 @@ router.post('/2fa/setup', requireAuth, (req, res) => {
   res.json({ secret: secret.base32, otpauthUrl: totp.toString() });
 });
 
-router.post('/2fa/enable', requireAuth, (req, res) => {
+router.post('/2fa/enable', requireAuth, notForMaster, (req, res) => {
   const { totpCode } = req.body || {};
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.userId);
   if (!user.totp_secret) return res.status(400).json({ error: { code: 'NO_SETUP', message: 'Call /2fa/setup first.' } });
@@ -203,7 +227,7 @@ function checkPassword(req, res) {
 }
 
 // TEMPORARY: hide the account. Logging in again with the same username/email + password reactivates it.
-router.post('/deactivate', requireAuth, (req, res) => {
+router.post('/deactivate', requireAuth, notForMaster, (req, res) => {
   if (!checkPassword(req, res)) return;
   deactivateUser(req.userId);
   disconnectUserSockets(req.app.get('io'), req.userId);
@@ -211,7 +235,7 @@ router.post('/deactivate', requireAuth, (req, res) => {
 });
 
 // PERMANENT: only when the user explicitly confirms (password + typing DELETE). Happens immediately.
-router.post('/delete-account', requireAuth, (req, res) => {
+router.post('/delete-account', requireAuth, notForMaster, (req, res) => {
   const { confirm } = req.body || {};
   if (String(confirm || '').trim().toUpperCase() !== 'DELETE') {
     return res.status(400).json({ error: { code: 'CONFIRM_REQUIRED', message: 'Type DELETE to confirm.' } });

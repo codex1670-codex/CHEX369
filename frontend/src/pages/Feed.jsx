@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useLive } from '../live.js';
 import { createPortal } from 'react-dom';
 import { api } from '../api.js';
 import PostCard from '../components/PostCard.jsx';
@@ -9,7 +10,7 @@ import MediaPicker from '../components/MediaPicker.jsx';
 import CameraCapture, { cameraSupported } from '../components/CameraCapture.jsx';
 import { defaultEdits, fileKind, MAX_IMAGE_BYTES, MAX_VIDEO_BYTES } from '../editSettings.js';
 
-export default function Feed({ onOpenProfile, onOpenStickies, onOpenLearn }) {
+export default function Feed({ onOpenProfile, onOpenStickies, onOpenLearn, onOpenAdmin }) {
   const { user } = useAuth();
   const [tab, setTab] = useState('following');
   const [posts, setPosts] = useState(null);
@@ -47,6 +48,21 @@ export default function Feed({ onOpenProfile, onOpenStickies, onOpenLearn }) {
 
   useEffect(() => { setPosts(null); load(true); /* eslint-disable-next-line */ }, [tab]);
 
+  // Live: when anyone posts / likes / comments / edits / deletes, quietly merge a fresh first page into
+  // what is on screen. Scroll position, loaded older posts and open comment boxes are kept.
+  useLive(['posts', 'users', 'feed'], async () => {
+    try {
+      const fetcher = tab === 'following' ? api.feedFollowing : api.feedForYou;
+      const res = await fetcher(null);
+      setPosts(old => {
+        if (!old) return res.posts;
+        const fresh = new Map(res.posts.map(x => [x.id, x]));
+        const tail = old.slice(res.posts.length).filter(x => !fresh.has(x.id));
+        return [...res.posts, ...tail];
+      });
+    } catch { /* offline — next event will catch up */ }
+  });
+
   const submitPost = async (e) => {
     e.preventDefault();
     if (!caption.trim() && !media) return;
@@ -82,12 +98,13 @@ export default function Feed({ onOpenProfile, onOpenStickies, onOpenLearn }) {
       </div>
 
       {!composerOpen && (
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+        <div className="feed-quick">
           <button type="button" className="btn-primary composer-toggle" onClick={() => setComposerOpen(true)} aria-expanded="false" aria-label="Write a new post">
             <span aria-hidden="true">＋</span> Post
           </button>
           {onOpenStickies && <button type="button" className="btn-ghost" style={{ width: 'auto', padding: '9px 16px' }} onClick={onOpenStickies} aria-label="Open sticky notes">📌 Sticky notes</button>}
           {onOpenLearn && <button type="button" className="btn-ghost" style={{ width: 'auto', padding: '9px 16px' }} onClick={onOpenLearn} aria-label="Open CHEX learn">🌍 CHEX learn</button>}
+          {user.isAdmin && onOpenAdmin && <button type="button" className="btn-primary" style={{ width: 'auto', padding: '9px 16px' }} onClick={onOpenAdmin} aria-label="Open the admin panel">🛡️ Admin</button>}
         </div>
       )}
 

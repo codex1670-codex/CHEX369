@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { floatingAiEnabled } from '../floatingAi.js';
 import { alertsEnabled, setAlertsEnabled } from '../announce.js';
 import { api } from '../api.js';
 import { requestStartCall } from '../callBus.js';
@@ -325,6 +326,14 @@ async function runCommand(raw, { navigate, currentUser }) {
 export default function Codex({ navigate, goBack, currentUser }) {
   const [open, setOpen] = useState(false); // true = the full panel; false = the small type box
   const [showReply, setShowReply] = useState(false); // small reply square under/over the type box
+  // The floating bar is off until the person switches it on in Settings (default OFF).
+  const [floatOn, setFloatOn] = useState(floatingAiEnabled());
+  useEffect(() => {
+    const sync = () => { const on = floatingAiEnabled(); setFloatOn(on); if (!on) { setOpen(false); setShowReply(false); } };
+    window.addEventListener('chex:floating-ai-changed', sync);
+    window.addEventListener('storage', sync);
+    return () => { window.removeEventListener('chex:floating-ai-changed', sync); window.removeEventListener('storage', sync); };
+  }, []);
   // Mute: stops the spoken "message from…" / "notification from…" alerts (shared with the ＋ menu).
   const [alertsOn, setAlertsOn] = useState(alertsEnabled());
   useEffect(() => {
@@ -812,7 +821,7 @@ export default function Codex({ navigate, goBack, currentUser }) {
 
   return (
     <>
-      {!open && (
+      {floatOn && !open && (
         <div className={`codex-mini-wrap ${dragging ? 'dragging' : ''}`} ref={wrapRef} style={pos ? { left: pos.x, bottom: pos.y, top: 'auto' } : undefined}>
           {replyVisible && (
             <div className="glass-card codex-mini-reply" role="status">
@@ -845,7 +854,7 @@ export default function Codex({ navigate, goBack, currentUser }) {
           </form>
         </div>
       )}
-      {open && (
+      {floatOn && open && (
         <div className="glass-card codex-panel">
           <div className="codex-panel-header">
             <span className="t">Codex</span>

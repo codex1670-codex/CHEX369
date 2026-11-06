@@ -33,7 +33,8 @@
 
 * { box-sizing: border-box; }
 
-html, body, #root { height: 100%; }
+html { height: auto; min-height: 100%; }
+body, #root { height: auto; min-height: 100%; }
 
 body {
   margin: 0;
@@ -1210,7 +1211,7 @@ html.codex-split .codex-mini-wrap { display: none; }
    Responsive layout: phones get a horizontal bottom menu and full-screen chats,
    desktops use the whole screen (menu rail at the left edge, wide content).
    ===================================================================================== */
-html, body { max-width: 100%; overflow-x: hidden; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+html, body { max-width: 100%; overflow-x: clip; overflow-y: visible; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 img, video, canvas { max-width: 100%; }
 pre, table { max-width: 100%; overflow-x: auto; }
 .app-shell { min-height: 100vh; min-height: 100dvh; }
@@ -1449,3 +1450,19 @@ button.ps-badge { border: 0; cursor: pointer; font-family: inherit; }
 .call-btn.on { background: #fff; color: #111; }
 .call-btn.decline { background: #e5484d; }
 .call-btn.accept { background: #2fb457; }
+
+/* ---- Call quality UI ---- */
+.call-remote { image-rendering: auto; }
+@media (min-width: 801px) { .call-remote { object-fit: contain; } .call-local { max-width: 220px; } }
+.call-net { position: absolute; top: calc(14px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); z-index: 3; display: flex; align-items: center; gap: 6px; padding: 5px 11px; border-radius: 999px; background: rgba(0,0,0,.45); backdrop-filter: blur(8px); font-size: 12px; }
+.call-net .bars { display: inline-flex; align-items: flex-end; gap: 2px; height: 12px; }
+.call-net .bars i { width: 3px; border-radius: 1px; background: rgba(255,255,255,.28); }
+.call-net .bars i:nth-child(1) { height: 5px; } .call-net .bars i:nth-child(2) { height: 8px; } .call-net .bars i:nth-child(3) { height: 12px; }
+.call-net.good .bars i { background: #34d27b; }
+.call-net.fair .bars i:nth-child(-n+2) { background: #f5b83d; }
+.call-net.poor .bars i:nth-child(1) { background: #ff5c5c; }
+.call-banner { position: absolute; top: calc(56px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); z-index: 3; max-width: 90vw; padding: 7px 14px; border-radius: 12px; background: rgba(40,40,60,.8); backdrop-filter: blur(8px); font-size: 12.5px; text-align: center; }
+.call-banner.warn { background: rgba(160,100,10,.85); }
+.call-tap { position: absolute; z-index: 4; top: 50%; left: 50%; transform: translate(-50%,-50%); padding: 12px 20px; border-radius: 14px; border: 0; background: #fff; color: #111; font-weight: 700; font-size: 15px; cursor: pointer; }
+.call-controls { flex-wrap: wrap; row-gap: 12px; }
+@media (max-width: 420px) { .call-controls { gap: 12px; } .call-btn { width: 60px; height: 60px; } .call-fs { display: none; } }

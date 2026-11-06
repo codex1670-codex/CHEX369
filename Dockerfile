@@ -18,4 +18,4 @@ COPY --from=web /app/frontend/dist /app/frontend/dist
 VOLUME /data
 EXPOSE 4000
 HEALTHCHECK --interval=30s --timeout=5s CMD node -e "fetch('http://localhost:4000/api/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
-CMD ["node", "src/index.js"]
+CMD ["node_modules/.bin/tsx", "src/index.js"]

@@ -9,6 +9,8 @@ import CoinLogo from './CoinLogo.jsx';
 import Celebration, { Trophy } from './Celebration.jsx';
 import { BookLogo, Crown, Gem, Heart, Owl, Scene, Speaker } from './LearnArt.jsx';
 import { tiltLeave, tiltMove } from '../ui3d.js';
+// The master account has unlimited coins (the server reports the largest safe integer) — show it as ∞.
+const showCoins = (n) => (n == null ? '–' : n >= 1e15 ? '∞' : n);
 
 /* ───────── Mascot: the purple CHEX owl ───────── */
 const Mascot = ({ size = 90, mood = 'happy' }) => <Owl size={size} mood={mood} />;
@@ -149,7 +151,7 @@ function Lesson({ C, n, s, update, onClose, onCoins }) {
         {result.section > 0 && (
           <div className="learn-coinwin" role="status">
             <b>🎉 Section {result.section} complete!</b>
-            <div>{!coin ? 'Checking your reward…' : coin.coins > 0 ? <><CoinLogo size={22} spin /> <b>+{coin.coins} CHEX coin</b> added to your wallet</> : coin.reason === 'already' ? 'You already earned the coin for this section.' : 'Finish the earlier levels in order to earn this coin.'}</div>
+            <div>{!coin ? 'Checking your reward…' : coin.coins > 0 ? <><CoinLogo size={22} spin /> <b>+{coin.coins} CHEX coin</b> added to your wallet</> : coin.reason === 'already' ? 'You already earned the coin for this section.' : coin.reason === 'locked' ? 'This is a Premium language — unlock it in Courses to earn coins.' : 'Finish the earlier levels in order to earn this coin.'}</div>
           </div>
         )}
         <div className="learn-grid learn-stats-pop">
@@ -318,7 +320,7 @@ function Home({ s, start, update, go }) {
 
       <div className="lx-premium lx-tilt" {...T3}>
         <Crown size={64} />
-        <div className="learn-grow"><b>CHEX Learn Premium</b><small>Unlock more languages, advanced lessons and rewards!</small></div>
+        <div className="learn-grow"><b>CHEX Learn Premium</b><small>Finish 100 levels, then unlock another language for 100 CHEX coins.</small></div>
         <button type="button" className="lx-btn gold" onClick={() => go('langs')}>Go Premium <span aria-hidden="true">→</span></button>
       </div>
 
@@ -369,22 +371,69 @@ function Path({ s, start }) {
   );
 }
 
-function Languages({ s, update }) {
+/* First visit: choose the one free language. Every other language is Premium. */
+function FirstLanguage({ onPick, busy, error }) {
+  const [pick, setPick] = useState(null);
+  const chosen = pick && LG(pick);
+  return (
+    <div className="lx-card learn-card lx-firstlang">
+      <div className="learn-center">
+        <Mascot size={90} />
+        <h2>Choose your first language</h2>
+        <p className="life-sub">Pick one language to learn for free. All the other languages become <b>Premium</b> — finish 100 levels, then unlock another one for 100 CHEX coins.</p>
+      </div>
+      {error && <div className="error-banner" role="alert">{error}</div>}
+      <div className="lx-firstgrid" role="radiogroup" aria-label="First language">
+        {LANGS.filter(l => hasCourse(l[0])).map(l => (
+          <button type="button" key={l[0]} role="radio" aria-checked={pick === l[0]} disabled={busy} className={`learn-opt${pick === l[0] ? ' sel' : ''}`} onClick={() => setPick(l[0])}>
+            <span className="learn-flag" aria-hidden="true">{l[2]}</span><b>{l[1]}</b>
+          </button>
+        ))}
+      </div>
+      <button type="button" className="lx-btn learn-wide" disabled={!pick || busy} onClick={() => onPick(pick)}>{chosen ? `Start learning ${chosen[1]}` : 'Pick a language'}</button>
+      <p className="life-sub learn-center" style={{ marginTop: 10 }}>Your free language can’t be swapped later, so choose the one you want most.</p>
+    </div>
+  );
+}
+
+function Languages({ s, update, info, coins, onUnlock, busy, error }) {
+  const owned = info.owned, price = info.price, need = info.unlockLevels;
+  const doing = owned.filter(l => (info.completed[l] || 0) < need);
   return (
     <>
       <h3 className="learn-h">Choose a language</h3>
       <p className="life-sub">Study-time estimates are for reaching professional working proficiency.</p>
+      {error && <div className="error-banner" role="alert">{error}</div>}
+      <div className="lx-card learn-card lx-premnote">
+        {info.canUnlock
+          ? <><b>🎉 You finished {need} levels!</b><div className="life-sub">Unlock one more language for <CoinLogo size={16} /> <b>{price} CHEX coins</b>. You have <b>{showCoins(coins)}</b>.</div></>
+          : <>
+              <b>👑 Premium languages</b>
+              <div className="life-sub">Finish {need} levels, then unlock another language with {price} CHEX coins.</div>
+              {doing.map(l => { const n = Math.min(need, info.completed[l] || 0); return (
+                <div key={l} style={{ marginTop: 8 }}>
+                  <div className="learn-rowx"><span className="learn-flag" aria-hidden="true">{LG(l)[2]}</span><b className="learn-grow">{LG(l)[1]}</b><span className="life-sub">{n}/{need} levels</span></div>
+                  <div className="learn-bar" style={{ marginTop: 6 }}><i style={{ width: `${(n / need) * 100}%` }} /></div>
+                </div>); })}
+            </>}
+      </div>
       {CATS.map((c, ci) => (
         <div key={c[0]} className="lx-card learn-card">
           <b>{c[0]}</b><div className="life-sub" style={{ margin: '2px 0 10px' }}>{c[1]} of study</div>
-          {LANGS.filter(l => l[3] === ci).map(l => (
-            <div key={l[0]} className="learn-rowx" style={{ marginBottom: 8 }}>
-              <span className="learn-flag" aria-hidden="true">{l[2]}</span><b className="learn-grow">{l[1]}</b>
-              {hasCourse(l[0])
-                ? <button type="button" className={`lx-btn sm${s.lang === l[0] ? ' ghost' : ''}`} disabled={s.lang === l[0]} onClick={() => update(p => switchLanguage(p, l[0]))}>{s.lang === l[0] ? 'Current' : 'Learn'}</button>
-                : <button type="button" className="lx-btn sm ghost" onClick={() => update(p => ({ ...p, want: { ...p.want, [l[0]]: !p.want[l[0]] } }))}>{s.want[l[0]] ? 'Requested ✓' : 'Notify me'}</button>}
-            </div>
-          ))}
+          {LANGS.filter(l => l[3] === ci).map(l => {
+            const mine = owned.includes(l[0]);
+            return (
+              <div key={l[0]} className={`learn-rowx lx-langrow${mine ? '' : ' locked'}`} style={{ marginBottom: 8 }}>
+                <span className="learn-flag" aria-hidden="true">{l[2]}</span>
+                <span className="learn-grow"><b>{l[1]}</b>{!mine && <span className="lx-premtag">👑 Premium</span>}{mine && <small className="life-sub lx-lvcount"> {info.completed[l[0]] || 0}/{LV} levels</small>}</span>
+                {mine
+                  ? <button type="button" className={`lx-btn sm${s.lang === l[0] ? ' ghost' : ''}`} disabled={s.lang === l[0]} onClick={() => update(p => switchLanguage(p, l[0]))}>{s.lang === l[0] ? 'Current' : 'Learn'}</button>
+                  : info.canUnlock
+                    ? <button type="button" className="lx-btn sm gold" disabled={busy || (coins ?? 0) < price} onClick={() => onUnlock(l[0])}>{(coins ?? 0) < price ? `Need ${price} coins` : <>Unlock · <CoinLogo size={14} /> {price}</>}</button>
+                    : <button type="button" className="lx-btn sm ghost" disabled aria-label={`${l[1]} is locked until you finish ${need} levels`}>🔒 Locked</button>}
+              </div>
+            );
+          })}
         </div>
       ))}
     </>
@@ -457,7 +506,7 @@ function Progress({ s, update, user, onOpenProfile, coins }) {
       <div className="learn-grid">
         <div className="learn-stat lx-tilt" {...T3}>🔥 {s.streak}<small>Day streak</small></div>
         <div className="learn-stat lx-tilt" {...T3}>⚡ {s.xp}<small>Total XP</small></div>
-        <div className="learn-stat lx-tilt" {...T3}><CoinLogo size={24} /> {coins ?? '–'}<small>CHEX coins</small></div>
+        <div className="learn-stat lx-tilt" {...T3}><CoinLogo size={24} /> {showCoins(coins)}<small>CHEX coins</small></div>
         <div className="learn-stat lx-tilt" {...T3}>📘 {s.lvl}/{LV}<small>Levels done</small></div>
         <div className="learn-stat lx-tilt" {...T3}>⏱️ {(s.min / 60).toFixed(1)} h<small>Time studied</small></div>
         <div className="learn-stat lx-tilt" {...T3}>🎯 {s.goal} XP<small>Daily goal</small></div>
@@ -488,6 +537,13 @@ export default function Learn({ onOpenProfile }) {
   const [coins, setCoins] = useState(null);       // the person's CHEX coin balance (their real wallet)
   const [notice, setNotice] = useState('');
   useEffect(() => { api.coins().then(r => setCoins(r.balance)).catch(() => {}); }, []);
+  const [info, setInfo] = useState(null);          // which languages the person owns (first one free, the rest Premium) + levels done in each
+  const [langErr, setLangErr] = useState('');
+  const [busy, setBusy] = useState(false);
+  const loadInfo = useCallback(() => api.learnLanguages().then(r => { setInfo(r); setLangErr(''); }).catch(e => setLangErr(e.message || 'Could not load your languages.')), []);
+  useEffect(() => { loadInfo(); }, [loadInfo]);
+  // If the saved course language isn't one this person owns (older saves default to Spanish), move them to one they own.
+  useEffect(() => { if (s && info?.chosen && !info.owned.includes(s.lang)) update(p => switchLanguage(p, info.owned[0])); }, [info, s?.lang]); // eslint-disable-line react-hooks/exhaustive-deps
   const C = useMemo(() => (s ? makeCourse(s.lang) : null), [s?.lang]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!s) {
@@ -495,7 +551,20 @@ export default function Learn({ onOpenProfile }) {
       ? <div className="lx-card life-empty learn" role="alert">{error} <button type="button" className="lx-btn sm ghost" onClick={reload}>Try again</button></div>
       : <div className="lx-card life-empty learn"><Owl size={70} /> Loading…</div>;
   }
+  const chooseFirst = async (code) => {
+    setBusy(true); setLangErr('');
+    try { const r = await api.learnChooseLanguage(code); setInfo(r); update(p => switchLanguage(p, code)); setView('learn'); }
+    catch (e) { setLangErr(e.message || 'Could not save your language.'); }
+    setBusy(false);
+  };
+  const unlockLang = async (code) => {
+    setBusy(true); setLangErr('');
+    try { const r = await api.learnUnlockLanguage(code); setInfo(r); setCoins(r.balance); update(p => switchLanguage(p, code)); setView('learn'); }
+    catch (e) { setLangErr(e.message || 'Could not unlock this language.'); loadInfo(); }
+    setBusy(false);
+  };
   const start = (n) => {
+    if (!info?.owned.includes(s.lang)) { setView('langs'); return; }
     const cur = regen(s);
     if (cur !== s) update(cur);
     if (cur.hearts < 1) { setNotice(`You’re out of hearts. Your power to play refills in ${fmtCountdown(heartsReturnIn(cur))}.`); return; }
@@ -505,7 +574,10 @@ export default function Learn({ onOpenProfile }) {
   const go = (v) => { setView(v); };
   const lang = LG(s.lang);
   const level = 1 + Math.floor(s.xp / 100);
-  const panel = { learn: <Home s={s} start={start} update={update} go={go} />, langs: <Languages s={s} update={update} />, practice: <Practice s={s} start={start} />, ranks: <Ranks s={s} />, quests: <Quests s={s} />, me: <Progress s={s} update={update} user={user} onOpenProfile={onOpenProfile} coins={coins} /> }[view];
+  const views = { learn: <Home s={s} start={start} update={update} go={go} />, langs: info && <Languages s={s} update={update} info={info} coins={coins} onUnlock={unlockLang} busy={busy} error={langErr} />, practice: <Practice s={s} start={start} />, ranks: <Ranks s={s} />, quests: <Quests s={s} />, me: <Progress s={s} update={update} user={user} onOpenProfile={onOpenProfile} coins={coins} /> }[view];
+  const panel = !info
+    ? (langErr ? <div className="lx-card life-empty" role="alert">{langErr} <button type="button" className="lx-btn sm ghost" onClick={loadInfo}>Try again</button></div> : <div className="lx-card life-empty"><Owl size={70} /> Loading…</div>)
+    : !info.chosen ? <FirstLanguage onPick={chooseFirst} busy={busy} error={langErr} /> : views;
 
   return (
     <section className="learn lx" aria-label="CHEX learn">
@@ -524,7 +596,7 @@ export default function Learn({ onOpenProfile }) {
         <div className="lx-top" aria-label="Your stats">
           <span className="lx-stat"><span className="lx-flame" aria-hidden="true">🔥</span><span><b>{s.streak}</b><small>Day Streak</small></span></span>
           <span className="lx-stat"><Gem size={34} /><span><b>{s.xp.toLocaleString()}</b><small>XP</small></span></span>
-          <span className="lx-stat lx-coin" title="Your CHEX coins"><CoinLogo size={30} spin /><span><b>{coins ?? '–'}</b><small>Coins</small></span></span>
+          <span className="lx-stat lx-coin" title="Your CHEX coins"><CoinLogo size={30} spin /><span><b>{showCoins(coins)}</b><small>Coins</small></span></span>
           <button type="button" className="lx-stat lx-langpill" onClick={() => go('langs')} title="Change language"><span className="learn-flag" aria-hidden="true">{lang[2]}</span><span><b>{lang[1]}</b><small>Course</small></span></button>
           <span className="lx-stat lx-hearts-row" aria-label={`${s.hearts} of 5 hearts`}>{Array.from({ length: 5 }, (_, h) => <span key={h} className={h < s.hearts ? 'on' : 'off'}><Heart size={24} /></span>)}<b>{s.hearts >= 5 ? 'Full' : `${s.hearts}/5`}</b></span>
         </div>
@@ -533,7 +605,7 @@ export default function Learn({ onOpenProfile }) {
         {notice && <div className="lx-card learn-card" role="status">❤️ {notice}</div>}
         <div key={view} className="lx-panel">{panel}</div>
       </main>
-      {lesson && <Lesson key={lesson.key} C={C} n={lesson.n} s={s} update={update} onClose={() => setLesson(null)} onCoins={setCoins} />}
+      {lesson && <Lesson key={lesson.key} C={C} n={lesson.n} s={s} update={update} onClose={() => setLesson(null)} onCoins={(b) => { setCoins(b); loadInfo(); }} />}
     </section>
   );
 }

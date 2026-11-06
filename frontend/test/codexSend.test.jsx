@@ -1,6 +1,6 @@
 // Phone regression: typing a command in the small Ask bar and tapping Send must send it.
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, cleanup, act } from '@testing-library/react';
 
 const api = vi.hoisted(() => ({
   codexStatus: vi.fn(), codexAct: vi.fn(), codexConfirm: vi.fn(), codexConfirmPlan: vi.fn(),
@@ -18,6 +18,7 @@ beforeEach(() => {
 });
 
 describe('Codex Ask bar', () => {
+  beforeEach(() => { localStorage.setItem('chex.floatingAi', 'on'); });   // the floating bar is OFF by default, so switch it on for these tests
   it('has a Send button that is disabled until something is typed, then sends the command', async () => {
     render(<Codex navigate={vi.fn()} goBack={vi.fn()} currentUser={{ id: 'me', username: 'me' }} />);
     const send = screen.getByRole('button', { name: 'Send to Codex' });
@@ -38,5 +39,19 @@ describe('Codex Ask bar', () => {
     const send = screen.getByRole('button', { name: 'Send to Codex' });
     const notCancelled = fireEvent.mouseDown(send);   // false = preventDefault was called
     expect(notCancelled).toBe(false);
+  });
+});
+
+describe('Floating AI bar default', () => {
+  it('is hidden by default, shows when switched on in Settings, and hides again when switched off', async () => {
+    localStorage.removeItem('chex.floatingAi');
+    render(<Codex navigate={vi.fn()} goBack={vi.fn()} currentUser={{ id: 'me', username: 'me' }} />);
+    expect(screen.queryByLabelText('Ask Codex')).toBeNull();
+    const { setFloatingAi } = await import('../src/floatingAi.js');
+    act(() => { setFloatingAi(true); });
+    expect(await screen.findByLabelText('Ask Codex')).toBeTruthy();
+    act(() => { setFloatingAi(false); });
+    await waitFor(() => expect(screen.queryByLabelText('Ask Codex')).toBeNull());
+    localStorage.removeItem('chex.floatingAi');
   });
 });

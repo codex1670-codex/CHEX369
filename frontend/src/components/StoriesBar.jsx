@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useLive } from '../live.js';
 import { api } from '../api.js';
 import Avatar from './Avatar.jsx';
 import { useAuth } from '../AuthContext.jsx';
@@ -21,6 +22,7 @@ export default function StoriesBar() {
 
   const load = () => api.storiesFeed().then(res => setGroups(res.groups));
   useEffect(() => { load(); }, []);
+  useLive(['stories', 'highlights', 'users'], () => { load().catch(() => {}); });
 
   const reset = () => { setText(''); setMedia(null); setMediaCaption(''); setError(''); setKind('text'); setComposing(false); };
 

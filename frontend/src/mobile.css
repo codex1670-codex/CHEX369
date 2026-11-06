@@ -131,7 +131,7 @@ button.chat-id { cursor: pointer; }
    Part B: phones (<= 800px)
    ============================================================ */
 @media (max-width: 800px) {
-  html, body, #root { max-width: 100%; overflow-x: hidden; }
+  html, body, #root { max-width: 100%; overflow-x: clip; overflow-y: visible; height: auto; }
   img, video, canvas { max-width: 100%; }
   *, *::before, *::after { box-sizing: border-box; }
 

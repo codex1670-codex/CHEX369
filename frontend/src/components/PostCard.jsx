@@ -1,4 +1,5 @@
 import { useRef, useState, useEffect } from 'react';
+import { useLive } from '../live.js';
 import Avatar from './Avatar.jsx';
 import { api } from '../api.js';
 import { useAuth } from '../AuthContext.jsx';
@@ -37,7 +38,7 @@ function CommentRow({ comment, postId, postAuthorId, onChanged, onReply, depth =
     setEditing(false);
   };
   const remove = async () => {
-    await api.deleteComment(postId, comment.id);
+    if (user.isAdmin && !isMine && !isPostAuthor) await api.adminDeleteContent('comment', comment.id); else await api.deleteComment(postId, comment.id);
     onChanged(null);
   };
   const toggleHide = async () => {
@@ -68,7 +69,7 @@ function CommentRow({ comment, postId, postAuthorId, onChanged, onReply, depth =
         <div style={{ display: 'flex', gap: 8, marginBottom: 6, marginLeft: 4 }} onClick={e => e.stopPropagation()}>
           <button className="btn-ghost" style={{ padding: '2px 8px', fontSize: 11 }} onClick={() => onReply(comment)}>Reply</button>
           {isMine && <button className="btn-ghost" style={{ padding: '2px 8px', fontSize: 11 }} onClick={() => setEditing(true)}>Edit</button>}
-          {(isMine || isPostAuthor) && <button className="btn-ghost" style={{ padding: '2px 8px', fontSize: 11, color: 'var(--pink-ink)' }} onClick={remove}>Delete</button>}
+          {(isMine || isPostAuthor || user.isAdmin) && <button className="btn-ghost" style={{ padding: '2px 8px', fontSize: 11, color: 'var(--pink-ink)' }} onClick={remove}>{user.isAdmin && !isMine && !isPostAuthor ? '🛡️ Delete' : 'Delete'}</button>}
           {isPostAuthor && !isMine && <button className="btn-ghost" style={{ padding: '2px 8px', fontSize: 11 }} onClick={toggleHide}>{comment.hidden ? 'Unhide' : 'Hide'}</button>}
           {!isMine && <button className="btn-ghost" style={{ padding: '2px 8px', fontSize: 11 }} onClick={report}>Report</button>}
         </div>
@@ -80,6 +81,8 @@ function CommentRow({ comment, postId, postAuthorId, onChanged, onReply, depth =
 export default function PostCard({ post, onOpenProfile, onDeleted }) {
   const { user } = useAuth();
   const [p, setP] = useState(post);
+  // A refreshed copy of this post arrived (someone liked, commented, edited…): show it right away.
+  useEffect(() => { setP(post); }, [post]);
   const containerRef = useRef(null);
 
   // Real "current post" tracking for Codex: whichever card is majority-visible becomes
@@ -182,6 +185,13 @@ export default function PostCard({ post, onOpenProfile, onDeleted }) {
     },
   });
 
+  // Live comments: if the comment box is open, pull new/removed comments as other people write them.
+  useLive(['posts'], async (ev) => {
+    if (ev?.postId && ev.postId !== p.id) return;
+    if (!showComments || !comments) return;
+    try { setComments((await api.getComments(p.id)).comments); } catch { /* ignore */ }
+  }, { enabled: showComments });
+
   const openComments = async () => {
     setShowComments(s => !s);
     if (!comments) {
@@ -260,7 +270,7 @@ export default function PostCard({ post, onOpenProfile, onDeleted }) {
   const deleteMyPost = async () => {
     setDeleting(true); setDeleteError('');
     try {
-      await api.deletePost(p.id);
+      if (user.isAdmin && !isMine) await api.adminDeleteContent('post', p.id); else await api.deletePost(p.id);
       setConfirmDelete(false);
       setGone(true);
       onDeleted?.(p.id);
@@ -294,7 +304,8 @@ export default function PostCard({ post, onOpenProfile, onDeleted }) {
           { key: 'save', label: p.savedByMe ? 'Remove from saved' : 'Save', icon: '🔖', onClick: toggleSave },
           { key: 'share', label: 'Share', icon: '↗', onClick: () => setSharing(true) },
           isMine && { key: 'delete', label: 'Delete', icon: '🗑️', danger: true, onClick: () => setConfirmDelete(true) },
-          !isMine && { key: 'report', label: 'Report', icon: '🚩', danger: true, onClick: reportPost },
+          !isMine && user.isAdmin && { key: 'admin-delete', label: 'Delete (admin)', icon: '🛡️', danger: true, onClick: () => setConfirmDelete(true) },
+          !isMine && !user.isAdmin && { key: 'report', label: 'Report', icon: '🚩', danger: true, onClick: reportPost },
         ]} />
       )}
       {confirmDelete && (

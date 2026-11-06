@@ -1,3 +1,4 @@
+# One command, whole stack:   docker compose up --build
 services:
   nexa:
     build: .
@@ -6,7 +7,46 @@ services:
       NEXA_ACCESS_SECRET: ${NEXA_ACCESS_SECRET:?set NEXA_ACCESS_SECRET}
       NEXA_REFRESH_SECRET: ${NEXA_REFRESH_SECRET:?set NEXA_REFRESH_SECRET}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      MONGODB_URI: mongodb://mongo:27017
+      MONGODB_DB: chex
+      DATABASE_URL: postgres://nexa:nexa@postgres:5432/nexa
+      REDIS_URL: redis://valkey:6379
+      AI_SERVICE_URL: http://ai:8000
+      AI_SERVICE_TOKEN: ${AI_SERVICE_TOKEN:-dev-ai-token}
     volumes: ["nexa-data:/data"]
+    depends_on:
+      mongo: { condition: service_started }
+      postgres: { condition: service_healthy }
+      valkey: { condition: service_healthy }
+      ai: { condition: service_started }
     restart: unless-stopped
+
+  ai:
+    build: ./ai-service
+    environment:
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      AI_SERVICE_TOKEN: ${AI_SERVICE_TOKEN:-dev-ai-token}
+    ports: ["8000:8000"]
+    restart: unless-stopped
+
+  mongo:
+    image: mongo:7
+    volumes: ["mongo-data:/data/db"]
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    environment: { POSTGRES_USER: nexa, POSTGRES_PASSWORD: nexa, POSTGRES_DB: nexa }
+    volumes: ["pg-data:/var/lib/postgresql/data"]
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U nexa"], interval: 5s, timeout: 3s, retries: 10 }
+    restart: unless-stopped
+
+  valkey:            # Redis-compatible cache + Socket.IO adapter
+    image: valkey/valkey:8-alpine
+    healthcheck: { test: ["CMD", "valkey-cli", "ping"], interval: 5s, timeout: 3s, retries: 10 }
+    restart: unless-stopped
+
 volumes:
   nexa-data:
+  mongo-data:
+  pg-data:

@@ -11,6 +11,8 @@ export const COIN_RULES = {
   streakReward: 100,           // ... and earn this many coins (a missed day restarts it)
   learnSectionReward: 1,       // CHEX coins for finishing one CHEX learn section (9 levels) ...
   learnSectionLevels: 9,       // ... of a language; each section pays once per language
+  learnUnlockLevels: 100,      // finish this many levels of your language(s) ...
+  learnUnlockPrice: 100,       // ... then pay this many CHEX coins to unlock one more language (the first is free)
   learnMinLevelSeconds: 10,    // a level can't be recorded sooner than this after the previous one
   copiedCaptionMinLength: 25,  // a text post only counts as 'copied from someone' when it is this long
 };
@@ -27,8 +29,14 @@ export const PROFILE_FRAMES = ['golden', 'aurora', 'neon', 'crown', 'emerald', '
 
 export const monthKey = (d = new Date()) => d.toISOString().slice(0, 7);
 
+// The master account ("sanjiv", see admin.js) has unlimited coins and owns every store item.
+// Its "balance" is the largest safe integer, and the UI shows ∞ for it (coinsSummary().unlimited).
+export const UNLIMITED_BALANCE = Number.MAX_SAFE_INTEGER;
+const isMasterId = (userId) => !!db.prepare("SELECT 1 FROM users WHERE id = ? AND role = 'master'").get(userId);
+
 export const getBalance = (userId) =>
-  db.prepare('SELECT COALESCE(SUM(amount), 0) AS b FROM coin_ledger WHERE user_id = ?').get(userId).b;
+  isMasterId(userId) ? UNLIMITED_BALANCE
+    : db.prepare('SELECT COALESCE(SUM(amount), 0) AS b FROM coin_ledger WHERE user_id = ?').get(userId).b;
 
 export const publicPostsInMonth = (userId, mk = monthKey()) =>
   db.prepare("SELECT COUNT(*) AS c FROM posts WHERE user_id = ? AND audience = 'public' AND deleted_at IS NULL AND coin_eligible = 1 AND substr(created_at, 1, 7) = ?").get(userId, mk).c;
@@ -48,13 +56,14 @@ export function safeAward(userId) {
 }
 
 export const ownedItems = (userId) =>
-  db.prepare('SELECT item_id FROM coin_unlocks WHERE user_id = ?').all(userId).map(r => r.item_id);
+  isMasterId(userId) ? STORE_ITEMS.map(i => i.id)
+    : db.prepare('SELECT item_id FROM coin_unlocks WHERE user_id = ?').all(userId).map(r => r.item_id);
 
 export function unlockItem(userId, itemId) {
   const item = STORE_ITEMS.find(i => i.id === itemId);
   if (!item) return { error: { status: 400, code: 'UNKNOWN_ITEM', message: 'That item is not in the store.' } };
   const tx = db.transaction(() => {
-    if (db.prepare('SELECT 1 FROM coin_unlocks WHERE user_id = ? AND item_id = ?').get(userId, itemId)) {
+    if (isMasterId(userId) || db.prepare('SELECT 1 FROM coin_unlocks WHERE user_id = ? AND item_id = ?').get(userId, itemId)) {
       return { error: { status: 409, code: 'ALREADY_OWNED', message: 'You already unlocked this.' } };
     }
     const balance = getBalance(userId);
@@ -85,9 +94,10 @@ export function coinsSummary(userId) {
   const claimed = !!db.prepare('SELECT 1 FROM coin_ledger WHERE user_id = ? AND ref = ?').get(userId, `monthly-public-posts:${mk}`);
   return {
     balance: getBalance(userId),
+    unlimited: isMasterId(userId),
     unlocked: [...owned],
     frame: db.prepare('SELECT profile_frame AS f FROM users WHERE id = ?').get(userId)?.f || null,
-    learn: { reward: COIN_RULES.learnSectionReward, levels: COIN_RULES.learnSectionLevels },
+    learn: { reward: COIN_RULES.learnSectionReward, levels: COIN_RULES.learnSectionLevels, unlockLevels: COIN_RULES.learnUnlockLevels, unlockPrice: COIN_RULES.learnUnlockPrice },
     game: { reward: COIN_RULES.gameWinReward, dailyCap: COIN_RULES.gameWinDailyCap, today: db.prepare("SELECT COUNT(*) AS c FROM coin_ledger WHERE user_id = ? AND ref LIKE 'game-win:%' AND substr(created_at, 1, 10) = ?").get(userId, new Date().toISOString().slice(0, 10)).c },
     streak: streakSummary(userId),
     monthly: { month: mk, count, goal: COIN_RULES.monthlyPublicPostGoal, reward: COIN_RULES.monthlyReward, claimed },
@@ -264,11 +274,71 @@ const LEARN_NAMES = { es: 'Spanish', fr: 'French', it: 'Italian', pt: 'Portugues
 export const LEARN_LEVEL_COUNT = 108;
 export const isLearnLang = (l) => LEARN_LANGS.includes(l);
 
+// ── Which languages a person may study ───────────────────────────────────────────
+// First language: free, chosen once. Every other language is premium: it unlocks only when ALL the languages you
+// already own have 100 finished levels, and costs 100 CHEX coins. People who studied before this rule existed keep
+// every language they had already started (kind 'earlier').
+const langRows = (userId) => db.prepare('SELECT lang FROM learn_langs WHERE user_id = ? ORDER BY created_at, rowid').all(userId).map(r => r.lang);
+function ownedLearnLangs(userId) {
+  let owned = langRows(userId);
+  if (!owned.length) {
+    const started = db.prepare('SELECT lang FROM learn_levels WHERE user_id = ? GROUP BY lang ORDER BY MIN(completed_at)').all(userId).map(r => r.lang);
+    for (const l of started) db.prepare("INSERT OR IGNORE INTO learn_langs (user_id, lang, kind) VALUES (?, ?, 'earlier')").run(userId, l);
+    owned = started;
+  }
+  return owned;
+}
+const doneCounts = (userId) => Object.fromEntries(db.prepare('SELECT lang, COUNT(*) AS c FROM learn_levels WHERE user_id = ? GROUP BY lang').all(userId).map(r => [r.lang, r.c]));
+const allDone = (owned, done) => owned.length > 0 && owned.every(l => (done[l] || 0) >= COIN_RULES.learnUnlockLevels);
+
+export function learnLanguages(userId) {
+  const owned = ownedLearnLangs(userId), done = doneCounts(userId);
+  return {
+    chosen: owned.length > 0, owned, completed: done,
+    unlockLevels: COIN_RULES.learnUnlockLevels, price: COIN_RULES.learnUnlockPrice,
+    canUnlock: allDone(owned, done) && owned.length < LEARN_LANGS.length,
+    balance: getBalance(userId),
+  };
+}
+
+export function chooseFirstLearnLanguage(userId, lang) {
+  if (!isLearnLang(lang)) return { error: { status: 400, code: 'BAD_LANG', message: 'That language does not exist.' } };
+  const tx = db.transaction(() => {
+    if (ownedLearnLangs(userId).length) return { error: { status: 409, code: 'ALREADY_CHOSEN', message: 'You already chose your first language. Other languages are premium.' } };
+    db.prepare("INSERT INTO learn_langs (user_id, lang, kind) VALUES (?, ?, 'first')").run(userId, lang);
+    return { ok: true };
+  });
+  const r = tx.immediate();
+  return r.error ? r : { ok: true, ...learnLanguages(userId) };
+}
+
+export function unlockLearnLanguage(userId, lang) {
+  if (!isLearnLang(lang)) return { error: { status: 400, code: 'BAD_LANG', message: 'That language does not exist.' } };
+  const tx = db.transaction(() => {
+    const owned = ownedLearnLangs(userId);
+    if (!owned.length) return { error: { status: 409, code: 'CHOOSE_FIRST', message: 'Choose your first language before unlocking others.' } };
+    if (owned.includes(lang)) return { error: { status: 409, code: 'OWNED', message: 'You already have this language.' } };
+    const done = doneCounts(userId);
+    if (!allDone(owned, done)) {
+      const need = owned.find(l => (done[l] || 0) < COIN_RULES.learnUnlockLevels);
+      return { error: { status: 403, code: 'FINISH_LEVELS', message: `Finish ${COIN_RULES.learnUnlockLevels} levels of ${LEARN_NAMES[need]} first (${done[need] || 0}/${COIN_RULES.learnUnlockLevels}).` } };
+    }
+    const balance = getBalance(userId);
+    if (balance < COIN_RULES.learnUnlockPrice) return { error: { status: 402, code: 'NOT_ENOUGH_COINS', message: `You need ${COIN_RULES.learnUnlockPrice - balance} more CHEX coins.` } };
+    db.prepare('INSERT INTO coin_ledger (user_id, amount, reason, ref) VALUES (?, ?, ?, ?)').run(userId, -COIN_RULES.learnUnlockPrice, `Unlocked ${LEARN_NAMES[lang]} in CHEX learn`, `learn-lang:${lang}`);
+    db.prepare("INSERT INTO learn_langs (user_id, lang, kind) VALUES (?, ?, 'unlocked')").run(userId, lang);
+    return { ok: true };
+  });
+  const r = tx.immediate();
+  return r.error ? r : { ok: true, ...learnLanguages(userId) };
+}
+
 export function recordLearnLevel(userId, lang, level, now = Date.now()) {
   const per = COIN_RULES.learnSectionLevels;
   const out = (recorded, coins, reason) => ({ recorded, coins, reason, balance: getBalance(userId) });
   if (!isLearnLang(lang) || !Number.isInteger(level) || level < 0 || level >= LEARN_LEVEL_COUNT) return { error: { status: 400, code: 'BAD_LEVEL', message: 'That level does not exist.' } };
   const tx = db.transaction(() => {
+    if (!ownedLearnLangs(userId).includes(lang)) return out(false, 0, 'locked');      // premium language not unlocked yet
     if (db.prepare('SELECT 1 FROM learn_levels WHERE user_id = ? AND lang = ? AND level = ?').get(userId, lang, level)) return out(false, 0, 'already');
     if (level > 0 && !db.prepare('SELECT 1 FROM learn_levels WHERE user_id = ? AND lang = ? AND level = ?').get(userId, lang, level - 1)) return out(false, 0, 'order');
     const last = db.prepare('SELECT MAX(completed_at) AS t FROM learn_levels WHERE user_id = ?').get(userId).t;
@@ -282,6 +352,58 @@ export function recordLearnLevel(userId, lang, level, now = Date.now()) {
       if (r.changes) coins = COIN_RULES.learnSectionReward;
     }
     return out(true, coins, null);
+  });
+  return tx.immediate();
+}
+
+// ── Gifts between people ─────────────────────────────────────────────────────────────────────────
+// The sender PAYS from their own wallet (coins gift = that many coins; theme/frame pack = its store price;
+// a language = the 100-coin unlock price). The receiver gets it for free. The master account sends for free.
+// Coin gifts are capped per day so two accounts can't be used to shuffle coins around endlessly.
+export const GIFT_RULES = { minCoins: 1, maxCoinsPerGift: 500, dailyCoinCap: 500 };
+export const LEARN_LANGUAGES = Object.entries(LEARN_NAMES).map(([code, name]) => ({ code, name }));
+
+export function sendGift(fromId, to, spec) {
+  const master = isMasterId(fromId);
+  const bad = (status, code, message) => ({ error: { status, code, message } });
+  const tx = db.transaction(() => {
+    const charge = (amount, reason, ref) => {
+      if (master) return null;
+      const balance = getBalance(fromId);
+      if (balance < amount) return bad(402, 'NOT_ENOUGH_COINS', `You need ${amount - balance} more CHEX coins for this gift.`);
+      db.prepare('INSERT INTO coin_ledger (user_id, amount, reason, ref) VALUES (?, ?, ?, ?)').run(fromId, -amount, reason, `${ref}:${to.id}:${Date.now()}:${Math.random()}`);
+      return null;
+    };
+    const who = `@${to.username}`;
+    if (spec.type === 'coins') {
+      const n = spec.amount;
+      if (!Number.isInteger(n) || n < GIFT_RULES.minCoins || n > GIFT_RULES.maxCoinsPerGift) return bad(400, 'INVALID_AMOUNT', `Send between ${GIFT_RULES.minCoins} and ${GIFT_RULES.maxCoinsPerGift} coins at a time.`);
+      if (!master) {
+        const today = new Date().toISOString().slice(0, 10);
+        const sent = -db.prepare("SELECT COALESCE(SUM(amount), 0) s FROM coin_ledger WHERE user_id = ? AND ref LIKE 'gift-coins-sent:%' AND substr(created_at, 1, 10) = ?").get(fromId, today).s;
+        if (sent + n > GIFT_RULES.dailyCoinCap) return bad(429, 'DAILY_LIMIT', `You can send up to ${GIFT_RULES.dailyCoinCap} coins a day (${Math.max(0, GIFT_RULES.dailyCoinCap - sent)} left today).`);
+      }
+      const e = charge(n, `Gift of coins to ${who}`, 'gift-coins-sent'); if (e) return e;
+      db.prepare('INSERT INTO coin_ledger (user_id, amount, reason, ref) VALUES (?, ?, ?, ?)').run(to.id, n, `Gift from @${spec.fromName}`, `gift-coins-recv:${fromId}:${Date.now()}:${Math.random()}`);
+      return { ok: true, label: `${n} CHEX coins`, text: `🎁 @${spec.fromName} sent you ${n} CHEX coins!`, amount: n };
+    }
+    if (spec.type === 'premium-themes' || spec.type === 'premium-frames') {
+      const item = STORE_ITEMS.find(i => i.id === spec.type);
+      if (db.prepare('SELECT 1 FROM coin_unlocks WHERE user_id = ? AND item_id = ?').get(to.id, item.id)) return bad(409, 'ALREADY_OWNED', `${who} already has ${item.name}.`);
+      const e = charge(item.price, `Gift of ${item.name} to ${who}`, 'gift-item-sent'); if (e) return e;
+      db.prepare('INSERT INTO coin_unlocks (user_id, item_id, price) VALUES (?, ?, 0)').run(to.id, item.id);
+      return { ok: true, label: item.name, text: `🎁 @${spec.fromName} gifted you ${item.name}!` };
+    }
+    if (spec.type === 'language') {
+      if (!isLearnLang(spec.lang)) return bad(400, 'BAD_LANG', 'That language does not exist.');
+      const owned = ownedLearnLangs(to.id);
+      if (!owned.length) return bad(409, 'NO_FIRST_LANGUAGE', `${who} hasn’t picked their first CHEX learn language yet — they get that one free.`);
+      if (owned.includes(spec.lang)) return bad(409, 'ALREADY_OWNED', `${who} already has ${LEARN_NAMES[spec.lang]}.`);
+      const e = charge(COIN_RULES.learnUnlockPrice, `Gift of ${LEARN_NAMES[spec.lang]} to ${who}`, 'gift-lang-sent'); if (e) return e;
+      db.prepare("INSERT INTO learn_langs (user_id, lang, kind) VALUES (?, ?, 'unlocked')").run(to.id, spec.lang);
+      return { ok: true, label: LEARN_NAMES[spec.lang], text: `🎁 @${spec.fromName} gifted you ${LEARN_NAMES[spec.lang]} in CHEX learn!` };
+    }
+    return bad(400, 'INVALID_GIFT', 'Choose coins, premium themes, premium frames or a language.');
   });
   return tx.immediate();
 }

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api.js';
+import GiftModal from '../components/GiftModal.jsx';
 
 const fmt = (n) => Number(n).toLocaleString();
 
@@ -9,6 +10,7 @@ export default function CoinStore({ onBack, onOpenSettings }) {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [justUnlocked, setJustUnlocked] = useState(false);
+  const [gifting, setGifting] = useState(false);
 
   useEffect(() => { api.coins().then(setW).catch(e => setError(e.message)); }, []);
 
@@ -31,7 +33,7 @@ export default function CoinStore({ onBack, onOpenSettings }) {
         <div className="coin-hero-coin" aria-hidden="true"><img src="/logo.png" alt="" draggable="false" /></div>
         <div>
           <div style={{ fontSize: 13, color: 'var(--text-mid)', fontWeight: 700 }}>Your balance</div>
-          <div className="coin-balance">{fmt(w.balance)} <span>CHEX coins</span></div>
+          <div className="coin-balance">{w.unlimited ? '∞' : fmt(w.balance)} <span>CHEX coins</span></div>
         </div>
       </div>
       {error && <div className="error-banner" style={{ marginBottom: 14 }}>{error}</div>}
@@ -61,7 +63,7 @@ export default function CoinStore({ onBack, onOpenSettings }) {
       <div className="glass-card" style={{ padding: 20, marginBottom: 16 }}>
         <div style={{ fontFamily: 'var(--font-display)', fontSize: 16, marginBottom: 10 }}>Store</div>
         {w.items.map(item => {
-          const short = item.price - w.balance;
+          const short = w.unlimited ? 0 : item.price - w.balance;
           return (
             <div key={item.id} className="coin-item">
               <div className="coin-item-icon" aria-hidden="true">{item.owned ? '🔓' : '🔒'}</div>
@@ -86,6 +88,13 @@ export default function CoinStore({ onBack, onOpenSettings }) {
           );
         })}
       </div>
+
+      <div className="glass-card" style={{ padding: 20, marginBottom: 16 }}>
+        <div style={{ fontFamily: 'var(--font-display)', fontSize: 16, marginBottom: 4 }}>🎁 Send a gift</div>
+        <p style={{ fontSize: 13, color: 'var(--text-mid)', margin: '0 0 12px' }}>Give a friend CHEX coins, Premium Themes, Premium Frames or a CHEX learn language. It’s paid from your coins. You can also tap 🎁 Gift on anyone’s profile.</p>
+        <button className="btn-primary" style={{ width: 'auto', padding: '8px 18px' }} onClick={() => setGifting(true)}>🎁 Send a gift</button>
+      </div>
+      {gifting && <GiftModal onClose={() => setGifting(false)} onSent={() => api.coins().then(setW).catch(() => {})} />}
 
       {w.history.length > 0 && (
         <div className="glass-card" style={{ padding: 20 }}>

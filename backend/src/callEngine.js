@@ -1,5 +1,6 @@
 import { v4 as uuid } from 'uuid';
 import db, { toPublicUser, USER_MEDIA_COLUMNS_SQL } from './db.js';
+import { sendCallPush } from './push.js';
 
 function conversationParticipants(conversationId) {
   return db.prepare('SELECT user_id FROM conversation_participants WHERE conversation_id = ?').all(conversationId).map(r => r.user_id);
@@ -47,6 +48,7 @@ export function registerCallHandlers(io, socket) {
         callId, conversationId, type: callType,
         caller: toPublicUser(caller),
       });
+      sendCallPush(otherId, caller, callType).catch(() => {});   // ring the phone even when CHEX is closed
     });
     const peers = others.map(id => toPublicUser(db.prepare(`SELECT id, username, display_name, avatar_color, ${USER_MEDIA_COLUMNS_SQL} FROM users WHERE id = ?`).get(id)));
     socket.emit('call:ringing', { callId, type: callType, peers });
@@ -96,6 +98,15 @@ export function registerCallHandlers(io, socket) {
     }
     db.prepare("UPDATE call_participants SET left_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE call_id = ? AND user_id = ?").run(callId, userId);
     tellParticipants(call.conversation_id, 'call:ended', { callId, endedBy: userId });
+  });
+
+  // After a network drop the socket reconnects as a fresh connection that is no longer in the call room.
+  // Let a real participant of a still-live call back in so signalling (ICE restart) keeps flowing.
+  socket.on('call:rejoin', ({ callId }) => {
+    const call = db.prepare('SELECT * FROM calls WHERE id = ?').get(callId);
+    if (!call || !['ringing', 'active'].includes(call.status)) return;
+    if (!conversationParticipants(call.conversation_id).includes(userId)) return;
+    socket.join(`call:${callId}`);
   });
 
   // Pure relay for WebRTC SDP offers/answers and ICE candidates — the server never

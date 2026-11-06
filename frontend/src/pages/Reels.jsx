@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useLive } from '../live.js';
 import { api } from '../api.js';
 import Avatar from '../components/Avatar.jsx';
 import { useAuth } from '../AuthContext.jsx';
@@ -83,6 +84,7 @@ function analyseVideo(file, atSeconds = 0) {
 function ReelCard({ reel, onDeleted, muted, onToggleMute, onSoundBlocked }) {
   const { user } = useAuth();
   const [r, setR] = useState(reel);
+  useEffect(() => { setR(reel); }, [reel]);   // fresh counts/caption pushed live
   const [showComments, setShowComments] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [comments, setComments] = useState(null);
@@ -203,9 +205,15 @@ function ReelCard({ reel, onDeleted, muted, onToggleMute, onSoundBlocked }) {
   };
 
   const deleteReel = async () => {
-    await api.deleteReel(r.id);
+    if (user.isAdmin && !isMine) await api.adminDeleteContent('reel', r.id); else await api.deleteReel(r.id);
     onDeleted?.(r.id);
   };
+
+  useLive(['reels'], async (ev) => {
+    if (ev?.reelId && ev.reelId !== r.id) return;
+    if (!showComments || !comments) return;
+    try { setComments((await api.reelComments(r.id)).comments); } catch { /* ignore */ }
+  }, { enabled: showComments });
 
   const openComments = async () => {
     setShowComments(s => !s);
@@ -267,7 +275,10 @@ function ReelCard({ reel, onDeleted, muted, onToggleMute, onSoundBlocked }) {
             <button className="btn-ghost danger" style={{ color: '#ff8a8a' }} onClick={() => setConfirmingDelete(true)}>🗑 Delete</button>
           </>
         )}
-        {isMine && confirmingDelete && (
+        {!isMine && user.isAdmin && !confirmingDelete && (
+          <button className="btn-ghost danger" style={{ color: '#ff8a8a' }} onClick={() => setConfirmingDelete(true)}>🛡️ Delete (admin)</button>
+        )}
+        {(isMine || user.isAdmin) && confirmingDelete && (
           <>
             <span style={{ fontSize: 12, color: '#fff' }}>Delete this reel?</span>
             <button className="btn-ghost danger" style={{ color: '#ff8a8a' }} onClick={deleteReel}>Yes, delete</button>
@@ -389,6 +400,20 @@ export default function Reels({ startReelId, onConsumeStart }) {
     setCursor(res.nextCursor);
   };
   useEffect(() => { load(); }, []);
+
+  // Live: refresh like/comment counts and captions of the reels on screen, and add brand-new reels at
+  // the end — nothing jumps or restarts while you are watching.
+  useLive(['reels', 'users'], async () => {
+    try {
+      const res = await api.reelsFeed();
+      setReels(old => {
+        if (!old) return res.reels;
+        const fresh = new Map(res.reels.map(x => [x.id, x]));
+        const have = new Set(old.map(x => x.id));
+        return [...old.map(x => fresh.get(x.id) || x), ...res.reels.filter(x => !have.has(x.id))];
+      });
+    } catch { /* ignore */ }
+  });
 
   // Auto-load the next page as the last reel comes into view, so swiping/scrolling down
   // keeps going instead of dead-ending on a "Load more" button mid-swipe.

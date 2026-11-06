@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useLive } from '../live.js';
 import { api } from '../api.js';
 import Avatar from './Avatar.jsx';
 import { useAuth } from '../AuthContext.jsx';
@@ -45,6 +46,7 @@ export default function NotesBar({ onOpenMessage }) {
   // A failed refresh (server asleep, offline…) must not throw or blank the bar: keep what we have.
   const load = () => api.notesFeed().then(res => setNotes(res.notes || [])).catch(() => setNotes(old => old || []));
   useEffect(() => { load(); }, []);
+  useLive(['notes', 'users'], () => { load(); });
   // Section 131/136 — mood + audience come from the same allowlisted registry the backend
   // validates against, so the picker never offers a value the server would reject.
   useEffect(() => { api.noteMoods().then(res => res.moods && setMoods(res.moods)).catch(() => {}); }, []);

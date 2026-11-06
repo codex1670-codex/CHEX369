@@ -5,6 +5,7 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { Server } from 'socket.io';
+import { liveUpdates } from './liveUpdates.js';
 import jwt from 'jsonwebtoken';
 import rateLimit from 'express-rate-limit';
 
@@ -27,6 +28,8 @@ import reelRoutes from './routes/reels.js';
 import gameRoutes from './routes/games.js';
 import tournamentRoutes from './routes/tournaments.js';
 import reportRoutes from './routes/reports.js';
+import adminRoutes from './routes/admin.js';
+import { seedMasterAccount } from './admin.js';
 import searchRoutes from './routes/search.js';
 import appRoutes from './routes/apps.js';
 import callRoutes from './routes/calls.js';
@@ -35,6 +38,10 @@ import pushRoutes from './routes/push.js';
 import { attachPush, sendStickyPush } from './push.js';
 import { registerGameHandlers } from './gameEngine.js';
 import { registerCallHandlers } from './callEngine.js';
+import { attachRealtimeAdapter } from './realtime.js';
+import { cache } from './cache.js';
+import { pgHealthy } from './postgres.js';
+import { ai } from './aiClient.js';
 import { ACCESS_SECRET, REFRESH_SECRET } from './middleware/auth.js';
 import { UPLOADS_ROOT } from './uploads.js';
 import { db } from './db.js';
@@ -66,6 +73,7 @@ app.use((_req, res, next) => {
 const ORIGINS = (process.env.CORS_ORIGIN || '').split(',').map(x => x.trim()).filter(Boolean);
 app.use(cors(ORIGINS.length ? { origin: ORIGINS } : undefined));
 app.use(express.json({ limit: '2mb' }));
+app.use('/api', liveUpdates(app));   // broadcasts `live:update` after every successful write
 
 // Uploaded reel video files (see uploads.js) — served back as plain static files, outside
 // the /api namespace, so <video src="/uploads/reels/...mp4"> just works like any hosted URL.
@@ -81,9 +89,16 @@ const apiLimiter = rateLimit({ windowMs: 60 * 1000, max: 300, standardHeaders: t
 
 app.get('/api/health', (_req, res) => res.json({ ok: true, service: 'nexa-backend', time: new Date().toISOString() }));
 // Readiness: proves the database actually answers (used by Docker/orchestrator health checks).
-app.get('/api/ready', (_req, res) => {
-  try { db.prepare('SELECT 1').get(); res.json({ ready: true, uptime: Math.round(process.uptime()) }); }
-  catch { res.status(503).json({ ready: false }); }
+app.get('/api/ready', async (_req, res) => {
+  try {
+    db.prepare('SELECT 1').get();
+    // Optional services are reported but never make the app "not ready": it degrades gracefully without them.
+    res.json({
+      ready: true,
+      uptime: Math.round(process.uptime()),
+      services: { cache: { backend: cache.backend, ok: await cache.ping() }, postgres: await pgHealthy(), ai: ai.enabled() },
+    });
+  } catch { res.status(503).json({ ready: false }); }
 });
 
 const AUTH_GUARDED = ['/login', '/signup', '/deactivate', '/delete-account', '/2fa/disable'];
@@ -104,6 +119,7 @@ app.use('/api/reels', apiLimiter, reelRoutes);
 app.use('/api/games', apiLimiter, gameRoutes);
 app.use('/api/tournaments', apiLimiter, tournamentRoutes);
 app.use('/api/reports', apiLimiter, reportRoutes);
+app.use('/api/admin', apiLimiter, adminRoutes);
 app.use('/api/search', apiLimiter, searchRoutes);
 app.use('/api/apps', apiLimiter, appRoutes);
 app.use('/api/calls', apiLimiter, callRoutes);
@@ -140,9 +156,14 @@ app.use((err, _req, res, _next) => {
   res.status(500).json({ error: { code: 'SERVER_ERROR', message: 'Something went wrong. Please try again.' } });
 });
 
+// The permanent master account "sanjiv" must exist before anyone can sign up / log in (re-created on every boot).
+seedMasterAccount();
+
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: ORIGINS.length ? ORIGINS : '*' } });
 app.set('io', io);
+const realtime = attachRealtimeAdapter(io); // shares rooms across instances when REDIS_URL is set
+if (realtime.enabled) console.log('[nexa] Socket.IO Redis adapter enabled');
 attachPush(io); // also send a phone/home-screen push for new notifications & messages
 
 io.use((socket, next) => {

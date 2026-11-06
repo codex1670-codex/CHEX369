@@ -32,14 +32,41 @@ const VERB = {
   story_view: 'viewed your story',
 };
 
-// Unread notifications the person has not yet been pushed about, newest first.
+// Unread notifications the person has not yet been pushed about, newest first. Only recent ones (last 15 minutes):
+// the "already pushed" list lives in memory, so after a restart/redeploy older unread items must not be sent again.
 const pushedIds = new Set();
+const RECENT_MS = 15 * 60 * 1000;
 function pendingFor(userId) {
   return db.prepare(`
     SELECT n.id, n.type, u.username, u.display_name FROM notifications n
     JOIN users u ON u.id = n.actor_id
-    WHERE n.recipient_id = ? AND n.read = 0 ORDER BY n.created_at DESC LIMIT 20
-  `).all(userId).filter(r => !pushedIds.has(r.id));
+    WHERE n.recipient_id = ? AND n.read = 0 AND n.created_at >= ? ORDER BY n.created_at DESC LIMIT 20
+  `).all(userId, new Date(Date.now() - RECENT_MS).toISOString()).filter(r => !pushedIds.has(r.id));
+}
+
+// Deliver one payload to one phone. 'dead' = the push service says this subscription can never work again
+// (uninstalled 404/410, or made with other server keys 401/403) so it is removed and the app re-registers on its next launch.
+// 'retry' = a temporary problem (busy service, 5xx, no network) worth trying again.
+async function deliver(s, payload, options) {
+  try {
+    await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, payload, options);
+    return 'ok';
+  } catch (err) {
+    const code = err?.statusCode;
+    if (code === 404 || code === 410 || code === 401 || code === 403) { db.prepare('DELETE FROM push_subscriptions WHERE endpoint = ?').run(s.endpoint); return 'dead'; }
+    return 'retry';
+  }
+}
+
+// Send to every phone; any that hit a temporary problem get two more tries (15 s, then 60 s later) so a brief outage doesn't lose the alert.
+async function fanOut(subs, payload, options, attempt = 0) {
+  const results = await Promise.all(subs.map(async (s) => [s, await deliver(s, payload, options)]));
+  const failed = results.filter(([, r]) => r === 'retry').map(([s]) => s);
+  if (failed.length && attempt < 2) {
+    const t = setTimeout(() => { fanOut(failed, payload, options, attempt + 1).catch(() => {}); }, attempt === 0 ? 15000 : 60000);
+    t.unref?.();
+  }
+  return results.filter(([, r]) => r === 'ok').length;
 }
 
 export async function sendPushToUser(userId) {
@@ -57,13 +84,25 @@ export async function sendPushToUser(userId) {
     ? { title: first.display_name || first.username, body: `${first.username} ${VERB[first.type] || 'sent you a notification'}`, tag: `chex-${first.type}`, url: MSG_TYPES.includes(first.type) ? '/?open=messages' : '/?open=notifications' }
     : { title: allMessages ? 'New messages' : 'New notifications', body: `${allMessages ? 'Message' : 'Notification'} from ${shown}`, tag: allMessages ? 'chex-messages' : 'chex-notifications', url: allMessages ? '/?open=messages' : '/?open=notifications' });
 
-  await Promise.all(subs.map(async (s) => {
-    try {
-      await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, payload, { TTL: 3600 });
-    } catch (err) {
-      if (err?.statusCode === 404 || err?.statusCode === 410) db.prepare('DELETE FROM push_subscriptions WHERE endpoint = ?').run(s.endpoint); // uninstalled / revoked
-    }
-  }));
+  // Messages are time-sensitive: 'high' urgency makes Android deliver them even in battery-saving (Doze) mode.
+  await fanOut(subs, payload, { TTL: 6 * 3600, urgency: allMessages ? 'high' : 'normal' });
+}
+
+// Someone is calling: ring the phone even if CHEX is closed. Expires after 45 s (the ring time), delivered at high urgency.
+export async function sendCallPush(userId, caller, type) {
+  const subs = db.prepare('SELECT * FROM push_subscriptions WHERE user_id = ?').all(userId);
+  if (!subs.length) return;
+  const name = caller?.display_name || caller?.username || 'Someone';
+  const payload = JSON.stringify({ title: `📞 ${name}`, body: `Incoming ${type === 'video' ? 'video' : 'voice'} call`, tag: 'chex-call', url: '/?open=messages', call: true });
+  await fanOut(subs, payload, { TTL: 45, urgency: 'high' });
+}
+
+// Settings → "Send a test notification". Always shown (even if CHEX is open). Returns how many phones accepted it.
+export async function sendTestPush(userId) {
+  const subs = db.prepare('SELECT * FROM push_subscriptions WHERE user_id = ?').all(userId);
+  if (!subs.length) return 0;
+  const payload = JSON.stringify({ title: 'CHEX test', body: 'Notifications are working on this phone 🎉', tag: 'chex-test', url: '/', force: true });
+  return fanOut(subs, payload, { TTL: 300, urgency: 'high' });
 }
 
 // Called whenever a realtime "something new" event goes to a user. Debounced, and delayed slightly because
@@ -100,11 +139,5 @@ export async function sendStickyPush(userId, note) {
   const life = String(note.source || '').startsWith('life:');
   const alarm = String(note.source || '').startsWith('life:alarm:');
   const payload = JSON.stringify({ title: alarm ? '⏰ Alarm' : life ? `🌟 ${note.label}` : '📌 Reminder', body: note.text, tag: `chex-sticky-${note.id}`, url: life ? '/?open=mylife' : '/?open=stickies', sticky: true });
-  await Promise.all(subs.map(async (s) => {
-    try {
-      await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, payload, { TTL: alarm ? 600 : 3600, urgency: 'high' });   // a late alarm is worse than none, so it expires after 10 minutes
-    } catch (err) {
-      if (err?.statusCode === 404 || err?.statusCode === 410) db.prepare('DELETE FROM push_subscriptions WHERE endpoint = ?').run(s.endpoint);
-    }
-  }));
+  await fanOut(subs, payload, { TTL: alarm ? 600 : 3600, urgency: 'high' });   // a late alarm is worse than none, so it expires after 10 minutes
 }

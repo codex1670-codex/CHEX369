@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { v4 as uuid } from 'uuid';
 import db, { toPublicUser, USER_MEDIA_COLUMNS_SQL } from '../db.js';
-import { recordLearnLevel } from '../coins.js';
+import { recordLearnLevel, learnLanguages, chooseFirstLearnLanguage, unlockLearnLanguage } from '../coins.js';
 import { requireAuth } from '../middleware/auth.js';
 import { syncAlert, removeAlert, setFocusAlert, clearFocusAlert } from '../lifeAlerts.js';
 
@@ -105,6 +105,19 @@ router.get('/learn-board', requireAuth, (req, res) => {
 // CHEX learn: the browser reports a finished level; the server records it and pays 1 CHEX coin when it closes a section.
 router.post('/learn/level', requireAuth, (req, res) => {
   const r = recordLearnLevel(req.userId, String(req.body?.lang || ''), Number(req.body?.level));
+  if (r.error) return res.status(r.error.status).json({ error: r.error });
+  res.json(r);
+});
+
+// CHEX learn languages: the first one is free (chosen once); every other language is premium.
+router.get('/learn/languages', requireAuth, (req, res) => res.json(learnLanguages(req.userId)));
+router.post('/learn/language', requireAuth, (req, res) => {
+  const r = chooseFirstLearnLanguage(req.userId, String(req.body?.lang || ''));
+  if (r.error) return res.status(r.error.status).json({ error: r.error });
+  res.json(r);
+});
+router.post('/learn/unlock', requireAuth, (req, res) => {
+  const r = unlockLearnLanguage(req.userId, String(req.body?.lang || ''));
   if (r.error) return res.status(r.error.status).json({ error: r.error });
   res.json(r);
 });

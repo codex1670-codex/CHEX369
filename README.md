@@ -1,3 +1,20 @@
+# CHEX / Nexa
+
+> **Stack:** React + TypeScript · Tailwind · Framer Motion · Three.js · Node + TypeScript · Python/FastAPI (AI) ·
+> MongoDB + PostgreSQL · Redis/Valkey · WebSockets + WebRTC · Docker + Render · Git + GitHub.
+> See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for status and roadmap.
+
+```bash
+npm run install:all && pip install -r ai-service/requirements.txt
+npm run dev:backend      # http://localhost:4000
+npm run dev:frontend     # http://localhost:5173
+npm run dev:ai           # http://localhost:8000  (optional)
+npm run typecheck && npm test && npm run test:ai
+npm run stack            # everything in Docker (app + AI + Mongo + Postgres + Valkey)
+```
+
+---
+
 # NEXA — Extended Build
 
 A real, runnable implementation covering most of the NEXA spec end to end against a real
@@ -96,8 +113,11 @@ endpoint or a real Socket.io event and shows the real result.
 **Calls**
 - Real WebRTC signaling over Socket.io: invite → ring (45s auto-timeout to "missed") →
   accept/decline → SDP/ICE relay → end → history. Voice and video, mute/camera toggle.
-- STUN-only (no TURN) — reliable on the same network/localhost; a production deployment
-  would need a TURN server for calls across restrictive NATs.
+- Call quality: HD video (720p/30fps, up to 1080p), mono Opus voice at 48 kHz with forward error correction,
+  automatic video-quality stepping on weak networks (voice is never reduced), ICE-restart auto-reconnect,
+  camera flip, full screen, screen wake-lock and a live connection indicator.
+- For rock-solid calls across different networks / mobile data set TURN_URL, TURN_USERNAME and
+  TURN_CREDENTIAL (see render.yaml). Without TURN only STUN is used, which works on most home networks.
 
 **Games & Game Store**
 - Server-authoritative Tic-Tac-Toe, Connect Four, and Checkers (pluggable engine in

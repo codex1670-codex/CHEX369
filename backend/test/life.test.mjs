@@ -307,6 +307,7 @@ test('existing databases are upgraded in place: old life_items (no learn kind) k
 test('learn coins: the server records levels in order, with a speed limit, and pays 1 coin per section', async () => {
   const coins = await import('../src/coins.js');
   const a = mk('coa'); const uid = 'id-coa';
+  for (const [l, k] of [['es', 'first'], ['fr', 'unlocked']]) db.prepare('INSERT INTO learn_langs (user_id, lang, kind) VALUES (?,?,?)').run(uid, l, k);
   const t0 = Date.now() - 3_600_000;
   const play = (lang, level, i) => coins.recordLearnLevel(uid, lang, level, t0 + i * 11_000);
   let i = 0;
@@ -336,6 +337,8 @@ test('learn coins: HTTP endpoint needs sign-in, validates input, and shows up in
   assert.equal((await call(a, 'POST', '/learn/level', { lang: 'klingon', level: 0 })).status, 400);
   assert.equal((await call(a, 'POST', '/learn/level', { lang: 'es', level: 108 })).status, 400);
   assert.equal((await call(a, 'POST', '/learn/level', { lang: 'es', level: 1.5 })).status, 400);
+  assert.equal((await call(a, 'POST', '/learn/level', { lang: 'es', level: 0 })).body.reason, 'locked');   // no language chosen yet
+  assert.equal((await call(a, 'POST', '/learn/language', { lang: 'es' })).status, 200);
   const ok = await call(a, 'POST', '/learn/level', { lang: 'es', level: 0 });
   assert.deepEqual([ok.status, ok.body.recorded, ok.body.coins, ok.body.balance], [200, true, 0, 0]);
   const dup = await call(a, 'POST', '/learn/level', { lang: 'es', level: 0 });
@@ -347,10 +350,59 @@ test('learn coins: HTTP endpoint needs sign-in, validates input, and shows up in
 test('learn coins: deleting progress or editing the saved level cannot mint coins', async () => {
   const coins = await import('../src/coins.js');
   const a = mk('coc');
+  await call(a, 'POST', '/learn/language', { lang: 'es' });
   const made = await call(a, 'POST', '', { kind: 'learn', data: prog({ lvl: 8 }) });
   await call(a, 'PATCH', `/${made.body.item.id}`, { data: { lvl: 108, pr: { es: 108 } } });
   assert.equal(coins.getBalance('id-coc'), 0);                                   // saving progress never pays
   const r = await call(a, 'POST', '/learn/level', { lang: 'es', level: 107 });   // claiming a late level needs the earlier ones
   assert.deepEqual([r.body.recorded, r.body.coins, r.body.reason], [false, 0, 'order']);
   assert.equal(coins.getBalance('id-coc'), 0);
+});
+
+/* ───────── CHEX learn: first language free, the rest premium (100 levels + 100 CHEX coins) ───────── */
+test('learn languages: pick one free first language; others stay locked until 100 levels are done and 100 coins are paid', async () => {
+  const coins = await import('../src/coins.js');
+  const a = mk('lga'); const uid = 'id-lga';
+  const start = await call(a, 'GET', '/learn/languages');
+  assert.deepEqual([start.body.chosen, start.body.owned, start.body.canUnlock, start.body.price, start.body.unlockLevels], [false, [], false, 100, 100]);
+  assert.equal((await call(a, 'POST', '/learn/language', { lang: 'klingon' })).status, 400);
+  assert.equal((await call(a, 'POST', '/learn/unlock', { lang: 'fr' })).body.error.code, 'CHOOSE_FIRST');
+  const first = await call(a, 'POST', '/learn/language', { lang: 'de' });
+  assert.deepEqual([first.status, first.body.owned], [200, ['de']]);
+  assert.equal((await call(a, 'POST', '/learn/language', { lang: 'fr' })).status, 409);          // the free pick is only once
+  // every other language is locked: no levels, no coins
+  const locked = await call(a, 'POST', '/learn/level', { lang: 'fr', level: 0 });
+  assert.deepEqual([locked.body.recorded, locked.body.reason], [false, 'locked']);
+  // play 99 German levels: still not enough
+  const t0 = Date.now() - 86_400_000;
+  for (let n = 0; n < 99; n++) coins.recordLearnLevel(uid, 'de', n, t0 + n * 11_000);
+  assert.equal((await call(a, 'GET', '/learn/languages')).body.canUnlock, false);
+  const early = await call(a, 'POST', '/learn/unlock', { lang: 'fr' });
+  assert.deepEqual([early.status, early.body.error.code], [403, 'FINISH_LEVELS']);
+  // the 100th level opens the door, but it still costs 100 coins (11 sections of 1 coin = 11 so far)
+  coins.recordLearnLevel(uid, 'de', 99, t0 + 99 * 11_000);
+  assert.equal((await call(a, 'GET', '/learn/languages')).body.canUnlock, true);
+  const poor = await call(a, 'POST', '/learn/unlock', { lang: 'fr' });
+  assert.deepEqual([poor.status, poor.body.error.code], [402, 'NOT_ENOUGH_COINS']);
+  assert.equal(coins.getBalance(uid), 11);
+  db.prepare('INSERT INTO coin_ledger (user_id, amount, reason, ref) VALUES (?,?,?,?)').run(uid, 100, 'test top-up', 'test:topup');
+  const ok = await call(a, 'POST', '/learn/unlock', { lang: 'fr' });
+  assert.deepEqual([ok.status, ok.body.owned, ok.body.balance, ok.body.canUnlock], [200, ['de', 'fr'], 11, false]);
+  assert.equal((await call(a, 'POST', '/learn/unlock', { lang: 'fr' })).body.error.code, 'OWNED');
+  // French works now; a third language needs 100 French levels too
+  assert.equal((await call(a, 'POST', '/learn/level', { lang: 'fr', level: 0 })).body.recorded, true);
+  assert.equal((await call(a, 'POST', '/learn/unlock', { lang: 'it' })).body.error.code, 'FINISH_LEVELS');
+  assert.equal((await fetch(`${base}/learn/languages`)).status, 401);
+});
+
+test('learn languages: people who already studied keep the languages they started', async () => {
+  const coins = await import('../src/coins.js');
+  const a = mk('lgb'); const uid = 'id-lgb';
+  const t0 = Date.now() - 86_400_000;
+  db.prepare('INSERT INTO learn_levels (user_id, lang, level, completed_at) VALUES (?,?,?,?)').run(uid, 'es', 0, new Date(t0).toISOString());
+  db.prepare('INSERT INTO learn_levels (user_id, lang, level, completed_at) VALUES (?,?,?,?)').run(uid, 'ja', 0, new Date(t0 + 5).toISOString());
+  const r = await call(a, 'GET', '/learn/languages');
+  assert.deepEqual([r.body.chosen, r.body.owned], [true, ['es', 'ja']]);
+  assert.equal((await call(a, 'POST', '/learn/language', { lang: 'fr' })).status, 409);
+  assert.equal(coins.recordLearnLevel(uid, 'ja', 1, t0 + 20_000).recorded, true);
 });

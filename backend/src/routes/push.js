@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import db from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
-import { vapidPublicKey } from '../push.js';
+import { vapidPublicKey, sendTestPush } from '../push.js';
 
 const router = Router();
 
@@ -23,6 +23,12 @@ router.post('/unsubscribe', requireAuth, (req, res) => {
   const endpoint = req.body?.endpoint;
   if (typeof endpoint === 'string') db.prepare('DELETE FROM push_subscriptions WHERE endpoint = ? AND user_id = ?').run(endpoint, req.userId);
   res.json({ ok: true });
+});
+
+// "Send a test notification": tells the app how many of this person's phones accepted it (0 = none registered).
+router.post('/test', requireAuth, async (req, res) => {
+  try { res.json({ devices: await sendTestPush(req.userId) }); }
+  catch { res.json({ devices: 0 }); }
 });
 
 export default router;

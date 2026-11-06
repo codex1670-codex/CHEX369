@@ -3,6 +3,7 @@ import { render, screen, fireEvent, cleanup, waitFor, within } from '@testing-li
 
 const api = vi.hoisted(() => ({
   lifeItems: vi.fn(), addLifeItem: vi.fn(), updateLifeItem: vi.fn(), learnBoard: vi.fn(), learnLevel: vi.fn(), coins: vi.fn(),
+  learnLanguages: vi.fn(), learnChooseLanguage: vi.fn(), learnUnlockLanguage: vi.fn(),
   deleteLifeItem: vi.fn(), startFocusAlert: vi.fn(), stopFocusAlert: vi.fn(),
   stickies: vi.fn(), ringingStickies: vi.fn(), addSticky: vi.fn(), updateSticky: vi.fn(), snoozeSticky: vi.fn(), dismissSticky: vi.fn(), deleteSticky: vi.fn(),
 }));
@@ -32,6 +33,7 @@ beforeEach(() => {
   api.learnBoard.mockResolvedValue({ board: [] });
   api.coins.mockResolvedValue({ balance: 4 });
   api.learnLevel.mockResolvedValue({ recorded: true, coins: 0, balance: 4 });
+  api.learnLanguages.mockResolvedValue({ chosen: true, owned: ['es'], completed: {}, unlockLevels: 100, price: 100, canUnlock: false, balance: 4 });   // Spanish is this person's free first language
   api.stickies.mockResolvedValue({ notes: [] }); api.ringingStickies.mockResolvedValue({ notes: [] });
 });
 afterEach(() => cleanup());
@@ -226,5 +228,51 @@ describe('CHEX learn page', () => {
     expect(await screen.findByText(/Network down/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
     await screen.findByText(/Spanish course/);
+  });
+});
+
+describe('CHEX learn languages: first one free, the rest Premium', () => {
+  const info = (over = {}) => ({ chosen: true, owned: ['es'], completed: { es: 12 }, unlockLevels: 100, price: 100, canUnlock: false, balance: 4, ...over });
+  const openCourses = async () => { render(<Learn />); fireEvent.click(await screen.findByRole('tab', { name: /Courses/ })); };
+  const rowOf = (name) => screen.getByText(name).closest('.lx-langrow');
+
+  it('first visit asks for one free first language; picking it saves it and opens the course', async () => {
+    api.learnLanguages.mockResolvedValue(info({ chosen: false, owned: [], completed: {} }));
+    api.learnChooseLanguage.mockResolvedValue(info({ owned: ['fr'], completed: {} }));
+    render(<Learn />);
+    expect(await screen.findByText('Choose your first language')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Pick a language' }).disabled).toBe(true);
+    fireEvent.click(screen.getByRole('radio', { name: /French/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Start learning French' }));
+    await waitFor(() => expect(api.learnChooseLanguage).toHaveBeenCalledWith('fr'));
+    await waitFor(() => expect(screen.queryByText('Choose your first language')).toBeNull());
+  });
+
+  it('Courses: every other language is Premium and locked until 100 levels are finished', async () => {
+    api.learnLanguages.mockResolvedValue(info());
+    await openCourses();
+    expect(await screen.findAllByText('👑 Premium')).toHaveLength(11);
+    const locked = screen.getAllByRole('button', { name: /is locked until you finish 100 levels/ });
+    expect(locked).toHaveLength(11);
+    locked.forEach(b => expect(b.disabled).toBe(true));
+    expect(screen.getByText('12/100 levels')).toBeTruthy();          // progress toward the unlock
+    expect(api.learnUnlockLanguage).not.toHaveBeenCalled();
+  });
+
+  it('after 100 levels a Premium language unlocks for 100 CHEX coins', async () => {
+    api.learnLanguages.mockResolvedValue(info({ completed: { es: 100 }, canUnlock: true }));
+    api.coins.mockResolvedValue({ balance: 150 });
+    api.learnUnlockLanguage.mockResolvedValue(info({ owned: ['es', 'it'], completed: { es: 100 }, balance: 50 }));
+    await openCourses();
+    await waitFor(() => expect(within(rowOf('Italian')).getByRole('button').textContent).toMatch(/Unlock/));
+    fireEvent.click(within(rowOf('Italian')).getByRole('button'));
+    await waitFor(() => expect(api.learnUnlockLanguage).toHaveBeenCalledWith('it'));
+  });
+
+  it('with fewer than 100 coins the unlock button says so and stays disabled', async () => {
+    api.learnLanguages.mockResolvedValue(info({ completed: { es: 100 }, canUnlock: true }));   // balance is 4
+    await openCourses();
+    await waitFor(() => expect(within(rowOf('Italian')).getByRole('button').textContent).toMatch(/Need 100 coins/));
+    expect(within(rowOf('Italian')).getByRole('button').disabled).toBe(true);
   });
 });

@@ -66,19 +66,25 @@ function getCtx() {
 export function playNotificationSound() {
   if (!alertsEnabled()) return;
   const ctx = getCtx();
-  if (!ctx || ctx.state !== 'running') return;
-  const now = ctx.currentTime;
-  [[880, 0], [1175, 0.22]].forEach(([freq, offset]) => {
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = 'sine';
-    osc.frequency.value = freq;
-    gain.gain.setValueAtTime(0.0001, now + offset);
-    gain.gain.exponentialRampToValueAtTime(0.35, now + offset + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + offset + 0.5);
-    osc.connect(gain); gain.connect(ctx.destination);
-    osc.start(now + offset); osc.stop(now + offset + 0.55);
-  });
+  if (!ctx) return;
+  const play = () => {
+    const now = ctx.currentTime;
+    [[880, 0], [1175, 0.22]].forEach(([freq, offset]) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.0001, now + offset);
+      gain.gain.exponentialRampToValueAtTime(0.35, now + offset + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + offset + 0.5);
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.start(now + offset); osc.stop(now + offset + 0.55);
+    });
+  };
+  // Phones suspend the audio engine when the app goes to the background (iPhone even marks it 'interrupted'):
+  // wake it first and play once it is running, instead of silently dropping the chime.
+  if (ctx.state === 'running') play();
+  else ctx.resume().then(() => { if (ctx.state === 'running') play(); }).catch(() => {});
 }
 
 // Chime once, then speak the line once. If the person has not touched the page yet, hold it until they do.
@@ -90,10 +96,10 @@ export function notifyOnce(text) {
 }
 
 if (typeof window !== 'undefined') {
+  // Stays attached for the whole session (it is cheap): any tap re-wakes the audio engine if the phone suspended it meanwhile.
   const unlock = () => {
     userTouched = true;
     getCtx();
-    ['pointerdown', 'touchstart', 'keydown', 'click'].forEach(ev => window.removeEventListener(ev, unlock));
     if (pending) { const t = pending; pending = null; notifyOnce(t); }
   };
   ['pointerdown', 'touchstart', 'keydown', 'click'].forEach(ev => window.addEventListener(ev, unlock, { passive: true }));

@@ -1,3 +1,22 @@
+## Floating AI bar off by default + phone notification fixes
+- The floating AI (Codex) bar is OFF by default. Settings → Floating AI bar switches it on (it then shows on every page) and off again. Setting is kept on the device.
+- Notifications, made to work on more phones:
+  - The service worker no longer hides an alert just because the page reports 'visible' (some phones say that while the app is in the background); it skips only when CHEX is open AND focused. iPhone/iPad always get the alert (they revoke silent pushes).
+  - A subscription made with other server keys (the cause of 403 errors) is detected and replaced; dead subscriptions (401/403/404/410) are removed. Phones re-register when the app returns to the front and when the browser replaces a subscription (`pushsubscriptionchange`).
+  - Temporary push-service failures are retried (15 s, then 60 s) instead of losing the alert; messages and calls are sent at high urgency so Android delivers them in battery-saving mode. Only the last 15 minutes of unread items are pushed, so a server restart can't resend old ones.
+  - Incoming calls now ring the phone even when CHEX is closed.
+  - Signing out stops this phone getting that account's notifications.
+  - The in-app chime wakes the phone's audio engine before playing (it was silently skipped after the app had been in the background).
+  - Settings → Permissions: 'Send a test notification' button, plus iPhone 'Add to Home Screen' and Android battery tips.
+- New: backend/test/push.test.mjs; frontend tests updated. Files: frontend/src/push.js, public/sw.js, announce.js, floatingAi.js, Codex.jsx, Settings.jsx, PermissionsPanel.jsx; backend/src/push.js, routes/push.js, callEngine.js.
+
+## CHEX learn: first language free, other languages Premium
+- The Learn page now first asks the person to choose ONE language (free). It is chosen once and kept on the server.
+- Every other language is Premium (shown with a lock). It unlocks when all the languages you own have 100 finished levels, and costs 100 CHEX coins (charged atomically from the wallet).
+- The server enforces it: levels/coins for a locked language are refused (`locked`). People who already studied keep the languages they started.
+- New endpoints: GET /api/life/learn/languages, POST /api/life/learn/language, POST /api/life/learn/unlock. New table: learn_langs.
+- Files: backend/src/coins.js, routes/life.js, schema.sql, test/life.test.mjs; frontend/src/learn/Learn.jsx, learn.css, api.js.
+
 ## v85 – Responsive pass (phones, tablets, desktop)
 - New `frontend/src/responsive.css` (loaded last): nothing scrolls sideways, long words wrap, media/dialogs/sheets always fit the screen, fluid text sizes, reduced-motion support.
 - Touch screens: buttons, chips, selects and links are at least 36-40px so they are easy to tap (post actions, game chips, sticky chips, Codex mini-bar, profile stats, login link, emoji picker).

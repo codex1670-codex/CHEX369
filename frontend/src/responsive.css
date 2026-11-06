@@ -6,7 +6,9 @@
 
 /* ---- everywhere: nothing may push the page sideways; long words wrap; media scales ---- */
 html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
-html, body { max-width: 100%; overflow-x: clip; }
+html, body { max-width: 100%; overflow-x: clip; overflow-y: visible; }
+html { overflow-y: auto; scroll-behavior: auto; -webkit-overflow-scrolling: touch; }
+body { touch-action: pan-y pinch-zoom; overscroll-behavior-y: auto; }
 :where(img, video, canvas, svg, iframe) { max-width: 100%; }
 :where(img, video) { height: auto; }
 :where(p, li, h1, h2, h3, h4, h5, h6, label, td, th, .glass-card, .main-col) { overflow-wrap: anywhere; }
@@ -20,7 +22,10 @@ html, body { max-width: 100%; overflow-x: clip; }
 :where(.main-col) { font-size: clamp(14px, 0.9rem + 0.15vw, 16px); }
 
 /* dialogs, sheets and pop-ups always fit the screen and scroll inside themselves */
-:where([role="dialog"], [class$="-sheet"], [class$="-box"], [class$="-modal"], [class$="-panel"]) { max-width: 100%; max-height: 100dvh; overflow-y: auto; overscroll-behavior: contain; }
+/* Only real pop-ups scroll inside themselves. Inline cards that merely happen to end in "-panel"
+   (Phone permissions, Learn, editor side panels) must flow with the page — otherwise each becomes a
+   second scroll container that traps your finger ("can't scroll") and shows a double scrollbar. */
+:where([role="dialog"], [class$="-sheet"], [class$="-box"], [class$="-modal"], [class$="-panel"]):where(:not(.perm-panel, .lx-panel, .me-panel)) { max-width: 100%; max-height: 100dvh; overflow-y: auto; overscroll-behavior: contain; }
 
 /* sticky / fixed controls respect notches and the home bar */
 .nav-bar-mobile { padding-left: max(4px, env(safe-area-inset-left, 0px)); padding-right: max(4px, env(safe-area-inset-right, 0px)); }

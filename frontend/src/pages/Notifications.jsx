@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { connectSocket } from '../socket.js';
 import { api } from '../api.js';
 import Avatar from '../components/Avatar.jsx';
 
@@ -27,6 +28,13 @@ export default function Notifications({ onOpenProfile }) {
     if ((res.unreadOther ?? res.unreadCount) > 0) { await api.markAllNotificationsRead('other'); window.dispatchEvent(new Event('chex:refresh-counts')); }
   };
   useEffect(() => { load(); }, []);
+  useEffect(() => {
+    const s = connectSocket();
+    const on = () => { load().catch(() => {}); };
+    s.on('notification:new', on);
+    return () => s.off('notification:new', on);
+    // eslint-disable-next-line
+  }, []);
 
   return (
     <div className="page-narrow">
