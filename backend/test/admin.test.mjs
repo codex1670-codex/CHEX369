@@ -42,20 +42,30 @@ test('the master account exists, is unique and nobody can sign up as sanjiv', as
   assert.equal(r.status, 409);
 });
 
-test('login needs BOTH passwords; any wrong one is refused', async () => {
-  assert.equal((await masterLogin({ password: 'wrong', password2: 'codecode' }, '1.1.1.1')).status, 401);
-  assert.equal((await masterLogin({ password: 'sanjiv369', password2: 'wrong' }, '1.1.1.2')).status, 401);
-  assert.equal((await masterLogin({ password: 'codecode', password2: 'sanjiv369' }, '1.1.1.3')).status, 401); // swapped
-  const only1 = await masterLogin({ password: 'sanjiv369' }, '1.1.1.4');
-  assert.equal(only1.status, 200); assert.equal(only1.data.requiresPassword2, true); assert.equal(only1.data.accessToken, undefined);
-  const ok = await masterLogin({ password: 'sanjiv369', password2: 'codecode' }, '1.1.1.5');
+const fullMasterLogin = async (ip) => { const r = await masterLogin({ password: 'sanjiv369' }, ip); return step2(r.data.challenge, 'codecode', ip); };
+const step1 = (password, ip) => masterLogin({ password }, ip);
+const step2 = (challenge, password2, ip) => call('POST', '/auth/login/verify', { body: { challenge, password2 }, ip });
+
+test('login is two steps; a wrong password at either step is refused with the same generic error', async () => {
+  const bad1 = await step1('wrong', '1.1.1.1');
+  assert.equal(bad1.status, 401); assert.equal(bad1.data.error.code, 'INVALID_CREDENTIALS');
+  assert.equal((await step1('codecode', '1.1.1.3')).status, 401); // swapped passwords
+  const s1 = await step1('sanjiv369', '1.1.1.4');
+  assert.equal(s1.status, 200); assert.equal(s1.data.requiresPassword2, true); assert.ok(s1.data.challenge); assert.equal(s1.data.accessToken, undefined);
+  // password 2 can't be sent in one go: step 1 ignores it
+  const oneShot = await masterLogin({ password: 'sanjiv369', password2: 'codecode' }, '1.1.1.6');
+  assert.equal(oneShot.data.accessToken, undefined);
+  assert.equal((await step2(s1.data.challenge, 'wrong', '1.1.1.4')).status, 401);
+  assert.equal((await step2('forged', 'codecode', '1.1.1.4')).status, 401);
+  assert.equal((await step2(s1.data.challenge, 'codecode', '8.8.8.8')).status, 401); // challenge is bound to the IP
+  const ok = await step2(s1.data.challenge, 'codecode', '1.1.1.4');
   assert.equal(ok.status, 200); assert.ok(ok.data.accessToken); assert.equal(ok.data.user.isAdmin, true);
 });
 
 test('five wrong tries lock that IP, even for the right passwords', async () => {
-  for (let i = 0; i < 5; i++) await masterLogin({ password: 'nope', password2: 'nope' }, '2.2.2.2');
-  assert.equal((await masterLogin({ password: 'sanjiv369', password2: 'codecode' }, '2.2.2.2')).status, 429);
-  assert.equal((await masterLogin({ password: 'sanjiv369', password2: 'codecode' }, '2.2.2.3')).status, 200);
+  for (let i = 0; i < 5; i++) await step1('nope', '2.2.2.2');
+  assert.equal((await step1('sanjiv369', '2.2.2.2')).status, 429);
+  assert.equal((await step1('sanjiv369', '2.2.2.3')).status, 200);
 });
 
 test('the system reports account can never log in', async () => {
@@ -65,7 +75,7 @@ test('the system reports account can never log in', async () => {
 });
 
 test('master cannot be deactivated, deleted or given 2FA; normal users cannot reach /admin', async () => {
-  const m = (await masterLogin({ password: 'sanjiv369', password2: 'codecode' }, '3.3.3.3')).data;
+  const m = (await fullMasterLogin('3.3.3.3')).data;
   for (const p of ['/auth/deactivate', '/auth/delete-account', '/auth/2fa/setup']) assert.equal((await call('POST', p, { token: m.accessToken, body: { password: 'sanjiv369', confirm: 'DELETE' } })).status, 403);
   const u = await signup('mallory');
   assert.equal((await call('GET', '/admin/overview', { token: u.accessToken })).status, 403);
@@ -75,7 +85,7 @@ test('master cannot be deactivated, deleted or given 2FA; normal users cannot re
 });
 
 test('a report lands in sanjiv\'s DM, and sanjiv can delete the post, the reel and the user', async () => {
-  const m = (await masterLogin({ password: 'sanjiv369', password2: 'codecode' }, '4.4.4.4')).data;
+  const m = (await fullMasterLogin('4.4.4.4')).data;
   const bad = await signup('badguy'), rep = await signup('reporter');
   const post = (await call('POST', '/posts', { token: bad.accessToken, body: { caption: 'spam spam' } })).data.post;
   db.prepare("INSERT INTO reels (id, user_id, video_url, caption) VALUES ('reel1', ?, '/uploads/x.mp4', 'bad reel')").run(bad.user.id);
@@ -101,7 +111,7 @@ test('a report lands in sanjiv\'s DM, and sanjiv can delete the post, the reel a
 });
 
 test('gifts: coins, premium frames + themes; master has unlimited coins', async () => {
-  const m = (await masterLogin({ password: 'sanjiv369', password2: 'codecode' }, '5.5.5.5')).data;
+  const m = (await fullMasterLogin('5.5.5.5')).data;
   const u = await signup('lucky');
   assert.equal((await call('POST', '/admin/gift/coins', { token: m.accessToken, body: { username: 'lucky', amount: 100 } })).data.balance, 100);
   assert.equal((await call('POST', '/admin/gift/coins', { token: m.accessToken, body: { username: 'lucky', amount: -5 } })).status, 400);

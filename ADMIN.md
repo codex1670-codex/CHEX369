@@ -2,9 +2,9 @@
 
 A permanent owner account that always exists (re-created on every server start).
 
-**Login** — username `sanjiv`, then the app asks for the second password. Both must be right
-(`password 1` first, `password 2` on the next step). A wrong one gives the normal
-"Incorrect username/email or password" error. 5 wrong tries from one IP lock that IP for 15 minutes.
+**Login** — two steps. Username `sanjiv` + password 1 on the normal login form; if both are right the app asks for
+password 2 (verified together with a 3-minute signed challenge tied to your IP). Anything wrong, at either step, gives
+the same generic "Incorrect username/email or password" error. 5 wrong tries from one IP lock that IP for 15 minutes.
 
 **What it can do** (🛡️ Admin in the ＋ menu, plus 🛡️ buttons on feed posts, reels and comments)
 - Delete any post, reel, comment, reel comment, story, note or message — from the feed or by ID

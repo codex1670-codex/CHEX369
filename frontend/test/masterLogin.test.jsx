@@ -9,26 +9,25 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 const typeInto = (ph, value) => fireEvent.change(screen.getByPlaceholderText(ph), { target: { value } });
 const json = (status, body) => Promise.resolve({ ok: status < 400, status, json: () => Promise.resolve(body) });
 
-describe('master (sanjiv) two-password login screen', () => {
-  it('asks for the second password after the first, then sends both', async () => {
+describe('two-step login screen', () => {
+  it('asks for the second password after the first, then verifies with the challenge', async () => {
     const calls = [];
     vi.stubGlobal('fetch', vi.fn((url, init) => {
       const body = init?.body ? JSON.parse(init.body) : {};
-      calls.push({ url, body });
-      if (!String(url).endsWith('/auth/login')) return json(401, {});
-      if (!body.password2) return json(200, { requiresPassword2: true });
-      return json(200, { user: { id: 'u', username: 'sanjiv', displayName: 'Sanjiv', isAdmin: true }, accessToken: 'a', refreshToken: 'r' });
+      calls.push({ url: String(url), body });
+      if (String(url).endsWith('/auth/login')) return json(200, { requiresPassword2: true, challenge: 'chal' });
+      if (String(url).endsWith('/auth/login/verify')) return json(200, { user: { id: 'u', username: 'sanjiv', displayName: 'Sanjiv', isAdmin: true }, accessToken: 'a', refreshToken: 'r' });
+      return json(401, {});
     }));
     render(<AuthProvider><Auth /></AuthProvider>);
     typeInto('Username or email', 'sanjiv');
     typeInto('Password', 'sanjiv369');
     fireEvent.click(screen.getByRole('button', { name: 'Log in' }));
-    await waitFor(() => expect(screen.getByPlaceholderText('Second password')).toBeTruthy());
-    expect(screen.queryByPlaceholderText('Password')).toBeNull();
-    typeInto('Second password', 'codecode');
+    await waitFor(() => expect(screen.queryByPlaceholderText('Username or email')).toBeNull());
+    expect(screen.queryByPlaceholderText('Username or email')).toBeNull();
+    typeInto('Password', 'codecode');
     fireEvent.click(screen.getByRole('button', { name: 'Verify' }));
-    await waitFor(() => expect(calls.filter(c => String(c.url).endsWith('/auth/login')).length).toBe(2));
-    const last = calls.filter(c => String(c.url).endsWith('/auth/login')).pop().body;
-    expect(last).toMatchObject({ identifier: 'sanjiv', password: 'sanjiv369', password2: 'codecode' });
+    await waitFor(() => expect(calls.some(c => c.url.endsWith('/auth/login/verify'))).toBe(true));
+    expect(calls.find(c => c.url.endsWith('/auth/login/verify')).body).toEqual({ challenge: 'chal', password2: 'codecode' });
   });
 });

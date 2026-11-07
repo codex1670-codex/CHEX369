@@ -8,7 +8,7 @@ import db from '../db.js';
 import { ACCESS_SECRET, REFRESH_SECRET, ACCESS_TTL, REFRESH_TTL_DAYS, requireAuth } from '../middleware/auth.js';
 import persistence from '../persistence.js';
 import { deactivateUser, reactivateUser, deleteUserPermanently, disconnectUserSockets } from '../accountService.js';
-import { checkMasterPassword1, checkMasterPasswords, masterLockedFor, masterFailed, masterSucceeded } from '../admin.js';
+import { verifyMasterPassword1, verifyMasterPassword2, issueMasterChallenge, readMasterChallenge, masterLockedFor, masterFailed, masterSucceeded } from '../admin.js';
 
 const router = Router();
 
@@ -96,16 +96,11 @@ router.post('/login', (req, res) => {
   if (!user || user.account_status === 'deleted' || user.role === 'system') return res.status(401).json(genericError);
 
   if (user.role === 'master') {
-    // The master account needs BOTH passwords. Wrong password(s) = no login; 5 misses lock this IP for 15 minutes.
+    // Step 1 of 2. A wrong password looks exactly like any other failed login; 5 misses lock the IP for 15 minutes.
     const ip = req.ip || 'unknown';
     if (masterLockedFor(ip)) return res.status(429).json({ error: { code: 'RATE_LIMITED', message: 'Too many attempts. Please wait a few minutes and try again.' } });
-    if (!checkMasterPassword1(password)) { masterFailed(ip); return res.status(401).json(genericError); }
-    const { password2 } = req.body || {};
-    if (typeof password2 !== 'string' || !password2) {
-      return res.status(200).json({ requiresPassword2: true, message: 'Enter your second password.' });
-    }
-    if (!checkMasterPasswords(password, password2)) { masterFailed(ip); return res.status(401).json(genericError); }
-    masterSucceeded(ip);
+    if (!verifyMasterPassword1(password)) { masterFailed(ip); return res.status(401).json(genericError); }
+    return res.status(200).json({ requiresPassword2: true, challenge: issueMasterChallenge(user.id, ip) });
   } else {
     const ok = bcrypt.compareSync(password, user.password_hash);
     if (!ok) return res.status(401).json(genericError);
@@ -132,6 +127,21 @@ router.post('/login', (req, res) => {
 
   const tokens = issueTokens(user.id);
   res.json({ user: publicUser(user), ...tokens, reactivated });
+});
+
+// Master login, step 2 of 2: needs the challenge from step 1 plus the second password.
+router.post('/login/verify', (req, res) => {
+  const { challenge, password2 } = req.body || {};
+  const genericError = { error: { code: 'INVALID_CREDENTIALS', message: 'Incorrect username/email or password.' } };
+  const ip = req.ip || 'unknown';
+  if (masterLockedFor(ip)) return res.status(429).json({ error: { code: 'RATE_LIMITED', message: 'Too many attempts. Please wait a few minutes and try again.' } });
+  const masterId = readMasterChallenge(challenge, ip);
+  if (!masterId || typeof password2 !== 'string') return res.status(401).json(genericError);
+  if (!verifyMasterPassword2(password2)) { masterFailed(ip); return res.status(401).json(genericError); }
+  masterSucceeded(ip);
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(masterId);
+  const tokens = issueTokens(user.id);
+  res.json({ user: publicUser(user), ...tokens, reactivated: false });
 });
 
 router.post('/refresh', (req, res) => {

@@ -1,34 +1,42 @@
 // The permanent MASTER account ("sanjiv") and everything that only it may do.
 //
 //  - It always exists: seedMasterAccount() runs on every boot and re-creates / repairs it.
-//  - Logging in needs BOTH passwords (see routes/auth.js). Only bcrypt hashes live here, never the
-//    plain passwords. To change them, set NEXA_MASTER_HASH_1 / NEXA_MASTER_HASH_2 (bcrypt hashes) in the
-//    environment, e.g.  node -e "console.log(require('bcryptjs').hashSync('new password', 12))"
+//  - Logging in is two steps (see routes/auth.js). Only bcrypt hashes live here, never plain passwords.
 //  - It cannot be deactivated, deleted, renamed or given 2FA by anyone (see guards in routes/auth.js).
 //  - It has unlimited CHEX coins and every store item (see coins.js).
 //  - Reports from users arrive in its DM inbox from the "CHEX Reports" system account.
 import bcrypt from 'bcryptjs';
 import { v4 as uuid } from 'uuid';
 import crypto from 'crypto';
+import jwt from 'jsonwebtoken';
+import { ACCESS_SECRET } from './middleware/auth.js';
 import db from './db.js';
 import persistence from './persistence.js';
 import { sendDirectMessage } from './routes/messages.js';
 
 export const MASTER_USERNAME = 'sanjiv';
-// bcrypt(cost 12) of the two master passwords.
-const MASTER_HASH_1 = process.env.NEXA_MASTER_HASH_1 || '$2a$12$UVvrRVqJ2OBHCuanW9xBneNRYygX.ftk2HiAhRorHi.VPQAfceRIS';
-const MASTER_HASH_2 = process.env.NEXA_MASTER_HASH_2 || '$2a$12$1AAk29mJtOkNj8evVI9Q8.6Hr0.kiyoEzijAEhiR9cZh5ko6VAw.e';
+// Only bcrypt (cost 12) hashes are stored - never the plain passwords. Override both in production with
+// NEXA_MASTER_HASH_1 / NEXA_MASTER_HASH_2 (see ADMIN.md).
+const MASTER_HASH_1 = process.env.NEXA_MASTER_HASH_1 || '$2a$12$gEXog2o2OVnq7atyHPTP3eEKVETEHgJFedeuVyCRKUU/LtSAc3zxm';
+const MASTER_HASH_2 = process.env.NEXA_MASTER_HASH_2 || '$2a$12$CRoFqHwueLcfAHLOn428LOPKwdFMwHAoax17QOzOZFy.XXK5GD2Iq';
 
 export const isMaster = (userId) => !!userId && db.prepare("SELECT 1 FROM users WHERE id = ? AND role = 'master'").get(userId) !== undefined;
 export const masterRow = () => db.prepare("SELECT * FROM users WHERE role = 'master'").get();
 
-// Both passwords must match. Always runs both comparisons so timing does not reveal which one was wrong.
-export function checkMasterPasswords(p1, p2) {
-  const a = bcrypt.compareSync(String(p1 ?? '').trim(), MASTER_HASH_1);
-  const b = bcrypt.compareSync(String(p2 ?? '').trim(), MASTER_HASH_2);
-  return a && b;
+// ---- Master login: step 1 = password 1, step 2 = password 2 (bound to a short-lived signed challenge). ----
+export const verifyMasterPassword1 = (p) => bcrypt.compareSync(String(p ?? '').trim(), MASTER_HASH_1);
+export const verifyMasterPassword2 = (p) => bcrypt.compareSync(String(p ?? '').trim(), MASTER_HASH_2);
+
+const CHALLENGE_SECRET = crypto.createHmac('sha256', ACCESS_SECRET).update('master-step2').digest('hex');
+// Proof that password 1 was just entered correctly from this IP. Valid for 3 minutes, useless for anything else.
+export const issueMasterChallenge = (userId, ip) =>
+  jwt.sign({ typ: 'master-step2', sub: userId, ip }, CHALLENGE_SECRET, { expiresIn: '3m' });
+export function readMasterChallenge(token, ip) {
+  try {
+    const p = jwt.verify(String(token ?? ''), CHALLENGE_SECRET);
+    return p.typ === 'master-step2' && p.ip === ip && isMaster(p.sub) ? p.sub : null;
+  } catch { return null; }
 }
-export const checkMasterPassword1 = (p1) => bcrypt.compareSync(String(p1 ?? '').trim(), MASTER_HASH_1);
 
 // ---- Brute-force lock for the master login: 5 wrong tries from one IP => locked 15 minutes. ----
 const fails = new Map(); // ip -> { n, until }

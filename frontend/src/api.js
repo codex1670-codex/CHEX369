@@ -132,6 +132,7 @@ const withClock = (context) => ({ ...(context || {}), clientTz: Intl.DateTimeFor
 export const api = {
   signup: (payload) => request('/auth/signup', { method: 'POST', body: payload }),
   login: (payload) => request('/auth/login', { method: 'POST', body: payload }),
+  loginVerify: (payload) => request('/auth/login/verify', { method: 'POST', body: payload }),
   logout: () => request('/auth/logout', { method: 'POST', body: { refreshToken: getStoredRefreshToken() } }),
   me: () => request('/auth/me'),
 

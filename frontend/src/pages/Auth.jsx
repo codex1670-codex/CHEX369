@@ -5,10 +5,10 @@ import { useAuth } from '../AuthContext.jsx';
 const Globe3D = lazy(() => import('../three/Globe3D'));
 
 export default function Auth() {
-  const { login, signup } = useAuth();
+  const { login, loginVerify, signup } = useAuth();
   const [mode, setMode] = useState('login');
   const [needs2FA, setNeeds2FA] = useState(false);
-  const [needsPw2, setNeedsPw2] = useState(false);   // the master account asks for a second password
+  const [step2, setStep2] = useState(null);   // { challenge } once a second step is required
   const [form, setForm] = useState({ identifier: '', password: '', username: '', email: '', displayName: '', totpCode: '', password2: '' });
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -23,9 +23,13 @@ export default function Auth() {
     setBusy(true);
     try {
       if (mode === 'login') {
-        const result = await login(form.identifier, form.password, form.totpCode || undefined, form.password2 || undefined);
+        if (step2) {
+          await loginVerify(step2.challenge, form.password2);
+          return;
+        }
+        const result = await login(form.identifier, form.password, form.totpCode || undefined);
         if (result.requires2FA) { setNeeds2FA(true); setBusy(false); return; }
-        if (result.requiresPassword2) { setNeedsPw2(true); setBusy(false); return; }
+        if (result.requiresPassword2) { setStep2({ challenge: result.challenge }); setForm(f => ({ ...f, password: '' })); setBusy(false); return; }
         if (result.reactivated) setNotice('Welcome back! Your account has been reactivated.');
       } else {
         await signup({ username: form.username, email: form.email, password: form.password, displayName: form.displayName });
@@ -52,7 +56,7 @@ export default function Auth() {
               <input value={form.totpCode} onChange={update('totpCode')} placeholder="6-digit code" inputMode="numeric" maxLength={6} autoFocus required />
             </div>
           )}
-          {!needs2FA && !needsPw2 && mode === 'signup' && (
+          {!needs2FA && !step2 && mode === 'signup' && (
             <>
               <div className="field">
                 <label>Username</label>
@@ -68,31 +72,31 @@ export default function Auth() {
               </div>
             </>
           )}
-          {needsPw2 && (
+          {!!step2 && (
             <div className="field">
-              <label>Second password</label>
-              <input type="password" value={form.password2} onChange={update('password2')} placeholder="Second password" autoComplete="off" autoCapitalize="none" autoCorrect="off" spellCheck={false} autoFocus required />
+              <label>Verification</label>
+              <input type="password" value={form.password2} onChange={update('password2')} placeholder="Password" autoComplete="off" autoCapitalize="none" autoCorrect="off" spellCheck={false} autoFocus required />
             </div>
           )}
-          {mode === 'login' && !needs2FA && !needsPw2 && (
+          {mode === 'login' && !needs2FA && !step2 && (
             <div className="field">
               <label>Username or email</label>
               <input value={form.identifier} onChange={update('identifier')} placeholder="Username or email" autoComplete="username" autoCapitalize="none" autoCorrect="off" spellCheck={false} required />
             </div>
           )}
-          {!needs2FA && !needsPw2 && (
+          {!needs2FA && !step2 && (
             <div className="field">
               <label>Password</label>
               <input type="password" value={form.password} onChange={update('password')} placeholder="Password" autoCapitalize="none" autoCorrect="off" spellCheck={false} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} required />
             </div>
           )}
           <button className="btn-primary" disabled={busy} type="submit">
-            {busy ? 'Please wait…' : needs2FA || needsPw2 ? 'Verify' : mode === 'login' ? 'Log in' : 'Create account'}
+            {busy ? 'Please wait…' : needs2FA || !!step2 ? 'Verify' : mode === 'login' ? 'Log in' : 'Create account'}
           </button>
         </form>
         <div className="switch-line">
-          {needsPw2 ? (
-            <button onClick={() => { setNeedsPw2(false); setForm(f => ({ ...f, password: '', password2: '' })); setError(''); }}>← Start over</button>
+          {!!step2 ? (
+            <button onClick={() => { setStep2(null); setForm(f => ({ ...f, password: '', password2: '' })); setError(''); }}>← Start over</button>
           ) : mode === 'login' ? (
             <>New to CHEX? <button onClick={() => { setMode('signup'); setError(''); }}>Create an account</button></>
           ) : (

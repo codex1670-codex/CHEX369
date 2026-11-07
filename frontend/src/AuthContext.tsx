@@ -4,13 +4,14 @@ import { unregisterPush } from './push.js';
 import type { User, Tokens } from './types';
 
 interface SignupPayload { username: string; email: string; password: string; displayName?: string }
-type LoginOutcome = { requires2FA: boolean; requiresPassword2?: boolean; reactivated?: boolean };
+type LoginOutcome = { requires2FA: boolean; requiresPassword2?: boolean; challenge?: string; reactivated?: boolean };
 
 export interface AuthContextValue {
   user: User | null;
   setUser: Dispatch<SetStateAction<User | null>>;
   booting: boolean;
-  login: (identifier: string, password: string, totpCode?: string, password2?: string) => Promise<LoginOutcome>;
+  login: (identifier: string, password: string, totpCode?: string) => Promise<LoginOutcome>;
+  loginVerify: (challenge: string, password2: string) => Promise<LoginOutcome>;
   signup: (payload: SignupPayload) => Promise<void>;
   logout: () => Promise<void>;
   clearSession: () => void;
@@ -56,13 +57,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })();
   }, []);
 
-  const login: AuthContextValue['login'] = async (identifier, password, totpCode, password2) => {
-    const data = await api.login({ identifier, password, totpCode, password2 });
+  const login: AuthContextValue['login'] = async (identifier, password, totpCode) => {
+    const data = await api.login({ identifier, password, totpCode });
     if (data.requires2FA) return { requires2FA: true };
-    if (data.requiresPassword2) return { requires2FA: false, requiresPassword2: true };
+    if (data.requiresPassword2) return { requires2FA: false, requiresPassword2: true, challenge: data.challenge };
     setTokens(data);
     setUser(data.user);
     return { requires2FA: false, reactivated: !!data.reactivated };
+  };
+
+  const loginVerify: AuthContextValue['loginVerify'] = async (challenge, password2) => {
+    const data = await api.loginVerify({ challenge, password2 });
+    setTokens(data);
+    setUser(data.user);
+    return { requires2FA: false };
   };
 
   const signup: AuthContextValue['signup'] = async (payload) => {
@@ -72,7 +80,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, setUser, booting, login, signup, logout, clearSession }}>
+    <AuthContext.Provider value={{ user, setUser, booting, login, loginVerify, signup, logout, clearSession }}>
       {children}
     </AuthContext.Provider>
   );
