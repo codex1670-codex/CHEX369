@@ -1,3 +1,5 @@
+// @vitest-environment jsdom
+import React from 'react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, fireEvent, screen, waitFor, cleanup } from '@testing-library/react';
 import { AuthProvider } from '../src/AuthContext.jsx';

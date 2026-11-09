@@ -21,8 +21,8 @@ account becomes the master account on the next start.
 **Changing the passwords** — only bcrypt hashes are stored in `backend/src/admin.js`. To change them,
 set these environment variables (e.g. on Render) and restart:
 
-    NEXA_MASTER_HASH_1=<bcrypt hash of password 1>
-    NEXA_MASTER_HASH_2=<bcrypt hash of password 2>
+    NEXA_MASTER_PASS1_HASH=<bcrypt hash of password 1>
+    NEXA_MASTER_PASS2_HASH=<bcrypt hash of password 2>
 
     node -e "console.log(require('bcryptjs').hashSync('your new password', 12))"
 

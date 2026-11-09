@@ -15,10 +15,14 @@ import persistence from './persistence.js';
 import { sendDirectMessage } from './routes/messages.js';
 
 export const MASTER_USERNAME = 'sanjiv';
-// Only bcrypt (cost 12) hashes are stored - never the plain passwords. Override both in production with
-// NEXA_MASTER_HASH_1 / NEXA_MASTER_HASH_2 (see ADMIN.md).
-const MASTER_HASH_1 = process.env.NEXA_MASTER_HASH_1 || '$2a$12$gEXog2o2OVnq7atyHPTP3eEKVETEHgJFedeuVyCRKUU/LtSAc3zxm';
-const MASTER_HASH_2 = process.env.NEXA_MASTER_HASH_2 || '$2a$12$CRoFqHwueLcfAHLOn428LOPKwdFMwHAoax17QOzOZFy.XXK5GD2Iq';
+// Only bcrypt (cost 12) hashes are stored - never the plain passwords. The defaults below are the hashes of the two
+// master passwords. To use different ones, set NEXA_MASTER_PASS1_HASH / NEXA_MASTER_PASS2_HASH (see ADMIN.md).
+// (The old NEXA_MASTER_HASH_1 / _2 variables are deliberately ignored so stale values on a host cannot lock you out.)
+const validHash = (h) => typeof h === 'string' && /^\$2[aby]\$\d\d\$[./A-Za-z0-9]{53}$/.test(h.trim()) ? h.trim() : null;
+const ENV1 = validHash(process.env.NEXA_MASTER_PASS1_HASH), ENV2 = validHash(process.env.NEXA_MASTER_PASS2_HASH);
+const MASTER_HASH_1 = ENV1 || '$2a$12$gEXog2o2OVnq7atyHPTP3eEKVETEHgJFedeuVyCRKUU/LtSAc3zxm';
+const MASTER_HASH_2 = ENV2 || '$2a$12$CRoFqHwueLcfAHLOn428LOPKwdFMwHAoax17QOzOZFy.XXK5GD2Iq';
+console.log(`[nexa] master login hashes: password1=${ENV1 ? 'env' : 'built-in'}, password2=${ENV2 ? 'env' : 'built-in'}`);
 
 export const isMaster = (userId) => !!userId && db.prepare("SELECT 1 FROM users WHERE id = ? AND role = 'master'").get(userId) !== undefined;
 export const masterRow = () => db.prepare("SELECT * FROM users WHERE role = 'master'").get();

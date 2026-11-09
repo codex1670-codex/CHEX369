@@ -21,7 +21,6 @@
     "jsonwebtoken": "^9.0.2",
     "mongodb": "^6.10.0",
     "multer": "^2.4.0",
-    "nexa": "file:..",
     "otpauth": "^9.5.2",
     "pg": "^8.23.1",
     "socket.io": "^4.7.5",
