@@ -1,0 +1,115 @@
+/* CHEX games — 3D animated play screen (same look as the Learn page) that always fits the screen.
+   CSS only: no new components. Rotation is kept OFF everything that holds a canvas, so pointer
+   coordinates stay exact. Turn off with Settings → Appearance (data-3d="off") or reduced motion. */
+
+/* ───────── 1. Fit the screen ───────── */
+.gx-fullscreen {
+  --g3-pur: #7b3ff2; --g3-pur2: #5b24d8; --g3-edge: #3d1796; --g3-ink: #241a66; --g3-gold: #ffc83d;
+  height: 100vh; height: 100dvh; display: flex; flex-direction: column; perspective: 1200px; isolation: isolate;
+  background: radial-gradient(120% 80% at 50% 0%, #7a48ee 0%, #4b2bb8 45%, #1d0f55 100%);
+  color: #fff;
+}
+.gx-fullscreen:has(> .gm-frame) { overflow: hidden; }
+.gx-fullscreen > button { flex: 0 0 auto; width: auto; margin-bottom: 8px !important; }
+.gx-fullscreen > .glass-card, .gx-fullscreen > .gm-frame { flex: 1 1 0; min-height: 0 !important; width: 100%; display: flex; flex-direction: column; justify-content: flex-start; }
+.gx-fullscreen .gm-frame { padding: clamp(8px, 2vmin, 18px); }
+.gx-fullscreen .gm-head { flex: 0 0 auto; margin-bottom: clamp(6px, 1.5vmin, 14px); }
+.gx-fullscreen .gm-frame > :not(.gm-head) { flex: 1 1 0; min-height: 0; }
+.gx-fullscreen .gm-table { flex: 1 1 0; min-height: 0; gap: clamp(6px, 1.4vmin, 12px); overflow: hidden auto; }
+.gx-fullscreen .gm-table > * { flex-shrink: 0; }
+.gx-fullscreen .gm-table > .gm-stage { flex: 1 1 0; min-height: 0; }
+.gx-fullscreen .gm-hint { font-size: clamp(10.5px, 1.6vmin, 12.5px); }
+.gx-fullscreen .gm-dpad { grid-template-columns: repeat(3, clamp(40px, 7vmin, 58px)); }
+.gx-fullscreen .gm-dpad .gm-btn, .gx-fullscreen .gm-hold { min-height: clamp(38px, 6.5vmin, 50px); }
+
+/* the stage becomes a box we can measure, and the board is sized to the biggest square/ratio that fits it */
+.gx-fullscreen .gm-stage { container-type: size; justify-content: center; max-width: none !important; }
+.gx-fullscreen .gm-stage > .gm-canvas { width: min(100cqw, calc(100cqh * var(--ar, 1))) !important; height: auto !important; max-width: none !important; max-height: 100cqh; }
+.gx-fullscreen .gm-stage > :where(.gm-grid, .gm-db, .gm-rv) { width: min(100cqw, 100cqh) !important; max-width: none !important; margin-inline: auto; }
+.gx-fullscreen .gm-stage > .gm-grid { gap: min(8px, 1.2cqmin); }
+
+/* ───────── 2. 3D animated background (floor grid + floating shapes) ───────── */
+.gx-fullscreen::before {
+  content: ''; position: absolute; left: -50%; right: -50%; bottom: -8%; height: 62%; z-index: -2; pointer-events: none;
+  background:
+    linear-gradient(rgba(255,255,255,.28) 2px, transparent 2px) 0 0 / 100% 56px,
+    linear-gradient(90deg, rgba(255,255,255,.28) 2px, transparent 2px) 0 0 / 56px 100%;
+  transform: perspective(520px) rotateX(64deg); transform-origin: 50% 100%;
+  -webkit-mask-image: linear-gradient(to top, #000 15%, transparent 95%); mask-image: linear-gradient(to top, #000 15%, transparent 95%);
+  animation: g3Floor 2.4s linear infinite;
+}
+@keyframes g3Floor { to { background-position: 0 56px, 56px 0; } }
+.gx-fullscreen::after {
+  content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background:
+    radial-gradient(circle at 50% 50%, #ffe27a 0 38%, #ffb21f 60%, #d97a06 100%) no-repeat,
+    radial-gradient(circle at 50% 50%, #c7b2ff 0 30%, #7b3ff2 70%, #4a1db0 100%) no-repeat,
+    radial-gradient(circle at 50% 50%, #9be7ff 0 30%, #2aa7ff 70%, #1463e0 100%) no-repeat,
+    radial-gradient(circle at 50% 50%, #ff9ac4 0 30%, #ff4f8b 75%, #b80f4a 100%) no-repeat,
+    radial-gradient(circle at 50% 50%, #fff 0 30%, rgba(255,255,255,.6) 100%) no-repeat;
+  background-size: 54px 54px, 78px 78px, 40px 40px, 64px 64px, 28px 28px;
+  background-position: 8% 18%, 90% 26%, 18% 74%, 84% 78%, 50% 8%;
+  filter: drop-shadow(0 14px 10px rgba(10,0,50,.45));
+  animation: g3Orbs 7s ease-in-out infinite alternate;
+}
+@keyframes g3Orbs {
+  0%   { transform: translate3d(0, 0, 0) rotateY(0deg); }
+  50%  { transform: translate3d(8px, -18px, 60px) rotateY(12deg); }
+  100% { transform: translate3d(-8px, 10px, -30px) rotateY(-12deg); }
+}
+
+/* ───────── 3. The game card: chunky 3D slab that floats ───────── */
+.gx-fullscreen .gm-frame {
+  background: linear-gradient(180deg, #ffffff, #f1eaff 70%); color: var(--g3-ink); border: 2px solid rgba(123,63,242,.25); border-radius: 26px;
+  box-shadow: 0 10px 0 var(--g3-edge), 0 28px 50px rgba(10,0,50,.5), inset 0 2px 0 #fff;
+  transform-style: preserve-3d; animation: g3In .6s cubic-bezier(.2,.9,.3,1) both, g3Float 5s ease-in-out .6s infinite;
+}
+@keyframes g3In { from { opacity: 0; transform: translateY(24px) translateZ(-120px) rotateX(-14deg); } }
+@keyframes g3Float { 0%, 100% { translate: 0 0; } 50% { translate: 0 -4px; } }
+.gx-fullscreen .gm-head { background: linear-gradient(180deg, #a06cff, #6a2fe6); border: 0; border-radius: 18px; box-shadow: 0 5px 0 var(--g3-edge), 0 12px 18px rgba(91,36,216,.35), inset 0 2px 0 rgba(255,255,255,.35); transform: translateZ(18px); }
+.gx-fullscreen .gm-head .gm-title { color: #fff; text-shadow: 0 2px 0 rgba(0,0,0,.25); }
+.gx-fullscreen .gm-head .gm-sub { color: #e6dcff; }
+
+/* ───────── 4. 3D controls, scoreboard and board ───────── */
+.gx-fullscreen > button.btn-ghost, .gx-fullscreen .gm-head .btn-ghost {
+  background: linear-gradient(180deg, #fff, #efe7ff); color: var(--g3-pur2); border: 2px solid rgba(123,63,242,.35); border-radius: 14px; font-weight: 900;
+  box-shadow: 0 4px 0 rgba(91,36,216,.45), 0 8px 12px rgba(10,0,50,.25); transition: transform .12s, box-shadow .12s;
+}
+.gx-fullscreen > button.btn-ghost { background: linear-gradient(180deg, #ffe27a, #ffb21f); color: #3a2300; border-color: #e3a015; box-shadow: 0 4px 0 #d97a06, 0 8px 12px rgba(10,0,50,.3); }
+.gx-fullscreen .btn-ghost:active { transform: translateY(3px); box-shadow: 0 1px 0 rgba(91,36,216,.45); }
+.gx-fullscreen .gm-stat { background: #fff; border: 2px solid rgba(123,63,242,.25); border-radius: 14px; color: var(--g3-ink); box-shadow: 0 4px 0 rgba(123,63,242,.25), 0 8px 12px rgba(91,36,216,.12); animation: g3Pop 3.2s ease-in-out infinite; }
+.gx-fullscreen .gm-stat:nth-child(2n) { animation-delay: .4s; } .gx-fullscreen .gm-stat:nth-child(3n) { animation-delay: .8s; }
+@keyframes g3Pop { 0%, 100% { translate: 0 0; } 50% { translate: 0 -3px; } }
+.gx-fullscreen .gm-stat span { color: #6a5fb0; } .gx-fullscreen .gm-stat b { color: var(--g3-pur2); text-shadow: none; }
+.gx-fullscreen .gm-btn { background: linear-gradient(180deg, #fff, #efe7ff); color: var(--g3-pur2); border: 2px solid rgba(123,63,242,.35); border-radius: 14px; box-shadow: 0 5px 0 rgba(91,36,216,.4), 0 10px 14px rgba(10,0,50,.2); transition: transform .12s, box-shadow .12s; }
+.gx-fullscreen .gm-btn:hover:not(:disabled) { transform: translateY(-2px); }
+.gx-fullscreen .gm-btn:active:not(:disabled), .gx-fullscreen .gm-btn.gm-hold:active { transform: translateY(4px); box-shadow: 0 1px 0 rgba(91,36,216,.4); }
+.gx-fullscreen .gm-btn.primary, .gx-fullscreen .gm-tap { background: linear-gradient(180deg, #a06cff, #6a2fe6); color: #fff; border-color: #4a1db0; box-shadow: 0 5px 0 var(--g3-edge), 0 12px 18px rgba(91,36,216,.4), inset 0 2px 0 rgba(255,255,255,.35); }
+.gx-fullscreen .gm-btn.on { background: linear-gradient(180deg, #ffe27a, #ffb21f); color: #3a2300; border-color: #e3a015; }
+.gx-fullscreen .gm-canvas { border: 3px solid var(--g3-pur); border-radius: 18px; box-shadow: 0 8px 0 var(--g3-edge), 0 22px 34px rgba(10,0,50,.45), 0 0 0 4px rgba(255,255,255,.7); }
+.gx-fullscreen .gm-grid, .gx-fullscreen .gm-db { filter: drop-shadow(0 8px 0 rgba(61,23,150,.55)) drop-shadow(0 18px 14px rgba(10,0,50,.3)); }
+.gx-fullscreen :where(.gm-tile, .gm-mem, .gm-ttt, .gm-lo, .gm-c4, .gm-rv-cell) { box-shadow: 0 4px 0 rgba(61,23,150,.45); transition: transform .15s, box-shadow .15s; }
+.gx-fullscreen :where(.gm-mem, .gm-ttt, .gm-lo, .gm-rv-cell):hover:not(:disabled) { transform: translateY(-3px) translateZ(10px) scale(1.04); box-shadow: 0 8px 0 rgba(61,23,150,.45); }
+.gx-fullscreen .gm-mem.up { animation: g3Flip .45s ease-out; }
+@keyframes g3Flip { from { transform: rotateY(90deg); } }
+.gx-fullscreen .gm-ttt, .gx-fullscreen .gm-c4 { animation: g3Drop .35s cubic-bezier(.3,1.5,.5,1); }
+@keyframes g3Drop { from { transform: scale(.4) translateZ(-40px); opacity: .3; } }
+.gx-fullscreen .gm-card { box-shadow: 0 4px 0 rgba(61,23,150,.4), 0 10px 14px rgba(10,0,50,.3); transition: transform .15s; }
+.gx-fullscreen .gm-card.hl { transform: translateY(-8px) translateZ(14px) rotateZ(-2deg); }
+.gx-fullscreen .gm-hint, .gx-fullscreen .gm-result, .gx-fullscreen .gm-label { color: #6a5fb0; font-weight: 700; }
+.gx-fullscreen .gm-overlay { background: radial-gradient(circle at 50% 30%, rgba(123,63,242,.95), rgba(20,8,60,.96)); }
+.gx-fullscreen .gm-overlay-title { color: #ffe27a; text-shadow: 0 2px 0 #d97a06, 0 5px 0 #a55a00, 0 12px 18px rgba(0,0,0,.5); animation: g3Pop 2.4s ease-in-out infinite; }
+.gx-fullscreen .gm-countdown { color: #ffe27a; text-shadow: 0 4px 0 #a55a00, 0 0 28px rgba(255,200,60,.7); animation: g3Beat 1s ease-in-out infinite; }
+@keyframes g3Beat { 50% { transform: scale(1.18); } }
+
+/* ───────── 5. Off switches ───────── */
+:root[data-3d="off"] .gx-fullscreen::before, :root[data-3d="off"] .gx-fullscreen::after { display: none; }
+:root[data-3d="off"] .gx-fullscreen * , :root[data-3d="off"] .gx-fullscreen { animation: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  .gx-fullscreen, .gx-fullscreen *, .gx-fullscreen::before, .gx-fullscreen::after { animation: none !important; }
+}
+/* very short screens (phone landscape): give the board all the room */
+@media (max-height: 520px) {
+  .gx-fullscreen .gm-sub, .gx-fullscreen .gm-hint { display: none; }
+  .gx-fullscreen .gm-head { padding: 4px 10px; }
+}

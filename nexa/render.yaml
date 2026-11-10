@@ -1,0 +1,67 @@
+# Render Blueprint — web app + AI service + Postgres + Valkey.
+# Accounts + uploads are kept in MongoDB (MONGODB_URI), so the free plan works:
+# a restart, sleep or redeploy no longer erases anything.
+envVarGroups:
+  - name: chex-shared
+    envVars:
+      - key: AI_SERVICE_TOKEN      # shared secret between the web app and the AI service
+        generateValue: true
+
+databases:
+  - name: chex-postgres
+    plan: free                      # NOTE: Render's free Postgres expires after 30 days — upgrade for production
+    databaseName: chex
+    user: chex
+
+services:
+  - type: keyvalue                  # Redis-compatible (Valkey): cache + Socket.IO adapter
+    name: chex-cache
+    plan: free
+    ipAllowList: []                 # internal connections only
+
+  - type: web
+    name: chex-ai
+    runtime: docker
+    plan: free
+    dockerfilePath: ./ai-service/Dockerfile
+    dockerContext: ./ai-service
+    healthCheckPath: /health
+    envVars:
+      - fromGroup: chex-shared
+      - key: ANTHROPIC_API_KEY
+        sync: false
+
+  - type: web
+    name: chex
+    runtime: docker
+    plan: free
+    healthCheckPath: /api/ready
+    envVars:
+      - fromGroup: chex-shared
+      - key: NEXA_ACCESS_SECRET
+        generateValue: true
+      - key: NEXA_REFRESH_SECRET
+        generateValue: true
+      - key: MONGODB_URI          # paste your MongoDB Atlas connection string in the Render dashboard
+        sync: false
+      - key: MONGODB_DB
+        value: chex
+      - key: DATABASE_URL
+        fromDatabase: { name: chex-postgres, property: connectionString }
+      - key: REDIS_URL
+        fromService: { type: keyvalue, name: chex-cache, property: connectionString }
+      - key: AI_SERVICE_URL
+        fromService: { type: web, name: chex-ai, envVarKey: RENDER_EXTERNAL_URL }
+      - key: MAX_VIDEO_MB
+        value: "100"
+      - key: ANTHROPIC_API_KEY    # optional (enables the AI features)
+        sync: false
+      # Calls between different networks / mobile data need a TURN relay for a steady connection.
+      # Free options: Metered.ca, Cloudflare Calls TURN, or your own coturn. Comma-separate several URLs, e.g.
+      # turn:host:80,turn:host:443?transport=tcp,turns:host:443?transport=tcp
+      - key: TURN_URL
+        sync: false
+      - key: TURN_USERNAME
+        sync: false
+      - key: TURN_CREDENTIAL
+        sync: false

@@ -1,0 +1,248 @@
+/* ═════════════════════════════════════════════════════════════════════════════════════════
+   Responsive layer — loaded last. Makes every page, button and text fit phones, tablets and
+   desktops. Rules use :where() / media queries so they only fill gaps and never fight the
+   page-specific styles. Checked at 320, 360, 390, 768 and 1280 px wide.
+   ═════════════════════════════════════════════════════════════════════════════════════════ */
+
+/* ---- everywhere: nothing may push the page sideways; long words wrap; media scales ---- */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+html, body { max-width: 100%; overflow-x: clip; overflow-y: visible; }
+html { overflow-y: auto; scroll-behavior: auto; -webkit-overflow-scrolling: touch; }
+body { touch-action: pan-y pinch-zoom; overscroll-behavior-y: auto; }
+:where(img, video, canvas, svg, iframe) { max-width: 100%; }
+:where(img, video) { height: auto; }
+:where(p, li, h1, h2, h3, h4, h5, h6, label, td, th, .glass-card, .main-col) { overflow-wrap: anywhere; }
+:where(h1, h2, h3, .page-title) { text-wrap: balance; }
+:where(pre, code, kbd) { max-width: 100%; overflow-x: auto; white-space: pre-wrap; word-break: break-word; }
+:where(table) { display: block; max-width: 100%; overflow-x: auto; }
+:where(input, textarea, select) { max-width: 100%; }
+
+/* fluid headings and body copy: comfortable on a 320px phone, not tiny on a 1920px monitor */
+.page-title { font-size: clamp(18px, 1.1rem + 0.8vw, 28px); }
+:where(.main-col) { font-size: clamp(14px, 0.9rem + 0.15vw, 16px); }
+
+/* dialogs, sheets and pop-ups always fit the screen and scroll inside themselves */
+/* Only real pop-ups scroll inside themselves. Inline cards that merely happen to end in "-panel"
+   (Phone permissions, Learn, editor side panels) must flow with the page — otherwise each becomes a
+   second scroll container that traps your finger ("can't scroll") and shows a double scrollbar. */
+:where([role="dialog"], [class$="-sheet"], [class$="-box"], [class$="-modal"], [class$="-panel"]):where(:not(.perm-panel, .lx-panel, .me-panel)) { max-width: 100%; max-height: 100dvh; overflow-y: auto; overscroll-behavior: contain; }
+
+/* sticky / fixed controls respect notches and the home bar */
+.nav-bar-mobile { padding-left: max(4px, env(safe-area-inset-left, 0px)); padding-right: max(4px, env(safe-area-inset-right, 0px)); }
+
+/* ---- touch screens: every button is a comfortable thumb target (≥ 40 × 40 px) ---- */
+@media (pointer: coarse) {
+  :where(button, [role="button"], summary) { touch-action: manipulation; }
+  .post-actions button { min-height: 40px; min-width: 40px; padding: 8px 6px; display: inline-flex; align-items: center; justify-content: center; gap: 4px; }
+  .post-save { min-width: 40px; min-height: 40px; }
+  .react-chip { min-height: 32px; padding: 4px 10px; }
+  .gx-chip { min-height: 36px; padding: 6px 12px; }
+  .gm-chipbtn, .sc-chip, .msg-new-group { min-height: 38px; }
+  .sc-dot { min-width: 34px; min-height: 34px; }
+  .codex-mini-btn { width: 36px; height: 36px; font-size: 15px; }
+  .codex-grip { min-width: 32px; min-height: 32px; }
+  :where(select, input:not([type="checkbox"]):not([type="radio"]):not([type="range"])) { min-height: 40px; }
+  .btn-ghost, .btn-primary { min-height: 42px; }
+  .pwa-btn { min-height: 40px; min-width: 64px; }
+  .ef-chip button { width: 32px; height: 32px; font-size: 14px; }
+  .ef-pick { width: 44px; height: 44px; }
+  .switch-line button, .ps-stat { min-height: 40px; padding-top: 10px; padding-bottom: 10px; }
+}
+
+/* ---- phones ---- */
+@media (max-width: 800px) {
+  /* the floating Ask bar: wide enough to actually type in, still clear of the menu bar */
+  .codex-mini-wrap { width: min(340px, calc(100vw - 20px)); left: 10px; }
+  .codex-mini input { min-width: 70px; }
+  .codex-mini select { max-width: 64px; font-size: 12px; text-overflow: ellipsis; }
+  .codex-mini-reply { width: min(300px, calc(100vw - 20px)); }
+
+  /* page headers and button rows wrap instead of overflowing */
+  :where(.page-header, .tabs, .btn-row, .gm-row, .row-wrap) { flex-wrap: wrap; }
+  .page-title { overflow-wrap: anywhere; }
+
+  /* Game Store rows: a bit more room for the title */
+  .gx-title { word-break: break-word; }
+}
+
+/* ---- very small phones (≤ 360px) ---- */
+@media (max-width: 360px) {
+  .main-col:not(.fixed-page) { padding-left: 10px; padding-right: 10px; }
+  .post-card.glass-card { margin-left: -10px; margin-right: -10px; }   /* stay edge-to-edge with the narrower page padding */
+  .nb-lbl { font-size: 9px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+  .nav-bar-mobile button { font-size: 18px; }
+  .btn-primary, .btn-ghost { padding-left: 11px; padding-right: 11px; font-size: 13.5px; }
+  .gx-row { padding-right: 8px; }
+  .gx-actions .gx-btn { padding-left: 6px; padding-right: 6px; }
+}
+
+/* ---- landscape phones (short screens): give the page the height back ---- */
+@media (max-height: 480px) and (orientation: landscape) {
+  .codex-mini-wrap { display: none; }
+  .main-col:not(.fixed-page) { padding-bottom: 72px; }
+  .nav-bar-mobile button { min-height: 40px; }
+  .nb-lbl { display: none; }
+}
+
+/* ---- desktop: keep reading pages a comfortable width instead of stretching edge to edge ---- */
+@media (min-width: 1000px) {
+  .page-narrow { max-width: 780px; margin-left: auto; margin-right: auto; }
+}
+@media (min-width: 1600px) {
+  .main-col:not(.fixed-page) { max-width: 1320px; }
+}
+
+/* ---- reduced motion: calm the decorative animation everywhere ---- */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; }
+}
+
+/* ═════════════════════════════════════════════════════════════════════════════════════════
+   Round 2 — gaps found in an audit of every page: fixed widths, 100vh on phones (the address bar
+   hides part of it), the 7-button bottom bar on 320px screens, tablets, and the AI panel.
+   ═════════════════════════════════════════════════════════════════════════════════════════ */
+
+/* the AI (Codex) panel never wider than the screen, and always clear of the notch and home bar */
+.codex-panel { width: min(340px, calc(100vw - 24px)); right: max(12px, min(28px, 3vw)); max-height: min(480px, calc(100dvh - 120px)); }
+
+/* use the real visible height on phones (100vh ignores the browser's address bar) */
+@supports (height: 100dvh) {
+  .messages-layout { height: calc(100dvh - 48px); }
+  .main-col.fixed-page { height: 100dvh; }
+  .nav-rail, .app-shell { min-height: 100dvh; }
+}
+
+/* ---- phones ---- */
+@media (max-width: 800px) {
+  /* 7 bottom-bar buttons share the width equally and never overflow */
+  .nav-bar-mobile { display: flex; }
+  .nav-bar-mobile > button { flex: 1 1 0; min-width: 0; padding-left: 2px; padding-right: 2px; }
+  .nb-lbl { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* two-column layouts become one column */
+  :where(.messages-layout, .profile-grid, .settings-grid, .two-col, .cols-2) { grid-template-columns: minmax(0, 1fr) !important; }
+  :where(.btn-row, .row-wrap, .gm-row) > :where(button, .btn-primary, .btn-ghost) { flex: 1 1 auto; }
+
+  /* pop-ups use the whole phone width with a little breathing room, and scroll inside */
+  :where([role="dialog"], [class$="-modal"], [class$="-sheet"]) { width: min(100%, 100vw); max-height: calc(100dvh - env(safe-area-inset-top, 0px)); padding-bottom: max(12px, env(safe-area-inset-bottom, 0px)); }
+
+  /* long usernames / captions never stretch a row */
+  :where(.post-header, .convo-row, .notif-row, .gx-row, .follow-row) > * { min-width: 0; }
+}
+
+/* ---- tablets (801–999px): keep the roomy phone grid but stop it stretching ---- */
+@media (min-width: 801px) and (max-width: 999px) {
+  .main-col:not(.fixed-page) { max-width: 720px; margin-left: auto; margin-right: auto; }
+}
+
+/* ---- big screens: pop-ups and the AI panel stay a sensible size ---- */
+@media (min-width: 1000px) {
+  :where([role="dialog"], [class$="-modal"]) { max-width: min(640px, 92vw); }
+}
+
+/* ---- 320px phones: tighten spacing so no button or label is cut off ---- */
+@media (max-width: 340px) {
+  .page-title { font-size: 17px; }
+  .codex-mini-wrap { width: calc(100vw - 16px); left: 8px; }
+  .gx-fullscreen .gm-dpad { grid-template-columns: repeat(3, 40px); }
+  .tabs button, .feed-tabs button { padding-left: 8px; padding-right: 8px; font-size: 12.5px; }
+}
+
+/* tab rows scroll sideways inside themselves instead of squeezing or overflowing the page */
+.tabs, .feed-tabs { overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.tabs::-webkit-scrollbar, .feed-tabs::-webkit-scrollbar { display: none; }
+.tabs > *, .feed-tabs > * { flex: 0 0 auto; }
+
+/* note composer preview + favourite line fit any screen */
+.note-preview, .note-composer input { max-width: 100%; box-sizing: border-box; }
+
+/* ═════════════════════════════════════════════════════════════════════════════════════════
+   Round 3 — button / tab / chip text. Words inside buttons must never be chopped in the middle
+   ("Cance|l", "Confir|m") and a row of tabs must never be cut off at the screen edge.
+   ═════════════════════════════════════════════════════════════════════════════════════════ */
+
+/* Root cause of the chopped labels: `overflow-wrap: anywhere` (set on .glass-card / .main-col for
+   long usernames) is inherited by every button inside them. Controls break only between words. */
+:where(button, [role="button"], [role="tab"], summary, select, option, label.chip,
+       .btn-primary, .btn-ghost, .gx-btn, .gx-chip, .gm-chipbtn, .gm-btn, .pwa-btn, .sc-chip,
+       [class*="chip"], [class*="-tab"], .tabs > *, .feed-tabs > *) {
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: manual;
+}
+
+/* short action labels stay on one line; the ROW wraps instead of the word */
+:where(.btn-primary, .btn-ghost, .gx-btn, .gx-chip, .gm-chipbtn, .pwa-btn, .sc-chip,
+       .tabs > button, .feed-tabs > button, .life-tabs > button) {
+  white-space: nowrap;
+}
+
+/* Codex confirm / pick rows ("Here's what I understood: … Cancel · Edit · Confirm") */
+.codex-actions { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; margin-top: 4px; }
+.codex-actions > :where(button) { flex: 0 0 auto; width: auto; min-width: 0; max-width: 100%; white-space: nowrap; }
+.codex-actions > :where(div) { flex: 1 1 100%; }
+.codex-mini-reply { min-width: 220px; }
+.codex-mini-reply :where(button) { overflow-wrap: normal; word-break: normal; }
+.codex-mini-reply .codex-mini-msg { overflow-wrap: break-word; }
+
+/* the reply card must not be squeezed narrower than its own buttons, and may grow a little */
+@media (max-width: 800px) {
+  .codex-mini-reply { width: min(320px, calc(100vw - 20px)); min-width: 0; }
+}
+
+/* ---- phones: tab rows WRAP so every tab is visible (no hidden "Tournaments" off-screen) ---- */
+@media (max-width: 800px) {
+  .feed-tabs, .gm-cats, .gm-topbar {
+    flex-wrap: wrap; overflow: visible; gap: 8px; padding-bottom: 0;
+  }
+  .feed-tabs > *, .gm-cats > *, .gm-topbar > * { flex: 1 1 auto; white-space: nowrap; text-align: center; }
+  .feed-tabs button { padding: 8px 12px; font-size: 13px; min-height: 36px; }
+  .gm-chipbtn, .gm-topbar > button { padding: 6px 12px; min-height: 34px; }
+  .gm-topbar .gm-join-toggle { flex: 0 0 auto; width: auto; }
+  .tabs { flex-wrap: wrap; overflow: visible; }
+  .tabs > * { flex: 1 1 auto; }
+}
+@media (max-width: 360px) {
+  .feed-tabs button { padding: 7px 9px; font-size: 12.5px; }
+  .gm-chipbtn { padding: 5px 10px; font-size: 12px; }
+}
+
+/* ---- desktop: tab / chip rows keep a comfortable size and never stretch oddly ---- */
+@media (min-width: 801px) {
+  .feed-tabs, .gm-cats { flex-wrap: wrap; overflow: visible; }
+  .feed-tabs > *, .gm-cats > * { flex: 0 0 auto; }
+}
+
+/* game cards: action buttons ("Start tournament" / "Play online") never clip on narrow cards */
+@media (max-width: 420px) {
+  .gx-btn { padding: 9px 8px; font-size: 12.5px; letter-spacing: 0; }
+  .gx-chip { font-size: 12px; padding: 5px 10px; }
+}
+
+/* Codex floating box: wide enough on desktop for the grip, mic, text, language, bell and ⤢ buttons
+   AND a readable placeholder; the reply card above it matches its width. */
+@media (min-width: 801px) {
+  .codex-mini-wrap { width: 320px; }
+  .codex-mini-reply { width: auto; max-width: 100%; }
+}
+.codex-mini input { text-overflow: ellipsis; }
+.codex-mini select { flex: 0 0 auto; }
+
+/* ---- Codex Send button ---- */
+.codex-send {
+  flex: 0 0 auto; width: 34px; height: 34px; border-radius: 50%; border: 0; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center; font-size: 15px; line-height: 1;
+  background: var(--gold-grad, linear-gradient(180deg, #ffc21a, #ff9100)); color: #1b1000; font-weight: 800;
+  touch-action: manipulation; transition: opacity .15s, transform .1s;
+}
+.codex-send:active:not(:disabled) { transform: scale(.92); }
+.codex-send:disabled { opacity: .35; cursor: default; }
+.codex-input-row .codex-send { align-self: center; }
+@media (pointer: coarse) { .codex-send { width: 38px; height: 38px; } }
+
+/* phones: while you are typing, make room for Send by tucking away the language picker and bell */
+@media (max-width: 800px) {
+  .codex-mini.has-text select, .codex-mini.has-text .codex-bell { display: none; }
+  /* the keyboard must never hide the Ask bar (iPhones don't shrink the page when it opens) */
+  html.kb-open .codex-mini-wrap { bottom: calc(var(--kb-inset, 0px) + 8px) !important; top: auto !important; }
+}

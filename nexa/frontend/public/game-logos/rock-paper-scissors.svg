@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+<defs>
+<linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff9d1a"/><stop offset="1" stop-color="#a84a00"/></linearGradient>
+<linearGradient id="gold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff7b0"/><stop offset=".4" stop-color="#ffc400"/><stop offset=".75" stop-color="#ff9100"/><stop offset="1" stop-color="#ffe55c"/></linearGradient>
+<linearGradient id="gloss" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".45"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+<clipPath id="tile"><rect x="6" y="6" width="108" height="108" rx="26"/></clipPath>
+</defs>
+<rect x="3" y="3" width="114" height="114" rx="29" fill="url(#gold)"/>
+<rect x="6" y="6" width="108" height="108" rx="26" fill="url(#bg)"/>
+<g clip-path="url(#tile)">
+<circle cx="34" cy="70" r="20" fill="#9aa0b5" stroke="#3a3f55" stroke-width="3.5"/><path d="M24 66 Q34 60 44 66 M22 76 Q34 70 46 76" stroke="#3a3f55" stroke-width="2.5" fill="none" stroke-linecap="round"/><rect x="52" y="16" width="44" height="52" rx="6" fill="#fff" stroke="#3a3f55" stroke-width="3.5" transform="rotate(12 74 42)"/><path d="M62 30 H88 M62 40 H88 M62 50 H80" stroke="#c0c6e0" stroke-width="3" stroke-linecap="round" transform="rotate(12 74 42)"/><g transform="translate(78 92) rotate(-30)"><path d="M0 0 L-22 -26 M0 0 L22 -26" stroke="#d0d6ea" stroke-width="7" stroke-linecap="round"/><circle cx="-10" cy="12" r="8" fill="none" stroke="#ff3b3b" stroke-width="5"/><circle cx="10" cy="12" r="8" fill="none" stroke="#ff3b3b" stroke-width="5"/></g>
+<ellipse cx="60" cy="14" rx="62" ry="34" fill="url(#gloss)"/>
+</g>
+<rect x="6" y="6" width="108" height="108" rx="26" fill="none" stroke="#fff3a0" stroke-opacity=".55" stroke-width="1.5"/>
+</svg>
