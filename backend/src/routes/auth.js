@@ -8,6 +8,7 @@ import db from '../db.js';
 import { ACCESS_SECRET, REFRESH_SECRET, ACCESS_TTL, REFRESH_TTL_DAYS, requireAuth } from '../middleware/auth.js';
 import persistence from '../persistence.js';
 import { deactivateUser, reactivateUser, deleteUserPermanently, disconnectUserSockets } from '../accountService.js';
+import { broadcastAccountChange } from '../liveUpdates.js';
 import { verifyMasterPassword1, verifyMasterPassword2, issueMasterChallenge, readMasterChallenge, masterLockedFor, masterFailed, masterSucceeded } from '../admin.js';
 
 const router = Router();
@@ -93,7 +94,7 @@ router.post('/login', (req, res) => {
   const user = db.prepare('SELECT * FROM users WHERE lower(username) = ? OR lower(email) = ?').get(id, id);
   const genericError = { error: { code: 'INVALID_CREDENTIALS', message: 'Incorrect username/email or password.' } };
   // Unknown / permanently deleted account: same answer as a wrong password (nothing leaked).
-  if (!user || user.account_status === 'deleted' || user.role === 'system') return res.status(401).json(genericError);
+  if (!user || user.account_status === 'deleted' || user.role === 'system' || user.private_owner_id) return res.status(401).json(genericError);
 
   if (user.role === 'master') {
     // Step 1 of 2. A wrong password looks exactly like any other failed login; 5 misses lock the IP for 15 minutes.
@@ -126,6 +127,7 @@ router.post('/login', (req, res) => {
   }
 
   const tokens = issueTokens(user.id);
+  if (reactivated) broadcastAccountChange(req.app.get('io'), user.id, 'active');
   res.json({ user: publicUser(user), ...tokens, reactivated });
 });
 
@@ -241,6 +243,7 @@ router.post('/deactivate', requireAuth, notForMaster, (req, res) => {
   if (!checkPassword(req, res)) return;
   deactivateUser(req.userId);
   disconnectUserSockets(req.app.get('io'), req.userId);
+  broadcastAccountChange(req.app.get('io'), req.userId, 'deactivated');
   res.json({ ok: true, status: 'deactivated', message: 'Your account is deactivated. Log in again with the same username and password to reactivate it.' });
 });
 
@@ -253,6 +256,7 @@ router.post('/delete-account', requireAuth, notForMaster, (req, res) => {
   if (!checkPassword(req, res)) return;
   deleteUserPermanently(req.userId);
   disconnectUserSockets(req.app.get('io'), req.userId);
+  broadcastAccountChange(req.app.get('io'), req.userId, 'deleted');
   res.json({ ok: true, status: 'deleted', message: 'Your account has been permanently deleted.' });
 });
 

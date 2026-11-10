@@ -50,14 +50,18 @@ export default function Feed({ onOpenProfile, onOpenStickies, onOpenLearn, onOpe
 
   // Live: when anyone posts / likes / comments / edits / deletes, quietly merge a fresh first page into
   // what is on screen. Scroll position, loaded older posts and open comment boxes are kept.
-  useLive(['posts', 'users', 'feed'], async () => {
+  useLive(['posts', 'users', 'feed'], async (ev) => {
+    // A deleted post disappears at once; a deactivated/deleted account's posts vanish too (no refresh).
+    if (ev?.action === 'delete' && ev.postId) setPosts(old => (old ? old.filter(x => x.id !== ev.postId) : old));
+    if (ev?.action === 'account' && ev.status !== 'active') setPosts(old => (old ? old.filter(x => x.author?.id !== ev.userId) : old));
     try {
       const fetcher = tab === 'following' ? api.feedFollowing : api.feedForYou;
       const res = await fetcher(null);
       setPosts(old => {
         if (!old) return res.posts;
         const fresh = new Map(res.posts.map(x => [x.id, x]));
-        const tail = old.slice(res.posts.length).filter(x => !fresh.has(x.id));
+        const gone = ev?.action === 'delete' ? ev.postId : null;
+        const tail = old.slice(res.posts.length).filter(x => !fresh.has(x.id) && x.id !== gone && !(ev?.action === 'account' && ev.status !== 'active' && x.author?.id === ev.userId));
         return [...res.posts, ...tail];
       });
     } catch { /* offline — next event will catch up */ }

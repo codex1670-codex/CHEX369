@@ -29,6 +29,9 @@ export function reactivateUser(userId: string): void {
 
 // Permanently remove a user and everything that belongs to them.
 export function deleteUserPermanently(userId: string): boolean {
+  // Take the hidden private-space identity (and its gallery, chats, posts) with it.
+  const shadow = db.prepare('SELECT shadow_id s FROM private_spaces WHERE owner_id = ?').get(userId) as { s: string } | undefined;
+  if (shadow?.s) deleteUserPermanently(shadow.s);
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(userId) as Record<string, string | null> | undefined;
   if (!user) return false;
 

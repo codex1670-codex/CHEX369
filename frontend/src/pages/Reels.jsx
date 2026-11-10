@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLive } from '../live.js';
+import { saveToPrivate } from '../privateSave.js';
 import { api } from '../api.js';
 import Avatar from '../components/Avatar.jsx';
 import { useAuth } from '../AuthContext.jsx';
@@ -322,6 +323,9 @@ function ReelCard({ reel, onDeleted, muted, onToggleMute, onSoundBlocked }) {
         <button onClick={toggleSave}>
           <span>{r.savedByMe ? '🔖' : '🏷️'}</span>
         </button>
+        <button onClick={() => saveToPrivate({ url: r.videoUrl, kind: 'video', name: `reel-${r.id}`, source: 'reel' })} aria-label="Save to private gallery" title="Save to private gallery">
+          <span>🔒</span>
+        </button>
       </div>
 
       {videoEditor && (
@@ -403,14 +407,18 @@ export default function Reels({ startReelId, onConsumeStart }) {
 
   // Live: refresh like/comment counts and captions of the reels on screen, and add brand-new reels at
   // the end — nothing jumps or restarts while you are watching.
-  useLive(['reels', 'users'], async () => {
+  useLive(['reels', 'users'], async (ev) => {
+    // Deleted reel / switched-off account: drop it from the screen immediately.
+    if (ev?.action === 'delete' && ev.reelId) setReels(old => (old ? old.filter(x => x.id !== ev.reelId) : old));
+    if (ev?.action === 'account' && ev.status !== 'active') setReels(old => (old ? old.filter(x => x.author?.id !== ev.userId) : old));
     try {
       const res = await api.reelsFeed();
       setReels(old => {
         if (!old) return res.reels;
         const fresh = new Map(res.reels.map(x => [x.id, x]));
         const have = new Set(old.map(x => x.id));
-        return [...old.map(x => fresh.get(x.id) || x), ...res.reels.filter(x => !have.has(x.id))];
+        const gone = ev?.action === 'delete' ? ev.reelId : null;
+        return [...old.filter(x => x.id !== gone).map(x => fresh.get(x.id) || x), ...res.reels.filter(x => !have.has(x.id))];
       });
     } catch { /* ignore */ }
   });

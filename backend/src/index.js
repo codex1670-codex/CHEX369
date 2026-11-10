@@ -33,6 +33,8 @@ import { seedMasterAccount } from './admin.js';
 import searchRoutes from './routes/search.js';
 import appRoutes from './routes/apps.js';
 import callRoutes from './routes/calls.js';
+import privateRoutes from './routes/private.js';
+import { blockShadow } from './space.js';
 import codexRoutes from './routes/codex.js';
 import pushRoutes from './routes/push.js';
 import { attachPush, sendStickyPush } from './push.js';
@@ -105,6 +107,8 @@ const AUTH_GUARDED = ['/login', '/signup', '/deactivate', '/delete-account', '/2
 app.use('/api/auth', (req, res, next) => (AUTH_GUARDED.includes(req.path) ? authLimiter(req, res, next) : next()), authRoutes);
 app.use('/api/users', apiLimiter, userRoutes);
 app.use('/api/posts', apiLimiter, postRoutes);
+// The second space has no Games, CHEX learn (coins/learn), sticky notes or alarms (My life items).
+app.use(['/api/coins', '/api/stickies', '/api/life', '/api/games', '/api/tournaments'], blockShadow);
 app.use('/api/coins', apiLimiter, coinRoutes);
 app.use('/api/stickies', apiLimiter, stickyRoutes);
 app.use('/api/life', apiLimiter, lifeRoutes);
@@ -123,6 +127,7 @@ app.use('/api/admin', apiLimiter, adminRoutes);
 app.use('/api/search', apiLimiter, searchRoutes);
 app.use('/api/apps', apiLimiter, appRoutes);
 app.use('/api/calls', apiLimiter, callRoutes);
+app.use('/api/private', apiLimiter, privateRoutes);
 const codexLimiter = rateLimit({ windowMs: 60 * 1000, max: 20, standardHeaders: true, legacyHeaders: false,
   message: { error: { code: 'RATE_LIMITED', message: 'Too many Codex requests. Please slow down.' } } });
 // The on-screen agent makes several cheap calls per command (resolve + report per step, plus a few

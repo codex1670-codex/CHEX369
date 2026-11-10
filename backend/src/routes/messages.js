@@ -5,9 +5,40 @@ import { requireAuth } from '../middleware/auth.js';
 import { isBlocked, isRestricted, canViewAccountContent } from './users.js';
 import { canViewPost } from './posts.js';
 import { notifyMasterOfReport } from '../admin.js';
+import { ownerOf, isShadow, movedChat, movedChatByUsername, mapForShadow, viewerIdFromReq } from '../space.js';
 import { mediaMiddleware, removeLocalUpload, MAX_MESSAGE_MEDIA_BYTES, MAX_VOICE_NOTE_BYTES } from '../uploads.js';
 
 const router = Router();
+
+// ---- Second space bridge ----
+// A chat the owner moved to the second space (space_chats) is still the owner's own 1-to-1 conversation.
+// While the second space is open, requests about such a chat run as the owner, and every answer is rewritten so
+// the second space sees its own profile + the contact's second-space display name (see space.js).
+const NON_CONVO_FIRST = new Set(['requests', 'conversations', 'self', 'share', 'send', 'send-media', 'theme']);
+function conversationIdOf(req) {
+  let m = /^\/conversations\/([^/]+)/.exec(req.path);
+  if (m && m[1] !== 'group') return m[1];
+  m = /^\/([^/]+)/.exec(req.path);
+  if (m && !NON_CONVO_FIRST.has(m[1])) return db.prepare('SELECT conversation_id c FROM messages WHERE id = ?').get(m[1])?.c || null;
+  return typeof req.body?.conversationId === 'string' ? req.body.conversationId : null;
+}
+router.use((req, res, next) => {
+  const viewer = viewerIdFromReq(req);
+  const owner = viewer ? ownerOf(viewer) : null;
+  if (!owner) return next();
+  req.spaceShadowId = viewer;
+  const send = res.json.bind(res);
+  res.json = (body) => send(mapForShadow(body, viewer));
+  const cid = conversationIdOf(req);
+  if ((cid && movedChat(owner, cid)) || (typeof req.body?.toUsername === 'string' && movedChatByUsername(owner, req.body.toUsername))) req.spaceActAs = owner;
+  next();
+});
+
+// Realtime event for one participant: a moved chat is delivered to the second space instead of the normal app.
+function emitToParticipant(io, userId, convoId, event, payload) {
+  const moved = movedChat(userId, convoId);
+  io?.to(`user:${moved ? moved.shadow_id : userId}`).emit(event, payload);
+}
 
 // Everyone's emoji reaction on a message ([{ user_id, emoji }]), so reactions survive a reload.
 const reactionsFor = (messageId) => db.prepare('SELECT user_id, emoji FROM message_reactions WHERE message_id = ? ORDER BY created_at').all(messageId);
@@ -97,6 +128,9 @@ function conversationDTO(row, viewerId) {
     blocked: !!(other && db.prepare('SELECT 1 FROM blocks WHERE blocker_id = ? AND blocked_id = ?').get(viewerId, other.id)),
     restricted: !!(other && isRestricted(viewerId, other.id)),
     createdAt: row.created_at,
+    // Moved to the second space (only ever shown inside it): the contact's second-space display name.
+    inSpace: !!(viewerId && movedChat(viewerId, row.id)),
+    spaceName: (viewerId && movedChat(viewerId, row.id)?.display_name) || null,
   };
 }
 
@@ -177,14 +211,24 @@ router.post('/requests/:id/report', requireAuth, (req, res) => {
 
 router.get('/conversations', requireAuth, (req, res) => {
   // Chats I deleted stay hidden until somebody writes in them again.
-  const rows = db.prepare(`
+  const base = `
     SELECT c.* FROM conversations c
     JOIN conversation_participants cp ON cp.conversation_id = c.id
     WHERE cp.user_id = @me
-      AND (cp.cleared_at IS NULL OR EXISTS (SELECT 1 FROM messages m WHERE m.conversation_id = c.id AND m.deleted_at IS NULL AND m.created_at > cp.cleared_at))
-    ORDER BY COALESCE((SELECT MAX(created_at) FROM messages m WHERE m.conversation_id = c.id), c.created_at) DESC
-  `).all({ me: req.userId });
-  res.json({ conversations: rows.map(r => conversationDTO(r, req.userId)) });
+      AND (cp.cleared_at IS NULL OR EXISTS (SELECT 1 FROM messages m WHERE m.conversation_id = c.id AND m.deleted_at IS NULL AND m.created_at > cp.cleared_at))`;
+  // Chats moved to the second space never show in the normal list …
+  const own = db.prepare(`${base} AND NOT EXISTS (SELECT 1 FROM space_chats sc WHERE sc.owner_id = @me AND sc.conversation_id = c.id)`).all({ me: req.userId });
+  let list = own.map(r => conversationDTO(r, req.userId));
+  // … they only appear inside the second space, next to that profile's own chats.
+  const owner = ownerOf(req.userId);
+  if (owner) {
+    const moved = db.prepare(`${base} AND EXISTS (SELECT 1 FROM space_chats sc WHERE sc.owner_id = @me AND sc.conversation_id = c.id)`).all({ me: owner });
+    list = list.concat(moved.map(r => conversationDTO(r, owner)));
+    list.sort((a, b) => String(b.lastMessage?.createdAt || b.createdAt).localeCompare(String(a.lastMessage?.createdAt || a.createdAt)));
+  } else {
+    list.sort((a, b) => String(b.lastMessage?.createdAt || b.createdAt).localeCompare(String(a.lastMessage?.createdAt || a.createdAt)));
+  }
+  res.json({ conversations: list });
 });
 
 router.get('/conversations/:id/messages', requireAuth, (req, res) => {
@@ -215,7 +259,13 @@ router.post('/conversations/:id/read', requireAuth, (req, res) => {
 // need to deliver a direct message through the exact same permission sequence.
 // Returns { status: 'sent'|'message_request', ...} — never throws for expected outcomes,
 // only for programmer errors (missing args). Callers must still catch for DB errors.
-export function sendDirectMessage({ fromUserId, toUsername, conversationId, text, io, media = null, share = null }) {
+export function sendDirectMessage({ fromUserId, toUsername, conversationId, text, io, media = null, share = null, viaShadow = null }) {
+  // Second space: writing in a chat that was moved there means writing in the owner's own chat with that person.
+  if (!viaShadow && isShadow(fromUserId)) {
+    const owner = ownerOf(fromUserId);
+    const mv = conversationId ? movedChat(owner, conversationId) : movedChatByUsername(owner, toUsername);
+    if (mv) { viaShadow = fromUserId; fromUserId = owner; conversationId = mv.conversation_id; toUsername = undefined; }
+  }
   const cleanText = String(text || '').trim().slice(0, 4000);
   if (!cleanText && !media) return { httpStatus: 400, body: { error: { code: 'EMPTY_MESSAGE', message: "There's nothing to send." } } };
 
@@ -240,6 +290,9 @@ export function sendDirectMessage({ fromUserId, toUsername, conversationId, text
       return { httpStatus: 403, body: { error: { code: 'BLOCKED', message: "You can't message this user." } } };
     }
     convo = findDirectConversation(fromUserId, target.id);
+    if (convo && !viaShadow && movedChat(fromUserId, convo.id)) {
+      return { httpStatus: 409, body: { error: { code: 'MOVED_TO_SPACE', message: 'This chat is in your second space. Open your second space to message them.' } } };
+    }
 
     if (!convo && media) {
       return { httpStatus: 403, body: { error: { code: 'REQUEST_PENDING', message: 'Photos, videos and voice notes can be sent once they accept your message request. Send a text message first.' } } };
@@ -276,13 +329,16 @@ export function sendDirectMessage({ fromUserId, toUsername, conversationId, text
 
   const otherParticipants = db.prepare('SELECT user_id, muted FROM conversation_participants WHERE conversation_id = ? AND user_id != ?').all(convo.id, fromUserId);
   otherParticipants.forEach(p => {
-    io?.to(`user:${p.user_id}`).emit('message:new', dto);
+    // A chat moved to the second space notifies the second space only — never the normal app.
+    const moved = movedChat(p.user_id, convo.id);
+    const target = moved ? moved.shadow_id : p.user_id;
+    io?.to(`user:${target}`).emit('message:new', dto);
     // Muted chats (and people I restricted) still receive the message but never raise an alert.
     const quiet = p.muted || (convo.type === 'direct' && isRestricted(p.user_id, fromUserId));
     if (quiet) return;
-    io?.to(`user:${p.user_id}`).emit('notification:new', { type: 'message' });
+    io?.to(`user:${target}`).emit('notification:new', { type: 'message' });
     db.prepare('INSERT INTO notifications (id, recipient_id, actor_id, type, target_id) VALUES (?, ?, ?, ?, ?)')
-      .run(uuid(), p.user_id, fromUserId, 'message', msgId);
+      .run(uuid(), target, fromUserId, 'message', msgId);
   });
 
   return { httpStatus: 201, body: { status: 'sent', message: dto } };
@@ -293,7 +349,7 @@ export function sendDirectMessage({ fromUserId, toUsername, conversationId, text
 // instead of a message, and never silently delivers a message the recipient hasn't allowed.
 router.post('/send', requireAuth, (req, res) => {
   const { toUsername, conversationId, text } = req.body || {};
-  const result = sendDirectMessage({ fromUserId: req.userId, toUsername, conversationId, text, io: req.app.get('io') });
+  const result = sendDirectMessage({ fromUserId: req.userId, toUsername, conversationId, text, io: req.app.get('io'), viaShadow: req.spaceShadowId && req.spaceActAs ? req.spaceShadowId : null });
   res.status(result.httpStatus).json(result.body);
 });
 
@@ -309,7 +365,7 @@ router.post('/send-media', requireAuth, mediaMiddleware('messages', ['image', 'v
     seconds: req.media.kind === 'audio' ? Math.min(3600, Math.max(0, Math.round(Number(seconds)) || 0)) : 0 };
   let result;
   try {
-    result = sendDirectMessage({ fromUserId: req.userId, toUsername, conversationId, text, io: req.app.get('io'), media });
+    result = sendDirectMessage({ fromUserId: req.userId, toUsername, conversationId, text, io: req.app.get('io'), media, viaShadow: req.spaceShadowId && req.spaceActAs ? req.spaceShadowId : null });
   } catch (err) {
     removeLocalUpload(media.url);
     throw err;
@@ -529,7 +585,7 @@ router.post('/:id/react', requireAuth, (req, res) => {
   const reactions = reactionsFor(msg.id);
   const io = req.app.get('io');
   const others = db.prepare('SELECT user_id FROM conversation_participants WHERE conversation_id = ? AND user_id != ?').all(msg.conversation_id, req.userId);
-  others.forEach(p => io?.to(`user:${p.user_id}`).emit('message:reaction', { messageId: msg.id, reactions }));
+  others.forEach(p => emitToParticipant(io, p.user_id, msg.conversation_id, 'message:reaction', { messageId: msg.id, reactions }));
   res.json({ reactions });
 });
 
@@ -542,7 +598,7 @@ router.delete('/:id/react', requireAuth, (req, res) => {
   const reactions = reactionsFor(msg.id);
   const io = req.app.get('io');
   const others = db.prepare('SELECT user_id FROM conversation_participants WHERE conversation_id = ? AND user_id != ?').all(msg.conversation_id, req.userId);
-  others.forEach(p => io?.to(`user:${p.user_id}`).emit('message:reaction', { messageId: msg.id, reactions }));
+  others.forEach(p => emitToParticipant(io, p.user_id, msg.conversation_id, 'message:reaction', { messageId: msg.id, reactions }));
   res.json({ reactions });
 });
 
@@ -560,7 +616,7 @@ router.patch('/:id', requireAuth, (req, res) => {
   const updated = db.prepare('SELECT * FROM messages WHERE id = ?').get(msg.id);
   const io = req.app.get('io');
   const others = db.prepare('SELECT user_id FROM conversation_participants WHERE conversation_id = ? AND user_id != ?').all(msg.conversation_id, req.userId);
-  others.forEach(p => io?.to(`user:${p.user_id}`).emit('message:edited', { id: updated.id, content: updated.content, editedAt: updated.edited_at }));
+  others.forEach(p => emitToParticipant(io, p.user_id, msg.conversation_id, 'message:edited', { id: updated.id, content: updated.content, editedAt: updated.edited_at }));
   res.json({ message: { id: updated.id, content: updated.content, editedAt: updated.edited_at } });
 });
 
@@ -571,7 +627,7 @@ router.delete('/:id', requireAuth, (req, res) => {
   db.prepare("UPDATE messages SET deleted_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?").run(msg.id);
   const io = req.app.get('io');
   const others = db.prepare('SELECT user_id FROM conversation_participants WHERE conversation_id = ? AND user_id != ?').all(msg.conversation_id, req.userId);
-  others.forEach(p => io?.to(`user:${p.user_id}`).emit('message:deleted', { id: msg.id }));
+  others.forEach(p => emitToParticipant(io, p.user_id, msg.conversation_id, 'message:deleted', { id: msg.id }));
   res.json({ ok: true });
 });
 
@@ -612,7 +668,7 @@ router.post('/:id/forward', requireAuth, (req, res) => {
   if (!senderIsParticipant) return res.status(403).json({ error: { code: 'FORBIDDEN', message: "You don't have access to this message." } });
 
   const { toUsername, conversationId } = req.body || {};
-  const result = sendDirectMessage({ fromUserId: req.userId, toUsername, conversationId, text: original.content, io: req.app.get('io') });
+  const result = sendDirectMessage({ fromUserId: req.userId, toUsername, conversationId, text: original.content, io: req.app.get('io'), viaShadow: req.spaceShadowId && req.spaceActAs ? req.spaceShadowId : null });
   if (result.httpStatus < 400 && result.body.message) {
     db.prepare('UPDATE messages SET forwarded_from_id = ? WHERE id = ?').run(original.id, result.body.message.id);
   }

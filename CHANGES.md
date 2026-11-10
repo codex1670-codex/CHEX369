@@ -353,3 +353,27 @@
 - `backend/src/appCatalog.js`: 130+ apps (social, streaming, Google, shopping, UPI, travel, AI, games) seeded on every boot with Android package + iOS scheme + website. Previously the catalog table was never filled, so "open <app>" had nothing to resolve.
 - `frontend/src/appLauncher.js`: Android opens the installed app by package (Chrome intent) and lands on a Google search if it isn't installed; iPhone tries the URL scheme then falls back to Google; computers open the website (or Google).
 - Apps not in the list also go to Google. "open youtube and search X" opens the app on that search where the app supports it.
+
+## Live everything (no refresh)
+- Deleted posts/reels/stories vanish instantly for everyone; deactivating/deleting/reactivating an account removes/restores its content live (`live:update` now carries `action`, ids, and `account` events).
+- Story likes (new: POST/DELETE /api/stories/:id/like, table story_likes) and story views reach the author live; the viewer list shows who liked.
+- CHEX learn: coins/languages sync live; the voice picks a real voice on first tap.
+- While you are in Messages, new-message alerts play a soft chime only (no spoken voice).
+- A game invite in chat has a "Join game" button that joins the room directly.
+
+## Private space (replaces the My life page)
+- **My life is gone.** The ＋ menu entry (and Settings card) is now **🔒 Private space**. Sticky notes and CHEX learn keep their own pages.
+- **Password gate.** First time: choose a private username, display name and password. After that the password is asked every time (5 wrong tries lock it for 10 minutes). It locks again when you leave the page, press Lock, or leave the app in the background for 5 minutes.
+- **A real second profile.** Each person gets a hidden second identity with its OWN followers/following, posts, stories, notes, chats, calls and video calls, search and profile. It never merges with the normal profile: normal people cannot see, follow, message, call or search it, and it cannot see normal people. Private chats never appear in the normal Messages page.
+- **Private gallery.** Add photos/videos from the device, or use **🔒 Save to private gallery** on any post (⋯ menu), reel or chat photo/video; the file is copied into the private space. Open, download or delete items there.
+- Backend: `space.js` (isolation helpers), `routes/private.js`, tables `private_spaces` + `private_gallery`, column `users.private_owner_id`; guards in users, search, feed, reels, messages/groups, mentions. Deleting the real account also deletes the private one.
+- Tests: backend/test/privateSpace.test.mjs, frontend/test/privateSpace.test.jsx.
+
+## Second space v2 (merged posts/users/reels, separate Messages + Profile, move chats)
+- **Removed from the second space:** Games, CHEX learn and Sticky notes (and alarms). The second space has Home, Search, Reels, Chats, Gallery and Profile only. The server answers `SPACE_RESTRICTED` (403) for `/api/games`, `/api/tournaments`, `/api/coins` (learn), `/api/stickies`, `/api/life`, and the AI assistant refuses reminder / game actions there.
+- **Merged with the normal app:** posts, reels, stories, search and users. The second-space profile can be found, followed and opened by normal users, and it sees the normal feed/reels. (The old "never mix" filters in feed, reels, search, users, mentions were removed.)
+- **Separate:** the Profile (own username, display name, followers, following, posts) and the Messages page.
+- **Messaging both ways:** a second-space profile can message normal users and normal users can message it (normal message-request rules apply).
+- **Move a chat to the second space:** Messages → ⋯ on a chat (or long-press in the list) → **🔒 Move to second space**. You type a second-space display name (it must differ from their real display name). The chat leaves the normal Messages list and normal notifications, and appears only inside the second space; the contact keeps the **same username** there but shows the new display name. Inside the second space: **✏️ Change second-space name** and **↩️ Move back to normal chats**. Messages written there go into the same conversation with that person.
+- Backend: `space.js` (`blockShadow`, `movedChat`, `mapForShadow`), table `space_chats`, endpoints `POST /api/private/chat/move`, `PATCH|DELETE /api/private/chat/:conversationId`, a bridge at the top of `routes/messages.js`. Frontend: Reels tab, Messages menu actions. Calls inside a moved chat are not offered in the second space.
+- Tests: backend/test/privateSpace.test.mjs and frontend/test/privateSpace.test.jsx rewritten for the new rules.

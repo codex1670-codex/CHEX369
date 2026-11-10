@@ -134,6 +134,7 @@ const addColumnIfMissing = (table, col, def) => {
   if (!cols.includes(col)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${def}`);
 };
 // App catalog: how to launch the installed phone app (Android package / iOS URL scheme).
+addColumnIfMissing('users', 'private_owner_id', 'TEXT');   // set only on hidden private-space identities
 addColumnIfMissing('app_registry', 'android_package', 'TEXT');
 addColumnIfMissing('app_registry', 'ios_scheme', 'TEXT');
 seedAppCatalog(db);

@@ -21,6 +21,8 @@ function storyDTO(row, viewerId) {
     edits: parseEdits(row.edits), background: row.background,
     audience: row.audience, createdAt: row.created_at, expiresAt: row.expires_at,
     viewCount, viewedByMe,
+    likeCount: db.prepare('SELECT COUNT(*) c FROM story_likes WHERE story_id = ?').get(row.id).c,
+    likedByMe: viewerId ? !!db.prepare('SELECT 1 FROM story_likes WHERE story_id = ? AND user_id = ?').get(row.id, viewerId) : false,
   };
 }
 
@@ -177,20 +179,38 @@ router.get('/:id', requireAuth, (req, res) => {
   const row = db.prepare('SELECT * FROM stories WHERE id = ? AND deleted_at IS NULL').get(req.params.id);
   if (!row) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Story not found or expired.' } });
   if (row.user_id !== req.userId) {
-    db.prepare('INSERT OR IGNORE INTO story_views (story_id, viewer_id) VALUES (?, ?)').run(row.id, req.userId);
+    const ins = db.prepare('INSERT OR IGNORE INTO story_views (story_id, viewer_id) VALUES (?, ?)').run(row.id, req.userId);
+    // A new viewer: the author's view count / viewer list updates live, no refresh.
+    if (ins.changes) req.app.get('io')?.to(`user:${row.user_id}`).emit('story:view', { storyId: row.id, userId: req.userId });
   }
   res.json({ story: storyDTO(row, req.userId) });
 });
+
+// Heart / un-heart a story. The author sees it live (count + who liked) without refreshing.
+function setStoryLike(req, res, on) {
+  const row = db.prepare('SELECT * FROM stories WHERE id = ? AND deleted_at IS NULL').get(req.params.id);
+  if (!row) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Story not found or expired.' } });
+  if (row.user_id !== req.userId && !db.prepare('SELECT 1 FROM story_views WHERE story_id = ? AND viewer_id = ?').get(row.id, req.userId)) {
+    db.prepare('INSERT OR IGNORE INTO story_views (story_id, viewer_id) VALUES (?, ?)').run(row.id, req.userId);
+  }
+  if (on) db.prepare('INSERT OR IGNORE INTO story_likes (story_id, user_id) VALUES (?, ?)').run(row.id, req.userId);
+  else db.prepare('DELETE FROM story_likes WHERE story_id = ? AND user_id = ?').run(row.id, req.userId);
+  if (row.user_id !== req.userId) req.app.get('io')?.to(`user:${row.user_id}`).emit('story:like', { storyId: row.id, liked: on, userId: req.userId });
+  res.json({ story: storyDTO(row, req.userId) });
+}
+router.post('/:id/like', requireAuth, (req, res) => setStoryLike(req, res, true));
+router.delete('/:id/like', requireAuth, (req, res) => setStoryLike(req, res, false));
 
 router.get('/:id/viewers', requireAuth, (req, res) => {
   const row = db.prepare('SELECT * FROM stories WHERE id = ?').get(req.params.id);
   if (!row) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Story not found.' } });
   if (row.user_id !== req.userId) return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'Only the author can see viewers.' } });
   const viewers = db.prepare(`
-    SELECT u.id, u.username, u.display_name, u.avatar_color, sv.viewed_at FROM story_views sv
+    SELECT u.id, u.username, u.display_name, u.avatar_color, sv.viewed_at,
+      EXISTS(SELECT 1 FROM story_likes sl WHERE sl.story_id = sv.story_id AND sl.user_id = u.id) AS liked FROM story_views sv
     JOIN users u ON u.id = sv.viewer_id WHERE sv.story_id = ? ORDER BY sv.viewed_at DESC
   `).all(row.id);
-  res.json({ viewers: viewers.map(v => ({ id: v.id, username: v.username, displayName: v.display_name, avatarColor: v.avatar_color, viewedAt: v.viewed_at })) });
+  res.json({ viewers: viewers.map(v => ({ id: v.id, username: v.username, displayName: v.display_name, avatarColor: v.avatar_color, viewedAt: v.viewed_at, liked: !!v.liked })) });
 });
 
 router.delete('/:id', requireAuth, (req, res) => {

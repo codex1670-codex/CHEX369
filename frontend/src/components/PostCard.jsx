@@ -1,5 +1,6 @@
 import { useRef, useState, useEffect } from 'react';
 import { useLive } from '../live.js';
+import { saveToPrivate } from '../privateSave.js';
 import Avatar from './Avatar.jsx';
 import { api } from '../api.js';
 import { useAuth } from '../AuthContext.jsx';
@@ -303,6 +304,7 @@ export default function PostCard({ post, onOpenProfile, onDeleted }) {
           isMine && { key: 'edit', label: 'Edit', icon: '✏️', onClick: () => setEditingPost(true) },
           { key: 'save', label: p.savedByMe ? 'Remove from saved' : 'Save', icon: '🔖', onClick: toggleSave },
           { key: 'share', label: 'Share', icon: '↗', onClick: () => setSharing(true) },
+          p.mediaUrl && { key: 'private', label: 'Save to private gallery', icon: '🔒', onClick: () => saveToPrivate({ url: p.mediaUrl, kind: p.mediaType, name: `post-${p.id}`, source: 'post' }) },
           isMine && { key: 'delete', label: 'Delete', icon: '🗑️', danger: true, onClick: () => setConfirmDelete(true) },
           !isMine && user.isAdmin && { key: 'admin-delete', label: 'Delete (admin)', icon: '🛡️', danger: true, onClick: () => setConfirmDelete(true) },
           !isMine && !user.isAdmin && { key: 'report', label: 'Report', icon: '🚩', danger: true, onClick: reportPost },

@@ -7,3 +7,6 @@ __pycache__/
 .pytest_cache/
 *.pyc
 .DS_Store
+
+# User uploaded files
+backend/uploads/

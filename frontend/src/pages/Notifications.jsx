@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { connectSocket } from '../socket.js';
+import { useLive } from '../live.js';
 import { api } from '../api.js';
 import Avatar from '../components/Avatar.jsx';
 
@@ -19,7 +20,7 @@ function timeAgo(iso) {
   return `${Math.floor(diff / 86400)}d`;
 }
 
-export default function Notifications({ onOpenProfile }) {
+export default function Notifications({ onOpenProfile, onOpenGameInvite }) {
   const [items, setItems] = useState(null);
 
   const load = async () => {
@@ -28,6 +29,7 @@ export default function Notifications({ onOpenProfile }) {
     if ((res.unreadOther ?? res.unreadCount) > 0) { await api.markAllNotificationsRead('other'); window.dispatchEvent(new Event('chex:refresh-counts')); }
   };
   useEffect(() => { load(); }, []);
+  useLive(['users'], () => { load().catch(() => {}); }); // a switched-off / restored account updates the list at once
   useEffect(() => {
     const s = connectSocket();
     const on = () => { load().catch(() => {}); };
@@ -43,7 +45,7 @@ export default function Notifications({ onOpenProfile }) {
       {items?.length === 0 && <div className="empty-state"><div className="glyph">🔔</div>Nothing yet.</div>}
       {items?.map(n => (
         <div key={n.id} className="glass-card" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 14, marginBottom: 8, cursor: 'pointer', opacity: n.read ? 0.7 : 1 }}
-          onClick={() => onOpenProfile?.(n.actor.username)}>
+          onClick={() => (n.type === 'game_invite' && n.targetId && onOpenGameInvite ? onOpenGameInvite(n.targetId) : onOpenProfile?.(n.actor.username))}>
           <Avatar user={n.actor} size={38} />
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 13.5 }}><b>{n.actor.displayName}</b> {VERB[n.type] || n.type}</div>

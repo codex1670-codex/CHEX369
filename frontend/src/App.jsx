@@ -15,7 +15,7 @@ import Settings from './pages/Settings.jsx';
 import CoinStore from './pages/CoinStore.jsx';
 import Admin from './pages/Admin.jsx';
 import Stickies from './pages/Stickies.jsx';
-import MyLife from './pages/MyLife.jsx';
+import PrivateSpace from './pages/PrivateSpace.jsx';   // password-protected second profile (replaces the old My life page)
 const LearnPage = lazy(() => import('./pages/LearnPage.jsx'));   // CHEX learn: loaded only when opened
 import StickyAlerts from './components/StickyAlerts.jsx';
 import AlarmRinger from './components/AlarmRinger.jsx';
@@ -24,7 +24,7 @@ import Codex from './components/Codex.jsx';
 import CallLayer from './components/CallLayer.jsx';
 import InstallBanner from './components/InstallBanner.jsx';
 import Splash from './components/Splash.jsx';
-import { api } from './api.js';
+import { api, inPrivateSpace } from './api.js';
 import { PresenceProvider } from './presence.jsx';
 import { tiltMove, tiltLeave } from './ui3d.js';
 import { applyTheme, getStoredTheme } from './theme.js';
@@ -56,7 +56,7 @@ export default function App() {
   const [profileView, setProfileView] = useState(null); // 'saved-posts' | 'saved-reels' | 'reels-history' | 'profile-studio' | null
   const [joinCode, setJoinCode] = useState(null); // from an invite link: /?join=CODE
   const [gamesTab, setGamesTab] = useState(null); // 'discover' | 'friends' | 'mine' | 'tournaments' | null
-  const [myLifeTab, setMyLifeTab] = useState(null); // which "My life" section to open
+  const [privateFill, setPrivateFill] = useState(false); // Private space → Chats needs the tall page layout
   const [messageStart, setMessageStart] = useState(null);
   const [searchQuery, setSearchQuery] = useState(null);
   const [searchScope, setSearchScope] = useState(null); // 'reels' when opened by "search reel …"
@@ -68,6 +68,8 @@ export default function App() {
     window.addEventListener('chex:alerts-changed', sync);
     return () => window.removeEventListener('chex:alerts-changed', sync);
   }, []);
+  const routeRef = useRef('feed');          // current page, readable inside socket handlers
+  routeRef.current = route;
   const announcedRef = useRef(null); // ids of unread notifications already spoken (null until first load)
   const [fabOpen, setFabOpen] = useState(false);
   const [coinToast, setCoinToast] = useState('');
@@ -127,6 +129,7 @@ export default function App() {
     let timer = null;
     // Reload the badge counts; for anything new, have the AI say who it is from.
     const refresh = async (announce) => {
+      if (inPrivateSpace()) return; // the realtime link belongs to the private profile right now — leave the normal badges alone
       try {
         const res = await api.notifications();
         setCounts({ messages: res.unreadMessages || 0, other: res.unreadOther || 0 });
@@ -139,7 +142,9 @@ export default function App() {
         }
         const fresh = unreadItems.filter(n => !announcedRef.current.has(n.id)).reverse(); // oldest first
         fresh.forEach(n => announcedRef.current.add(n.id));
-        if (announce && fresh.length) { notifyOnce(announcementForBatch(fresh)); burstEmoji(); } // live: one chime + one spoken line + emoji burst per new arrival
+        // live: one chime + one spoken line + emoji burst per new arrival. While you are already inside Messages
+        // it stays quiet: just the soft chime, no spoken line.
+        if (announce && fresh.length) { notifyOnce(announcementForBatch(fresh), { silent: routeRef.current === 'messages' }); burstEmoji(); }
       } catch { /* offline — keep last counts */ }
     };
     const onEvent = () => { clearTimeout(timer); timer = setTimeout(() => refresh(true), 350); };
@@ -155,13 +160,29 @@ export default function App() {
     };
     socket?.on('coins:earned', onCoins);
     window.addEventListener('chex:refresh-counts', onCounts);
+    const onToast = (e) => { setCoinToast(e?.detail?.text || ''); clearTimeout(coinTimer.current); coinTimer.current = setTimeout(() => setCoinToast(''), 3500); };
+    window.addEventListener('chex:toast', onToast);
+    // Server closed this socket (account deactivated / deleted elsewhere): confirm and sign out right away.
+    const onDisc = (reason) => { if (reason === 'io server disconnect') api.me().catch(() => logout()); };
+    const onStatus = (e) => { if (e?.userId === user.id && e.status !== 'active') logout(); };
+    socket?.on('disconnect', onDisc);
+    socket?.on('account:status', onStatus);
+    // Back online / back to the app: catch up on anything missed while it slept.
+    const onBack = () => { if (document.visibilityState === 'visible') refresh(false); };
+    document.addEventListener('visibilitychange', onBack);
+    socket?.io?.on('reconnect', onBack);
     return () => {
+      socket?.off('disconnect', onDisc);
+      socket?.off('account:status', onStatus);
+      document.removeEventListener('visibilitychange', onBack);
+      socket?.io?.off('reconnect', onBack);
       socket?.off('coins:earned', onCoins);
       clearTimeout(coinTimer.current);
       clearTimeout(timer);
       stopWatchingPush();
       ['notification:new', 'message:new', 'message_request:new'].forEach(ev => socket?.off(ev, onEvent));
       window.removeEventListener('chex:refresh-counts', onCounts);
+      window.removeEventListener('chex:toast', onToast);
       disconnectSocket();
     };
   }, [user]);
@@ -214,8 +235,9 @@ export default function App() {
       return;
     }
     if (key === 'profile') { setProfileUsername(username || user.username); setProfileView(['saved-posts', 'saved-reels', 'reels-history', 'profile-studio'].includes(view) ? view : null); }
-    if (key === 'mylife') setMyLifeTab(tab || null);
     if (key === 'games') setGamesTab(tab && ['discover', '2players', 'friends', 'mine', 'tournaments'].includes(tab) ? tab : null);
+    // A tapped game invite: go straight into that room (Games joins it as soon as it opens).
+    if (key === 'games' && typeof param === 'object' && param?.joinCode) setJoinCode(String(param.joinCode).replace(/[^a-z0-9]/gi, '').slice(0, 12).toUpperCase());
     if (key === 'messages') setMessageStart(username || null);
     if (key === 'search') setSearchScope(typeof param === 'object' && param?.scope === 'reels' ? 'reels' : null);
     if (key === 'search' && query) setSearchQuery(query);
@@ -273,7 +295,7 @@ export default function App() {
                   </button>
                 ))}
                 <button role="menuitem" style={{ '--i': NAV.length }} onPointerMove={tiltMove} onPointerLeave={tiltLeave} className={route === 'mylife' ? 'active' : ''} onClick={() => { setFabOpen(false); navigate('mylife'); }}>
-                  <span className="ico">🌟</span><span className="lbl">My life</span>
+                  <span className="ico">🔒</span><span className="lbl">Private space</span>
                 </button>
                 <button role="menuitem" style={{ '--i': NAV.length + 1 }} onPointerMove={tiltMove} onPointerLeave={tiltLeave} className={route === 'learn' ? 'active' : ''} onClick={() => { setFabOpen(false); navigate('learn'); }}>
                   <span className="ico">🌍</span><span className="lbl">CHEX learn</span>
@@ -311,15 +333,15 @@ export default function App() {
       </nav>
 
       {coinToast && <div className="coin-toast coin-toast-fixed" role="status">{coinToast}</div>}
-      <PageTransition routeKey={route} className={`main-col ${route === 'messages' ? 'fixed-page' : ''}`} onTouchStart={onSwipeStart} onTouchEnd={onSwipeEnd}>
+      <PageTransition routeKey={route} className={`main-col ${route === 'messages' || (route === 'mylife' && privateFill) ? 'fixed-page' : ''}`} onTouchStart={onSwipeStart} onTouchEnd={onSwipeEnd}>
         {route === 'feed' && <Feed onOpenProfile={(u) => navigate('profile', u)} onOpenStickies={() => navigate('stickies')} onOpenLearn={() => navigate('learn')} onOpenAdmin={() => navigate('admin')} />}
         {route === 'search' && <Search onOpenProfile={(u) => navigate('profile', u)} onOpenReel={(id) => navigate('reels', { reelId: id })} initialQuery={searchQuery} initialScope={searchScope} onConsumeQuery={() => setSearchQuery(null)} />}
         {route === 'reels' && <Reels startReelId={startReelId} onConsumeStart={() => setStartReelId(null)} />}
-        {route === 'notifications' && <Notifications onOpenProfile={(u) => navigate('profile', u)} />}
+        {route === 'notifications' && <Notifications onOpenProfile={(u) => navigate('profile', u)} onOpenGameInvite={(code) => navigate('games', { joinCode: code })} />}
         {route === 'games' && <Games initialTab={gamesTab} onConsumeInitialTab={() => setGamesTab(null)} initialJoinCode={joinCode} onConsumeJoinCode={() => setJoinCode(null)} />}
         {route === 'settings' && <Settings onBack={() => navigate('profile', user.username)} onOpenProfile={(u) => navigate('profile', u)} onOpenCoins={() => navigate('coins')} onOpenStickies={() => navigate('stickies')} onOpenMyLife={() => navigate('mylife')} />}
         {route === 'stickies' && <Stickies onBack={() => navigate('feed')} />}
-        {route === 'mylife' && <MyLife onBack={() => navigate('feed')} initialTab={myLifeTab} />}
+        {route === 'mylife' && <PrivateSpace onLayout={setPrivateFill} />}
         {route === 'learn' && <Suspense fallback={<Skeleton label="Loading Learn" />}><LearnPage onBack={() => navigate('feed')} onOpenProfile={(u) => navigate('profile', u)} /></Suspense>}
         {route === 'admin' && user.isAdmin && <Admin onBack={() => navigate('feed')} onOpenProfile={(u) => navigate('profile', u)} />}
         {route === 'coins' && <CoinStore onBack={() => navigate('settings')} onOpenSettings={() => navigate('settings')} />}
@@ -331,15 +353,16 @@ export default function App() {
             onOpenMessage={(u) => navigate('messages', u)}
             onOpenProfile={(u) => navigate('profile', u)}
             onOpenSettings={openSettings}
+            onOpenPrivateSpace={() => navigate('mylife')}
           />
         )}
         {route === 'messages' && (
-          <Messages startWithUsername={messageStart} onConsumeStart={() => setMessageStart(null)} onOpenReel={(id) => navigate('reels', { reelId: id })} />
+          <Messages startWithUsername={messageStart} onConsumeStart={() => setMessageStart(null)} onOpenReel={(id) => navigate('reels', { reelId: id })} onJoinGame={(code) => navigate('games', { joinCode: code })} />
         )}
       </PageTransition>
 
       <Codex navigate={navigate} goBack={goBack} currentUser={user} />
-      <StickyAlerts onOpen={() => navigate('mylife', { tab: 'reminders' })} />
+      <StickyAlerts onOpen={() => navigate('stickies')} />
       <AlarmRinger />
       <EmojiRain />
       <CallLayer />

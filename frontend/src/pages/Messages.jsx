@@ -18,6 +18,7 @@ import EditedMedia from '../components/EditedMedia.jsx';
 import PostModal from '../components/PostModal.jsx';
 import ActionSheet, { ConfirmSheet } from '../components/ActionSheet.jsx';
 import { useLongPress } from '../components/useLongPress.js';
+import { saveToPrivate } from '../privateSave.js';
 import { GroupAvatar, GroupInfoSheet, NewGroupSheet, groupTitle } from '../components/GroupSheets.jsx';
 
 function otherParticipant(convo, myId) {
@@ -54,7 +55,11 @@ function SharedCard({ share, onOpenPost, onOpenReel }) {
   );
 }
 
-function MessageBubble({ message, mine, myId, quick, onQuickChange, onChanged, onOpenPost, onOpenReel, sender = null }) {
+// A game invite is a normal message that carries a room code ("… invite code: ABC123" / "Room code: ABC123").
+const INVITE_RE = /(?:invite code|room code)\s*[:：]\s*([A-Z0-9]{4,12})\b/i;
+const inviteCodeOf = (m) => (m.content && !m.share && !m.mediaUrl ? (INVITE_RE.exec(m.content)?.[1] || '').toUpperCase() : '');
+
+function MessageBubble({ message, mine, myId, quick, onQuickChange, onChanged, onOpenPost, onOpenReel, onJoinGame, sender = null }) {
   const [viewer, setViewer] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(message.content);
@@ -162,6 +167,10 @@ function MessageBubble({ message, mine, myId, quick, onQuickChange, onChanged, o
             )}
             {message.share && <SharedCard share={message.share} onOpenPost={onOpenPost} onOpenReel={onOpenReel} />}
             {message.content}
+            {!mine && onJoinGame && inviteCodeOf(message) && (
+              <button type="button" className="btn-primary" style={{ display: 'block', marginTop: 8, width: '100%' }}
+                onClick={(e) => { e.stopPropagation(); onJoinGame(inviteCodeOf(message)); }}>🎮 Join game</button>
+            )}
             {message.editedAt && <span className="bubble-flag">(edited)</span>}
             {message.pinned && <span className="bubble-flag" aria-label="Pinned">📌</span>}
           </div>
@@ -181,6 +190,7 @@ function MessageBubble({ message, mine, myId, quick, onQuickChange, onChanged, o
       {menu && (
         <ActionSheet title="Message" header={emojiRow} onClose={() => setMenu(false)} actions={[
           message.content && { key: 'copy', label: 'Copy', icon: '📋', onClick: copyText },
+          message.mediaUrl && (message.mediaKind === 'image' || message.mediaKind === 'photo' || message.mediaKind === 'video') && { key: 'private', label: 'Save to private gallery', icon: '🔒', onClick: () => saveToPrivate({ url: message.mediaUrl, kind: message.mediaKind === 'video' ? 'video' : 'image', name: message.mediaName || '', source: 'chat' }) },
           { key: 'pin', label: message.pinned ? 'Unpin' : 'Pin', icon: '📌', onClick: togglePin },
           mine && message.mediaKind !== 'audio' && !message.mediaUrl && !message.share && { key: 'edit', label: 'Edit', icon: '✏️', onClick: () => { setDraft(message.content); setEditing(true); } },
           { key: 'me', label: 'Delete for me', icon: '🗑️', danger: true, hint: 'Others still see it', onClick: deleteForMe },
@@ -226,7 +236,7 @@ function ConvoRow({ convo, active, myId, onOpen, onMenu }) {
   );
 }
 
-export default function Messages({ startWithUsername, onConsumeStart, onOpenReel }) {
+export default function Messages({ startWithUsername, onConsumeStart, onOpenReel, onJoinGame }) {
   const { user } = useAuth();
   const [conversations, setConversations] = useState(null);
   const [requests, setRequests] = useState(null);
@@ -494,9 +504,24 @@ export default function Messages({ startWithUsername, onConsumeStart, onOpenReel
       group && { key: 'info', label: 'Group info', icon: 'ℹ️', onClick: () => { openConversation(c.id); setGroupInfo(true); } },
       !self && { key: 'mute', label: c.muted ? 'Unmute' : 'Mute', icon: c.muted ? '🔔' : '🔕', hint: c.muted ? undefined : 'No alerts for this chat',
         onClick: () => runChat(() => (c.muted ? api.unmuteChat(c.id) : api.muteChat(c.id)), c.muted ? 'Unmuted' : 'Muted — you won\'t get alerts for this chat') },
-      other && { key: 'restrict', label: c.restricted ? 'Unrestrict' : 'Restrict', icon: '🚷', hint: c.restricted ? undefined : 'Quiet their messages & comments',
+      // Second space: move this person's chat there (normal app) / rename or move it back (inside the second space).
+      other && !c.inSpace && !user.isPrivate && { key: 'space', label: 'Move to second space', icon: '🔒', hint: 'Hidden here · shown only in your second space',
+        onClick: () => {
+          const typed = window.prompt(`Display name for @${other.username} in your second space.\nThe username stays the same, the display name must be different from “${other.displayName}”.`, '');
+          if (typed === null) return;
+          runChat(() => api.privateMoveChat(c.id, typed), `Moved to your second space as “${typed.trim()}”`);
+        } },
+      c.inSpace && { key: 'rename', label: 'Change second-space name', icon: '✏️', hint: `@${other?.username || ''} keeps the same username`,
+        onClick: () => {
+          const typed = window.prompt('New display name for this chat in your second space:', c.spaceName || '');
+          if (typed === null) return;
+          runChat(() => api.privateRenameChat(c.id, typed), 'Name changed');
+        } },
+      c.inSpace && { key: 'back', label: 'Move back to normal chats', icon: '↩️', hint: 'Shows again in your normal Messages page',
+        onClick: () => runChat(async () => { await api.privateMoveBack(c.id); if (activeId === c.id) closeChat(); }, 'Moved back to your normal chats') },
+      other && !c.inSpace && { key: 'restrict', label: c.restricted ? 'Unrestrict' : 'Restrict', icon: '🚷', hint: c.restricted ? undefined : 'Quiet their messages & comments',
         onClick: () => runChat(() => (c.restricted ? api.unrestrict(other.username) : api.restrict(other.username)), c.restricted ? `${name} is no longer restricted` : `${name} is restricted`) },
-      other && { key: 'block', label: c.blocked ? 'Unblock' : 'Block', icon: '⛔', danger: !c.blocked,
+      other && !c.inSpace && { key: 'block', label: c.blocked ? 'Unblock' : 'Block', icon: '⛔', danger: !c.blocked,
         onClick: () => (c.blocked ? runChat(() => api.unblock(other.username), `${name} is unblocked`) : setConfirm({ kind: 'block', convo: c })) },
       group
         ? { key: 'leave', label: 'Leave group', icon: '🚪', danger: true, onClick: () => setConfirm({ kind: 'leave', convo: c }) }
@@ -637,7 +662,7 @@ export default function Messages({ startWithUsername, onConsumeStart, onOpenReel
                   </div>}
               {activeId && (
                 <div className="chat-actions">
-                  {!isSelfChat && !groupChat && !activeConvo?.blocked && <>
+                  {!isSelfChat && !groupChat && !activeConvo?.blocked && !activeConvo?.inSpace && <>
                     <button className="chat-icon-btn" aria-label="Voice call" onClick={() => requestStartCall(activeId, 'voice')}>📞</button>
                     <button className="chat-icon-btn" aria-label="Video call" onClick={() => requestStartCall(activeId, 'video')}>🎥</button>
                   </>}
@@ -652,7 +677,7 @@ export default function Messages({ startWithUsername, onConsumeStart, onOpenReel
             )}
             <div className="chat-messages" ref={scrollRef}>
               {messages.map(m => (
-                <MessageBubble key={m.id} message={m} mine={m.senderId === user.id} sender={groupChat ? memberById(m.senderId) : null} myId={user.id} quick={quick} onQuickChange={setQuick} onOpenPost={setOpenPostId} onOpenReel={onOpenReel} onChanged={(updated) => {
+                <MessageBubble key={m.id} message={m} mine={m.senderId === user.id} sender={groupChat ? memberById(m.senderId) : null} myId={user.id} quick={quick} onQuickChange={setQuick} onOpenPost={setOpenPostId} onOpenReel={onOpenReel} onJoinGame={onJoinGame} onChanged={(updated) => {
                   setMessages(list => updated === null ? list.filter(x => x.id !== m.id) : list.map(x => x.id === m.id ? { ...x, ...updated } : x));
                 }} />
               ))}

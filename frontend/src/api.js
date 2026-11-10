@@ -12,13 +12,19 @@ export function setTokens(tokens) {
   else localStorage.removeItem('nexa_refresh');
 }
 
-export function getAccessToken() { return accessToken; }
+// Private space: while it is open every request (and the realtime socket) acts as the hidden second
+// profile, using its own short-lived token. Nothing here ever touches the normal session.
+let privateToken = null;
+export function setPrivateSession(token) { privateToken = token || null; }
+export const inPrivateSpace = () => !!privateToken;
+export function getAccessToken() { return privateToken || accessToken; }
 export function getStoredRefreshToken() { return localStorage.getItem('nexa_refresh'); }
 export function onAuthFailure(fn) { onAuthLost = fn; }
 
 async function request(path, { method = 'GET', body, retry = true } = {}) {
   const headers = { 'Content-Type': 'application/json', 'X-Client-Id': CLIENT_ID };
-  if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+  const tokenUsed = privateToken || accessToken;
+  if (tokenUsed) headers.Authorization = `Bearer ${tokenUsed}`;
 
   const res = await fetch(BASE + path, {
     method,
@@ -26,7 +32,9 @@ async function request(path, { method = 'GET', body, retry = true } = {}) {
     body: body ? JSON.stringify(body) : undefined,
   });
 
-  if (res.status === 401 && retry && getStoredRefreshToken()) {
+  // The private session ended (12 h) — lock the space instead of touching the normal login.
+  if (res.status === 401 && privateToken && tokenUsed === privateToken) { window.dispatchEvent(new Event('chex:private-expired')); }
+  else if (res.status === 401 && retry && getStoredRefreshToken()) {
     const refreshed = await tryRefresh();
     if (refreshed) return request(path, { method, body, retry: false });
     onAuthLost();
@@ -45,6 +53,7 @@ async function request(path, { method = 'GET', body, retry = true } = {}) {
 
 // Used by the realtime socket: returns a fresh access token (refreshing if needed) or null.
 export async function ensureFreshAccessToken() {
+  if (privateToken) return null;
   if (await tryRefresh()) return accessToken;
   return null;
 }
@@ -70,11 +79,13 @@ async function tryRefresh() {
 // behavior as the JSON path above.
 async function requestForm(path, formData, { retry = true } = {}) {
   const headers = { 'X-Client-Id': CLIENT_ID };
-  if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+  const tokenUsed = privateToken || accessToken;
+  if (tokenUsed) headers.Authorization = `Bearer ${tokenUsed}`;
 
   const res = await fetch(BASE + path, { method: 'POST', headers, body: formData });
 
-  if (res.status === 401 && retry && getStoredRefreshToken()) {
+  if (res.status === 401 && privateToken && tokenUsed === privateToken) { window.dispatchEvent(new Event('chex:private-expired')); }
+  else if (res.status === 401 && retry && getStoredRefreshToken()) {
     const refreshed = await tryRefresh();
     if (refreshed) return requestForm(path, formData, { retry: false });
     onAuthLost();
@@ -228,6 +239,21 @@ export const api = {
   getStory: (id) => request(`/stories/${id}`),
   storyViewers: (id) => request(`/stories/${id}/viewers`),
   deleteStory: (id) => request(`/stories/${id}`, { method: 'DELETE' }),
+  // Private space (hidden second profile + gallery)
+  privateStatus: () => request('/private/status'),
+  privateSetup: (body) => request('/private/setup', { method: 'POST', body }),
+  privateEnter: (password) => request('/private/enter', { method: 'POST', body: { password } }),
+  privatePassword: (current, next) => request('/private/password', { method: 'POST', body: { current, next } }),
+  privateGallery: () => request('/private/gallery'),
+  privateGalleryUpload: (file) => requestForm('/private/gallery/upload', mediaForm(file, {})),
+  privateGallerySave: (body) => request('/private/gallery/save', { method: 'POST', body }),
+  privateGalleryDelete: (id) => request(`/private/gallery/${id}`, { method: 'DELETE' }),
+  // Chats moved to the second space (same username there, different display name)
+  privateMoveChat: (conversationId, displayName) => request('/private/chat/move', { method: 'POST', body: { conversationId, displayName } }),
+  privateRenameChat: (conversationId, displayName) => request(`/private/chat/${conversationId}`, { method: 'PATCH', body: { displayName } }),
+  privateMoveBack: (conversationId) => request(`/private/chat/${conversationId}`, { method: 'DELETE' }),
+  likeStory: (id) => request(`/stories/${id}/like`, { method: 'POST' }),
+  unlikeStory: (id) => request(`/stories/${id}/like`, { method: 'DELETE' }),
 
   reel: (id) => request(`/reels/${encodeURIComponent(id)}`),
   reelsFeed: (cursor) => request(`/reels/feed${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`),

@@ -7,6 +7,7 @@ import { parseCommand, editDistance, SPLIT_RE } from '../nlu.js';
 import { sanitizeControls, resolveControl, resolveField, resolveLandmark, planMixed, riskOf } from '../uiAgent.js';
 import { sendDirectMessage } from './messages.js';
 import { isBlocked } from './users.js';
+import { isShadow } from '../space.js';
 import { createRoom, joinRoomByCode, roomDTO } from './games.js';
 import { REEL_URL_RE } from './reels.js';
 import { findReels } from './search.js';
@@ -546,7 +547,13 @@ router.post('/ui-report', requireAuth, (req, res) => {
 // All actual execution lives here so both the fresh-request path and the post-confirmation
 // path run through the exact same authorization logic — confirmation only skips re-asking,
 // never re-validates less strictly.
+const SECOND_SPACE_BLOCKED = new Set(['create_reminder', 'invite_to_game', 'join_game']);
+const SECOND_SPACE_SCREENS = new Set(['games', 'stickies', 'learn', 'coins']);
 function executeAction(name, input, { req, io, context }) {
+  // Games, CHEX learn and sticky notes do not exist in the second space.
+  if (isShadow(req.userId) && (SECOND_SPACE_BLOCKED.has(name) || (name === 'navigate' && SECOND_SPACE_SCREENS.has(input?.screen)))) {
+    throw new Error("That isn't available in the second space.");
+  }
   // Every action that carries a `username` (send_message, follow, mute, block, restrict,
   // start_call, share_content, invite_to_game...) is resolved through the same
   // disambiguation-aware lookup before its own logic runs, so "message rahul" and "invite

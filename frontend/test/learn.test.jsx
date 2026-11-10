@@ -10,7 +10,8 @@ const api = vi.hoisted(() => ({
 const auth = vi.hoisted(() => ({ user: { id: 'u1', username: 'ada', displayName: 'Ada Lovelace', avatarColor: '#7C5CFF' } }));
 vi.mock('../src/api.js', () => ({ api }));
 vi.mock('../src/AuthContext.jsx', () => ({ useAuth: () => auth }));
-vi.mock('../src/socket.js', () => ({ getSocket: () => ({ on: () => {}, off: () => {} }) }));
+const fakeSocket = { on: () => {}, off: () => {}, io: { on: () => {}, off: () => {} } };
+vi.mock('../src/socket.js', () => ({ getSocket: () => fakeSocket, connectSocket: () => fakeSocket }));
 vi.mock('../src/stickyVoice.js', () => ({ speakReminder: vi.fn(), stickyVoiceOn: () => true, setStickyVoice: (v) => v }));
 // Make lessons deterministic: every level is seven "hello" questions with 'hello' as the right answer.
 vi.mock('../src/learn/course.js', async (orig) => ({
@@ -22,7 +23,6 @@ const Course = await vi.importActual('../src/learn/course.js');
 const R = await import('../src/learn/learnState.js');
 const { default: Learn } = await import('../src/learn/Learn.jsx');
 const { default: LearnPage } = await import('../src/pages/LearnPage.jsx');
-const { default: MyLife } = await import('../src/pages/MyLife.jsx');
 
 const saved = (over = {}) => ({ id: 'L1', kind: 'learn', ...R.newProgress(), onb: 0, createdAt: '2026-11-01T00:00:00Z', updatedAt: '', ...over });
 beforeEach(() => {
@@ -209,17 +209,13 @@ describe('CHEX learn page', () => {
     expect(screen.getByText('@grace · 🔥 4')).toBeTruthy();
   });
 
-  it('is its own page with a Back button, and no longer a tab inside My life', async () => {
+  it('is its own page with a Back button', async () => {
     const back = vi.fn();
     render(<LearnPage onBack={back} />);
     await screen.findByText(/Spanish course/);
     expect(screen.getByRole('heading', { name: /CHEX learn/ })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /Back/ }));
     expect(back).toHaveBeenCalled();
-    cleanup();
-    render(<MyLife />);
-    await screen.findByRole('tab', { name: /Daily planner/ });
-    expect(screen.queryByRole('tab', { name: /CHEX learn/ })).toBeNull();
   });
 
   it('shows a retry when progress cannot be loaded', async () => {

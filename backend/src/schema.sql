@@ -355,6 +355,46 @@ CREATE TABLE IF NOT EXISTS story_views (
   PRIMARY KEY (story_id, viewer_id)
 );
 
+-- Private space: a second hidden identity per account (see space.js), its password, and its gallery.
+CREATE TABLE IF NOT EXISTS private_spaces (
+  owner_id      TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  shadow_id     TEXT NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+  password_hash TEXT NOT NULL,
+  failed_count  INTEGER NOT NULL DEFAULT 0,
+  locked_until  TEXT,
+  created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE TABLE IF NOT EXISTS private_gallery (
+  id          TEXT PRIMARY KEY,
+  shadow_id   TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  kind        TEXT NOT NULL CHECK (kind IN ('image','video')),
+  url         TEXT NOT NULL,
+  name        TEXT NOT NULL DEFAULT '',
+  source      TEXT NOT NULL DEFAULT 'upload',
+  created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE INDEX IF NOT EXISTS idx_private_gallery_shadow ON private_gallery(shadow_id, created_at);
+
+-- Chats moved to the second space: hidden from the owner's normal Messages list, listed in the second space
+-- under a second-space display name (the contact keeps the same username).
+CREATE TABLE IF NOT EXISTS space_chats (
+  owner_id        TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+  contact_id      TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  display_name    TEXT NOT NULL,
+  created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  PRIMARY KEY (owner_id, conversation_id)
+);
+CREATE INDEX IF NOT EXISTS idx_space_chats_contact ON space_chats(owner_id, contact_id);
+
+-- Story likes: one heart per person per story.
+CREATE TABLE IF NOT EXISTS story_likes (
+  story_id    TEXT NOT NULL REFERENCES stories(id) ON DELETE CASCADE,
+  user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  PRIMARY KEY (story_id, user_id)
+);
+
 -- Reels: video-URL-based short posts (no upload/transcode pipeline in this slice —
 -- the video_url must point to an already-hosted video; see README).
 CREATE TABLE IF NOT EXISTS reels (

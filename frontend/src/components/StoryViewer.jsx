@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../api.js';
+import { useLive } from '../live.js';
+import { connectSocket } from '../socket.js';
 import EditedMedia from './EditedMedia.jsx';
 import PhotoEditor from './PhotoEditor.jsx';
 import VideoEditor from './VideoEditor.jsx';
@@ -126,6 +128,53 @@ export default function StoryViewer({ group, isMine, onClose }) {
   const loadViewers = async () => setViewers((await api.storyViewers(story.id)).viewers);
   const remove = async () => { await api.deleteStory(story.id); onClose(); };
 
+  // Live: views and hearts show up on the author's screen the moment they happen; a story deleted from
+  // another device / tab disappears from here without closing and reopening.
+  const storyIdRef = useRef(story.id);
+  storyIdRef.current = story.id;
+  const viewersOpenRef = useRef(false);
+  viewersOpenRef.current = !!viewers;
+  const refreshCounts = async (id) => {
+    try {
+      const fresh = (await api.getStory(id)).story;
+      setStories(list => list.map(x => (x.id === id ? { ...x, viewCount: fresh.viewCount, likeCount: fresh.likeCount, likedByMe: fresh.likedByMe } : x)));
+      if (viewersOpenRef.current && id === storyIdRef.current) loadViewers().catch(() => {});
+    } catch (err) {
+      // gone (deleted / expired): drop it
+      setStories(list => { const next = list.filter(x => x.id !== id); if (!next.length) setTimeout(onClose, 0); return next; });
+    }
+  };
+  useEffect(() => {
+    if (!isMine) return undefined;
+    const socket = connectSocket();
+    const on = ({ storyId }) => { if (stories.some(x => x.id === storyId)) refreshCounts(storyId); };
+    socket.on('story:view', on); socket.on('story:like', on);
+    return () => { socket.off('story:view', on); socket.off('story:like', on); };
+    // eslint-disable-next-line
+  }, [isMine, stories.length]);
+  useLive(['stories'], (ev) => {
+    if (ev?.action === 'delete' && ev.storyId) {
+      setStories(list => {
+        const next = list.filter(x => x.id !== ev.storyId);
+        if (!next.length) setTimeout(onClose, 0);
+        else if (index >= next.length) setIndex(next.length - 1);
+        return next;
+      });
+    } else if (ev?.storyId && stories.some(x => x.id === ev.storyId)) refreshCounts(ev.storyId);
+  });
+  useLive(['users'], (ev) => { if (ev?.action === 'account' && ev.status !== 'active' && ev.userId === group.author.id) onClose(); });
+
+  const toggleLike = async () => {
+    const id = story.id, was = !!story.likedByMe;
+    setStories(list => list.map(x => (x.id === id ? { ...x, likedByMe: !was, likeCount: Math.max(0, (x.likeCount || 0) + (was ? -1 : 1)) } : x))); // instant
+    try {
+      const res = was ? await api.unlikeStory(id) : await api.likeStory(id);
+      setStories(list => list.map(x => (x.id === id ? { ...x, likedByMe: res.story.likedByMe, likeCount: res.story.likeCount } : x)));
+    } catch {
+      setStories(list => list.map(x => (x.id === id ? { ...x, likedByMe: was, likeCount: Math.max(0, (x.likeCount || 0) + (was ? 1 : -1)) } : x)));
+    }
+  };
+
   const onSaved = (updated) => {
     setStories(list => list.map(s => (s.id === updated.id ? { ...s, ...updated } : s)));
     setEditing(false);
@@ -175,7 +224,12 @@ export default function StoryViewer({ group, isMine, onClose }) {
         </div>
 
         <div style={{ padding: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(0,0,0,0.35)', zIndex: 2 }}>
-          <div style={{ fontSize: 11.5, color: 'rgba(255,255,255,0.8)' }}>{story.viewCount} view{story.viewCount === 1 ? '' : 's'}</div>
+          <div style={{ fontSize: 11.5, color: 'rgba(255,255,255,0.8)' }}>{story.viewCount} view{story.viewCount === 1 ? '' : 's'}{story.likeCount > 0 ? ` · ❤️ ${story.likeCount}` : ''}</div>
+          {!isMine && (
+            <button type="button" aria-label={story.likedByMe ? 'Unlike story' : 'Like story'} aria-pressed={!!story.likedByMe}
+              style={{ background: 'none', border: 'none', fontSize: 24, cursor: 'pointer', lineHeight: 1, filter: story.likedByMe ? 'none' : 'grayscale(1) brightness(1.6)' }}
+              onClick={(e) => { e.stopPropagation(); toggleLike(); }}>{story.likedByMe ? '❤️' : '🤍'}</button>
+          )}
           {isMine && (
             <div style={{ display: 'flex', gap: 8 }}>
               <button className="btn-ghost" style={{ fontSize: 12, padding: '5px 10px' }} onClick={(e) => { e.stopPropagation(); setEditing(true); }}>Edit</button>
@@ -189,7 +243,7 @@ export default function StoryViewer({ group, isMine, onClose }) {
           <div style={{ position: 'absolute', bottom: 50, left: 0, right: 0, maxHeight: 160, overflowY: 'auto', background: 'rgba(10,8,18,0.95)', padding: 10, zIndex: 3 }}>
             {viewers.length === 0 && <div style={{ color: 'var(--text-low)', fontSize: 12.5 }}>No views yet.</div>}
             {viewers.map(v => (
-              <div key={v.id} style={{ color: 'white', fontSize: 13, padding: '4px 0' }}>{v.displayName} · @{v.username}</div>
+              <div key={v.id} style={{ color: 'white', fontSize: 13, padding: '4px 0' }}>{v.displayName} · @{v.username}{v.liked ? ' ❤️' : ''}</div>
             ))}
           </div>
         )}

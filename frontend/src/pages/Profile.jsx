@@ -13,7 +13,7 @@ import PostModal from '../components/PostModal.jsx';
 import { useAuth } from '../AuthContext.jsx';
 import { updateCodexContext } from '../codexContext.js';
 
-export default function Profile({ username, initialView, onConsumeInitialView, onOpenMessage, onOpenSettings, onOpenProfile }) {
+export default function Profile({ username, initialView, onConsumeInitialView, onOpenMessage, onOpenSettings, onOpenProfile, onOpenPrivateSpace }) {
   const { user: me, setUser } = useAuth();
   const [profile, setProfile] = useState(null);
   const [fsVideo, setFsVideo] = useState(null); // reel opened full screen from saved/history lists
@@ -291,6 +291,7 @@ export default function Profile({ username, initialView, onConsumeInitialView, o
           <button className="btn-ghost" onClick={() => openSaved('posts')}>{savedView === 'posts' ? 'Hide saved posts' : '🔖 Saved posts'}</button>
           <button className="btn-ghost" onClick={() => openSaved('reels')}>{savedView === 'reels' ? 'Hide saved reels' : '🎬 Saved reels'}</button>
           <button className="btn-ghost" onClick={openHistory}>{historyOpen ? 'Hide reels history' : '📜 Reels history'}</button>
+          {onOpenPrivateSpace && !me?.isPrivate && <button className="btn-ghost" onClick={onOpenPrivateSpace}>🔒 Private space</button>}
         </div>
       )}
 

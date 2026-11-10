@@ -25,7 +25,8 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
       res.status(401).json({ error: { code: 'INVALID_TOKEN', message: 'This session is no longer valid. Please log in again.' } });
       return;
     }
-    req.userId = payload.sub;
+    // The second space can act on the owner's moved chats (see space.js / routes/messages.js).
+    req.userId = (req as Request & { spaceActAs?: string }).spaceActAs || payload.sub;
     next();
   } catch {
     res.status(401).json({ error: { code: 'INVALID_TOKEN', message: 'Session expired or invalid. Please log in again.' } });

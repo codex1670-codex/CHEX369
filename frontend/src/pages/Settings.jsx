@@ -436,10 +436,10 @@ export default function Settings({ onBack, onOpenProfile, onOpenCoins, onOpenSti
       {onOpenMyLife && (
         <div className="glass-card" style={{ padding: 20, marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
           <div>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: 16, marginBottom: 4 }}>🌟 My life</div>
-            <div style={{ fontSize: 13, color: 'var(--text-mid)' }}>Smart reminders, sticky notes, daily planner, study timetable, assignments, focus timer and habits.</div>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 16, marginBottom: 4 }}>🔒 Private space</div>
+            <div style={{ fontSize: 13, color: 'var(--text-mid)' }}>A password-protected second profile with its own chats, calls, search, followers and a private gallery.</div>
           </div>
-          <button className="btn-primary" style={{ width: 'auto', padding: '8px 18px' }} onClick={onOpenMyLife}>Open My life</button>
+          <button className="btn-primary" style={{ width: 'auto', padding: '8px 18px' }} onClick={onOpenMyLife}>Open private space</button>
         </div>
       )}
       <div className="glass-card" style={{ padding: 20, marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>

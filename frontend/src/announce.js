@@ -88,11 +88,17 @@ export function playNotificationSound() {
 }
 
 // Chime once, then speak the line once. If the person has not touched the page yet, hold it until they do.
-export function notifyOnce(text) {
+// `silent: true` = soft chime only, no spoken line (used while the person is already inside Messages).
+export function notifyOnce(text, { silent = false } = {}) {
   if (!alertsEnabled() || !text) return;
-  if (!userTouched) { pending = text; return; }
+  if (!userTouched) { if (!silent) pending = text; return; }
   playNotificationSound();
-  setTimeout(() => speakAlert(text), 650); // let the chime finish first
+  if (!silent) setTimeout(() => speakAlert(text), 650); // let the chime finish first
+}
+
+// Browsers load their voice list lazily: ask once at start-up so the first spoken alert already has a voice.
+if (typeof window !== 'undefined' && window.speechSynthesis) {
+  try { window.speechSynthesis.getVoices(); window.speechSynthesis.addEventListener?.('voiceschanged', () => window.speechSynthesis.getVoices()); } catch { /* ignore */ }
 }
 
 if (typeof window !== 'undefined') {

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useLive } from '../live.js';
 import { createPortal } from 'react-dom';
 import { api } from '../api.js';
 import { useAuth } from '../AuthContext.jsx';
@@ -93,11 +94,17 @@ function Lesson({ C, n, s, update, onClose, onCoins }) {
   const say = useCallback((text) => {
     try {
       const u = new SpeechSynthesisUtterance(text); u.lang = SPEECH[C.code];
+      // Voices load lazily; pick the best match for this language each time so the very first tap already speaks.
+      const want = String(SPEECH[C.code] || '').toLowerCase();
+      const vs = speechSynthesis.getVoices?.() || [];
+      const v = vs.find(x => x.lang?.toLowerCase() === want) || vs.find(x => x.lang?.toLowerCase().startsWith(want.split('-')[0]));
+      if (v) u.voice = v;
       u.onstart = () => setSpeaking(true); u.onend = u.onerror = () => setSpeaking(false);
       speechSynthesis.cancel(); speechSynthesis.speak(u);
     } catch { setSpeaking(true); setTimeout(() => setSpeaking(false), 1200); }
   }, [C.code]);
   useEffect(() => () => { try { speechSynthesis.cancel(); } catch { /* speech not available */ } }, []);
+  useEffect(() => { try { speechSynthesis.getVoices(); } catch { /* no speech */ } }, []);
 
   const check = () => {
     const ok = q.k === 'ch' ? q.o[sel] === q.a : norm(bk.map(x => q.tiles[x]).join(' ')) === norm(q.a);
@@ -542,6 +549,8 @@ export default function Learn({ onOpenProfile }) {
   const [busy, setBusy] = useState(false);
   const loadInfo = useCallback(() => api.learnLanguages().then(r => { setInfo(r); setLangErr(''); }).catch(e => setLangErr(e.message || 'Could not load your languages.')), []);
   useEffect(() => { loadInfo(); }, [loadInfo]);
+  // Live: coins, owned languages and unlocks made on another device / tab show up without a refresh.
+  useLive(['life', 'coins'], () => { loadInfo(); api.coins().then(r => setCoins(r.balance)).catch(() => {}); });
   // If the saved course language isn't one this person owns (older saves default to Spanish), move them to one they own.
   useEffect(() => { if (s && info?.chosen && !info.owned.includes(s.lang)) update(p => switchLanguage(p, info.owned[0])); }, [info, s?.lang]); // eslint-disable-line react-hooks/exhaustive-deps
   const C = useMemo(() => (s ? makeCourse(s.lang) : null), [s?.lang]); // eslint-disable-line react-hooks/exhaustive-deps

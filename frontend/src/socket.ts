@@ -23,6 +23,14 @@ export function connectSocket(): Socket {
 
 export function getSocket(): Socket | null { return socket; }
 
+// Re-open the shared connection so the server sees the CURRENT token (the normal account, or the hidden
+// private profile). Every listener already attached to the socket stays in place.
+export function reconnectSocket(): void {
+  const s = connectSocket();
+  if (s.connected) s.disconnect();
+  s.connect();
+}
+
 export function disconnectSocket(): void {
   socket?.disconnect();
   socket = null;

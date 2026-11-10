@@ -1,4 +1,3 @@
-import React from 'react';
 import { useState, lazy, Suspense } from 'react';
 import { useAuth } from '../AuthContext.jsx';
 
@@ -17,59 +16,30 @@ export default function Auth() {
 
   const update = (k) => (e) => setForm(f => ({ ...f, [k]: e.target.value }));
 
-
-const submit = async (e) => {
-  e.preventDefault();
-  setError('');
-  setNotice('');
-  setBusy(true);
-
-  try {
-    if (mode === 'login') {
-      // Second password verification
-      if (step2) {
-        await loginVerify(step2.challenge, form.password2);
-        return;
+  const submit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setNotice('');
+    setBusy(true);
+    try {
+      if (mode === 'login') {
+        if (step2) {
+          await loginVerify(step2.challenge, form.password2);
+          return;
+        }
+        const result = await login(form.identifier, form.password, form.totpCode || undefined);
+        if (result.requires2FA) { setNeeds2FA(true); setBusy(false); return; }
+        if (result.requiresPassword2) { setStep2({ challenge: result.challenge }); setForm(f => ({ ...f, password: '' })); setBusy(false); return; }
+        if (result.reactivated) setNotice('Welcome back! Your account has been reactivated.');
+      } else {
+        await signup({ username: form.username, email: form.email, password: form.password, displayName: form.displayName });
       }
-
-      // First login step
-      const result = await login(
-        form.identifier,
-        form.password,
-        form.totpCode || undefined
-      );
-
-      if (result.requires2FA) {
-        setNeeds2FA(true);
-        setBusy(false);
-        return;
-      }
-
-      // Ask for the second password when required
-      if (result.requiresPassword2) {
-        setStep2({ challenge: result.challenge });
-        setForm(f => ({ ...f, password: '' }));
-        setBusy(false);
-        return;
-      }
-
-      if (result.reactivated) {
-        setNotice('Welcome back! Your account has been reactivated.');
-      }
-    } else {
-      await signup({
-        username: form.username,
-        email: form.email,
-        password: form.password,
-        displayName: form.displayName
-      });
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
     }
-  } catch (err) {
-    setError(err.message);
-  } finally {
-    setBusy(false);
-  }
-};
+  };
 
   return (
     <div className="center-screen">
@@ -121,41 +91,16 @@ const submit = async (e) => {
             </div>
           )}
           <button className="btn-primary" disabled={busy} type="submit">
-            {busy ? 'Please waitâ€¦' : needs2FA || !!step2 ? 'Verify' : mode === 'login' ? 'Log in' : 'Create account'}
+            {busy ? 'Please wait…' : needs2FA || !!step2 ? 'Verify' : mode === 'login' ? 'Log in' : 'Create account'}
           </button>
         </form>
         <div className="switch-line">
           {!!step2 ? (
-            <button
-              type="button"
-              onClick={() => {
-                setStep2(null);
-                setForm(f => ({ ...f, password: '', password2: '' }));
-                setError('');
-              }}
-            >
-              Start over
-            </button>
+            <button onClick={() => { setStep2(null); setForm(f => ({ ...f, password: '', password2: '' })); setError(''); }}>← Start over</button>
           ) : mode === 'login' ? (
-            <>
-              New to CHEX?{' '}
-              <button type="button" onClick={() => {
-                setMode('signup');
-                setError('');
-              }}>
-                Create an account
-              </button>
-            </>
+            <>New to CHEX? <button onClick={() => { setMode('signup'); setError(''); }}>Create an account</button></>
           ) : (
-            <>
-              Already have an account?{' '}
-              <button type="button" onClick={() => {
-                setMode('login');
-                setError('');
-              }}>
-                Log in
-              </button>
-            </>
+            <>Already have an account? <button onClick={() => { setMode('login'); setError(''); }}>Log in</button></>
           )}
         </div>
       </div>
