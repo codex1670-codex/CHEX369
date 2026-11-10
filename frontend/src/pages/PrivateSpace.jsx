@@ -2,7 +2,7 @@ import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'r
 import { createPortal } from 'react-dom';
 import { api, setPrivateSession, inPrivateSpace } from '../api.js';
 import { AuthContext } from '../AuthContext.jsx';
-import { reconnectSocket } from '../socket.ts';
+import { reconnectSocket } from '../socket.js';
 import Feed from './Feed.jsx';
 import Search from './Search.jsx';
 import Reels from './Reels.jsx';
@@ -222,4 +222,3 @@ export default function PrivateSpace({ onLayout }) {
     </AuthContext.Provider>
   );
 }
-

@@ -159,7 +159,15 @@ export function createPersistence({ uri = process.env.MONGODB_URI, storeFactory 
           log(`database restored from MongoDB (snapshot #${i === 0 ? 'latest' : i + 1})`);
         } catch (err) {
           warn(`snapshot #${i + 1} unusable: ${err.message}`);
-          fs.rmSync(tmp, { force: true });
+          try {
+            await fs.promises.rm(tmp, {
+              force: true,
+              maxRetries: 10,
+              retryDelay: 200
+            });
+          } catch (cleanupError) {
+            warn(`temporary restore cleanup failed: ${cleanupError.message}`);
+          }
         }
       }
       if (count > 0 && result !== 'restored') {

@@ -8,5 +8,5 @@ __pycache__/
 *.pyc
 .DS_Store
 
-# User uploaded files
+# User-uploaded runtime media
 backend/uploads/
