@@ -8,5 +8,9 @@ __pycache__/
 *.pyc
 .DS_Store
 
-# User-uploaded runtime media
-backend/uploads/
+.env
+!.env.example
+
+# Runtime user uploads
+/backend/uploads/
+

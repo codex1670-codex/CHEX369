@@ -15,17 +15,21 @@ import './responsive.css';
 import './games/games3d.css';
 import './polish.css';
 import './tailwind.css';
+import './compact.css';
 import { getStoredTheme, applyTheme } from './theme.js';
 import { initPremium } from './premiumThemes.js';
 import { apply3D } from './ui3d.js';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
 import { initKeyboardAware } from './keyboard.js';
+import { applyCompact, startCompactLayer } from './compact.js';
 
 // Applied before first paint so there's no flash of the wrong theme.
 applyTheme(getStoredTheme());
 initPremium();
 apply3D();
 initKeyboardAware();
+applyCompact();       // compact mode (icons + short text), on unless switched off in Settings
+startCompactLayer();
 
 const rootEl = document.getElementById('root');
 if (!rootEl) throw new Error('Missing #root element');

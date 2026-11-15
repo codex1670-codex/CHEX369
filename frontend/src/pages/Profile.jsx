@@ -204,6 +204,9 @@ export default function Profile({ username, initialView, onConsumeInitialView, o
 
   return (
     <div>
+      {profile.isSelf && onOpenPrivateSpace && !me?.isPrivate && (
+        <button type="button" className="btn-primary" style={{ width: '100%', marginBottom: 12 }} onClick={onOpenPrivateSpace}>🔒 Private space</button>
+      )}
       <ProfileStudio
         profile={profile}
         isSelf={profile.isSelf}
@@ -291,7 +294,6 @@ export default function Profile({ username, initialView, onConsumeInitialView, o
           <button className="btn-ghost" onClick={() => openSaved('posts')}>{savedView === 'posts' ? 'Hide saved posts' : '🔖 Saved posts'}</button>
           <button className="btn-ghost" onClick={() => openSaved('reels')}>{savedView === 'reels' ? 'Hide saved reels' : '🎬 Saved reels'}</button>
           <button className="btn-ghost" onClick={openHistory}>{historyOpen ? 'Hide reels history' : '📜 Reels history'}</button>
-          {onOpenPrivateSpace && !me?.isPrivate && <button className="btn-ghost" onClick={onOpenPrivateSpace}>🔒 Private space</button>}
         </div>
       )}
 

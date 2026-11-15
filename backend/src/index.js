@@ -1,3 +1,4 @@
+import './loadEnv.js';   // backend/.env (optional) — must stay the first import
 import express from 'express';
 import cors from 'cors';
 import http from 'http';
@@ -29,11 +30,15 @@ import gameRoutes from './routes/games.js';
 import tournamentRoutes from './routes/tournaments.js';
 import reportRoutes from './routes/reports.js';
 import adminRoutes from './routes/admin.js';
+import { createAiRouter } from './routes/ai.js';
+import { createAiAdminRouter } from './routes/aiAdmin.js';
+import { buildCodexAI } from './codexai/index.js';
 import { seedMasterAccount } from './admin.js';
 import searchRoutes from './routes/search.js';
 import appRoutes from './routes/apps.js';
 import callRoutes from './routes/calls.js';
 import privateRoutes from './routes/private.js';
+import scan3dRoutes from './routes/scan3d.js';
 import { blockShadow } from './space.js';
 import codexRoutes from './routes/codex.js';
 import pushRoutes from './routes/push.js';
@@ -123,11 +128,16 @@ app.use('/api/reels', apiLimiter, reelRoutes);
 app.use('/api/games', apiLimiter, gameRoutes);
 app.use('/api/tournaments', apiLimiter, tournamentRoutes);
 app.use('/api/reports', apiLimiter, reportRoutes);
+// CODEX AI platform (text / vision / image / video / audio / memory) — one stack shared by the user and admin routes.
+const codexAI = buildCodexAI({ db, uploadsRoot: UPLOADS_ROOT });
+app.use('/api/ai', apiLimiter, createAiRouter({ stack: codexAI }));
+app.use('/api/admin/ai', apiLimiter, createAiAdminRouter({ stack: codexAI }));
 app.use('/api/admin', apiLimiter, adminRoutes);
 app.use('/api/search', apiLimiter, searchRoutes);
 app.use('/api/apps', apiLimiter, appRoutes);
 app.use('/api/calls', apiLimiter, callRoutes);
 app.use('/api/private', apiLimiter, privateRoutes);
+app.use('/api/scan3d', apiLimiter, scan3dRoutes);   // CHEX Simulation: 3D Scanning Studio (private projects, jobs)
 const codexLimiter = rateLimit({ windowMs: 60 * 1000, max: 20, standardHeaders: true, legacyHeaders: false,
   message: { error: { code: 'RATE_LIMITED', message: 'Too many Codex requests. Please slow down.' } } });
 // The on-screen agent makes several cheap calls per command (resolve + report per step, plus a few

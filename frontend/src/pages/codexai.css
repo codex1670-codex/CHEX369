@@ -1,0 +1,55 @@
+/* CODEX AI page — mobile first; works in the browser and the installed (Android) app. */
+.cai-page { max-width: 760px; margin: 0 auto; padding: 10px 10px 90px; display: flex; flex-direction: column; gap: 8px; color: var(--text-mid); }
+.cai-head { display: flex; align-items: center; gap: 10px; padding: 10px 12px; }
+.cai-back { width: auto !important; padding: 6px 12px !important; }
+.cai-title { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.cai-title b { color: var(--text-hi); font-size: 17px; font-family: var(--font-display); }
+.cai-title span { font-size: 11px; color: var(--text-low); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cai-small { width: auto !important; padding: 7px 13px !important; font-size: 12.5px !important; }
+.cai-chips { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; }
+.cai-chip { flex: none; display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border-soft); background: var(--surface-hover); color: var(--text-mid); border-radius: 999px; padding: 5px 10px; font-size: 11.5px; cursor: pointer; }
+.cai-dot { width: 8px; height: 8px; border-radius: 50%; background: #888; }
+.st-ready .cai-dot { background: #3ddc84; } .st-cooldown .cai-dot, .st-limit_reached .cai-dot { background: #ffb020; } .st-not_configured .cai-dot, .st-disabled .cai-dot { background: #8a8f98; }
+.cai-note { font-size: 11.5px; padding: 6px 10px; border-radius: 10px; background: rgba(61, 220, 132, .08); border: 1px solid rgba(61, 220, 132, .25); color: var(--text-mid); }
+.cai-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border-soft); overflow-x: auto; }
+.cai-tabs button { background: none; border: 0; color: var(--text-low); padding: 8px 12px; font-size: 13px; cursor: pointer; border-bottom: 2px solid transparent; }
+.cai-tabs button.on { color: var(--text-hi); border-bottom-color: #ffd36b; }
+.cai-toast { padding: 8px 12px; border-radius: 10px; background: rgba(255, 211, 107, .12); border: 1px solid rgba(255, 211, 107, .3); color: var(--text-hi); font-size: 12.5px; }
+
+.cai-chat { display: flex; flex-direction: column; gap: 8px; }
+.cai-log { min-height: 240px; max-height: calc(100dvh - 400px); overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 4px 2px; }
+.cai-empty { font-size: 13px; line-height: 1.55; padding: 12px; } .cai-empty b { color: var(--text-hi); } .cai-empty ul { margin: 6px 0 0; padding-left: 18px; }
+.cai-msg { position: relative; max-width: 92%; padding: 9px 12px; border-radius: 14px; font-size: 14px; line-height: 1.5; word-break: break-word; display: flex; flex-direction: column; gap: 6px; }
+.cai-msg.me { align-self: flex-end; background: var(--surface-hover); color: var(--text-hi); }
+.cai-msg.ai { align-self: flex-start; background: rgba(255, 211, 107, .07); border: 1px solid rgba(255, 211, 107, .22); color: var(--text-hi); padding-right: 30px; }
+.cai-msg.err { border-color: rgba(255, 90, 90, .45); } .cai-msg.limit { border-color: rgba(255, 176, 32, .55); background: rgba(255, 176, 32, .08); }
+.cai-plain { white-space: pre-wrap; }
+.cai-code { margin: 0; padding: 8px 10px; background: rgba(0, 0, 0, .35); border-radius: 8px; overflow-x: auto; font-size: 12.5px; }
+.cai-route, .cai-heard { font-size: 11px; color: var(--text-low); }
+.cai-img, .cai-video { max-width: 100%; max-height: 340px; border-radius: 10px; display: block; } .cai-audio { width: 100%; max-width: 320px; }
+.cai-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.cai-proposal { padding-top: 6px; border-top: 1px dashed var(--border-soft); font-size: 13px; }
+.cai-tiny { position: absolute; top: 6px; right: 6px; background: none; border: 0; cursor: pointer; font-size: 14px; opacity: .7; }
+
+.cai-composer { padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; position: sticky; bottom: 8px; }
+.cai-modes { display: flex; gap: 5px; overflow-x: auto; scrollbar-width: none; }
+.cai-modes button { flex: none; border: 1px solid var(--border-soft); background: transparent; color: var(--text-mid); border-radius: 999px; padding: 4px 10px; font-size: 12px; cursor: pointer; }
+.cai-modes button.on { background: rgba(255, 211, 107, .16); color: var(--text-hi); border-color: rgba(255, 211, 107, .45); }
+.cai-input { display: flex; gap: 6px; align-items: flex-end; }
+.cai-input textarea, .cai-input input[type="text"], .cai-input input:not([type]) { flex: 1; min-width: 0; resize: none; max-height: 120px; background: var(--surface-hover); border: 1px solid var(--border-soft); border-radius: 16px; color: var(--text-hi); padding: 9px 13px; font-size: 14px; font-family: inherit; }
+.cai-icon { background: var(--surface-hover); border: 1px solid var(--border-soft); border-radius: 50%; width: 38px; height: 38px; font-size: 16px; cursor: pointer; flex: none; color: var(--text-hi); }
+.cai-icon.rec { background: rgba(255, 70, 70, .25); border-color: rgba(255, 70, 70, .7); animation: caipulse 1s infinite; }
+@keyframes caipulse { 50% { opacity: .55; } }
+.cai-attach { display: flex; gap: 6px; } .cai-att { position: relative; width: 52px; height: 52px; border-radius: 10px; background: var(--surface-hover); display: grid; place-items: center; overflow: hidden; } .cai-att img { width: 100%; height: 100%; object-fit: cover; }
+.cai-att button { position: absolute; top: 0; right: 0; background: rgba(0, 0, 0, .65); color: #fff; border: 0; font-size: 10px; cursor: pointer; }
+.cai-check { font-size: 11.5px; display: flex; gap: 6px; align-items: center; color: var(--text-low); }
+
+.cai-panel { padding: 14px; display: flex; flex-direction: column; gap: 10px; } .cai-panel h3 { margin: 0; color: var(--text-hi); font-size: 16px; }
+.cai-dim { color: var(--text-low); font-size: 12.5px; margin: 0; }
+.cai-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.cai-list li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px; border: 1px solid var(--border-soft); border-radius: 10px; font-size: 13px; }
+.cai-linkbtn { flex: 1; text-align: left; background: none; border: 0; color: var(--text-hi); cursor: pointer; display: flex; flex-direction: column; font-size: 13.5px; } .cai-linkbtn small, .cai-limit small { color: var(--text-low); font-size: 11px; }
+.cai-limit { flex-wrap: wrap; } .cai-limit > div:first-child { display: flex; flex-direction: column; }
+.cai-state { font-size: 12px; } .cai-state.st-ready { color: #3ddc84; } .cai-state.st-cooldown, .cai-state.st-limit_reached { color: #ffb020; }
+.cai-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; } .cai-grid figure { margin: 0; position: relative; } .cai-grid figcaption { font-size: 11px; color: var(--text-low); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (min-width: 900px) { .cai-log { max-height: calc(100dvh - 360px); } }

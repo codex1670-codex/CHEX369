@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { circleAskEnabled } from '../circleAsk/settings.js';
 import { floatingAiEnabled } from '../floatingAi.js';
 import { alertsEnabled, setAlertsEnabled } from '../announce.js';
 import { api } from '../api.js';
@@ -328,6 +329,13 @@ export default function Codex({ navigate, goBack, currentUser }) {
   const [showReply, setShowReply] = useState(false); // small reply square under/over the type box
   // The floating bar is off until the person switches it on in Settings (default OFF).
   const [floatOn, setFloatOn] = useState(floatingAiEnabled());
+  // Circle to Ask is its own opt-in feature (Settings → Circle to Ask); when on, the bar gets a ⭕ shortcut for it.
+  const [circleOn, setCircleOn] = useState(circleAskEnabled());
+  useEffect(() => {
+    const sync = () => setCircleOn(circleAskEnabled());
+    window.addEventListener('chex:circle-ask-changed', sync);
+    return () => window.removeEventListener('chex:circle-ask-changed', sync);
+  }, []);
   useEffect(() => {
     const sync = () => { const on = floatingAiEnabled(); setFloatOn(on); if (!on) { setOpen(false); setShowReply(false); } };
     window.addEventListener('chex:floating-ai-changed', sync);
@@ -850,6 +858,8 @@ export default function Codex({ navigate, goBack, currentUser }) {
               <option value="ko-KR">KO</option><option value="ru-RU">RU</option>
             </select>
             <button type="button" className="codex-mini-btn codex-bell" onClick={() => setAlertsEnabled(!alertsOn)} aria-label={alertsOn ? 'Mute AI alerts' : 'Unmute AI alerts'} aria-pressed={!alertsOn} title={alertsOn ? 'Mute alerts' : 'Alerts muted — tap to unmute'}>{alertsOn ? '🔔' : '🔕'}</button>
+            <button type="button" className="codex-mini-btn" onClick={() => navigate('codexai')} aria-label="Open CODEX AI" title="CODEX AI — chat, images, voice, memory">🧠</button>
+            {circleOn && <button type="button" className="codex-mini-btn" onClick={() => window.dispatchEvent(new Event('chex:circle-ask-start'))} aria-label="Circle to Ask" title="Circle part of the screen and ask about it">⭕</button>}
             <button type="button" className="codex-mini-btn" onClick={() => setOpen(true)} aria-label="Open full Codex" title="Open full Codex">⤢</button>
           </form>
         </div>

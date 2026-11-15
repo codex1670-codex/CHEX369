@@ -5,7 +5,10 @@ import { requireAuth, optionalAuth } from '../middleware/auth.js';
 import { isRestricted, canViewAccountContent, PRIVATE_OK_SQL } from './users.js';
 import { processMentionsAndHashtags } from '../content.js';
 import { safeAward, safeCheckPost, safeStreakTick } from '../coins.js';
-import { mediaMiddleware, removeLocalUpload, editsToJson, parseEdits } from '../uploads.js';
+import { mediaMiddleware, removeLocalUpload, editsToJson, parseEdits, model3dToJson, parseModel3d, UPLOADS_ROOT } from '../uploads.js';
+import fs from 'fs';
+import path from 'path';
+import { projectDir, safeJoin } from '../scan3d/store.js';
 
 const router = Router();
 
@@ -52,6 +55,10 @@ function postDTO(row, viewerId) {
     mediaUrl: row.image_url,
     mediaType: row.image_url ? (row.media_type || 'image') : null,
     edits: parseEdits(row.edits),
+    // CHEX Simulation: when set, the image is a cut-out and clients show it as a rotatable 3D object.
+    model3d: row.media_type === 'image' || !row.media_type ? parseModel3d(row.model3d) : null,
+    // 3D Scanning Studio: an interactive GLB (the post's image is its thumbnail).
+    modelAsset: row.model_asset || null,
     audience: row.audience || 'public',
     createdAt: row.created_at,
     editedAt: row.edited_at,
@@ -91,8 +98,26 @@ router.post('/', requireAuth, (req, res) => {
 router.post('/upload', requireAuth, mediaMiddleware('posts', ['image', 'video']), (req, res) => {
   const cap = typeof req.body.caption === 'string' ? req.body.caption.slice(0, 2200) : '';
   const id = uuid();
-  db.prepare('INSERT INTO posts (id, user_id, caption, image_url, media_type, edits, audience) VALUES (?, ?, ?, ?, ?, ?, ?)')
-    .run(id, req.userId, cap, req.media.url, req.media.kind, req.media.kind === 'video' ? editsToJson(req.body.edits) : null, cleanAudience(req.body.audience));
+  // A 3D post is always a photo (the cut-out); the settings are ignored on anything else.
+  const model3d = req.media.kind === 'image' ? model3dToJson(req.body.model3d) : null;
+  // 3D Scanning Studio publish: the uploaded image is the thumbnail, `modelProjectId` names the scan project whose
+  // GLB is copied into the public uploads (a published post is public media like any other). The owner must have
+  // ticked the confirmation (`confirmPublish`), so a scan is never published by accident.
+  let modelAsset = null;
+  if (req.body.modelProjectId) {
+    const fail = (status, code, message) => { removeLocalUpload(req.media.url); return res.status(status).json({ error: { code, message } }); };
+    if (req.media.kind !== 'image') return fail(400, 'THUMB_REQUIRED', 'A 3D post needs a still thumbnail image.');
+    if (req.body.confirmPublish !== 'true') return fail(400, 'CONFIRM_REQUIRED', 'Please confirm that you want to publish this scan.');
+    const proj = db.prepare('SELECT id, model_bytes FROM scan_projects WHERE id = ? AND user_id = ? AND deleted_at IS NULL').get(String(req.body.modelProjectId), req.userId);
+    if (!proj || !proj.model_bytes) return fail(404, 'MODEL_NOT_FOUND', 'That scan project has no model to publish.');
+    const src = safeJoin(projectDir(proj.id), 'current.glb');
+    if (!fs.existsSync(src)) return fail(404, 'MODEL_NOT_FOUND', 'That scan project has no model to publish.');
+    const dir = path.join(UPLOADS_ROOT, 'models'); fs.mkdirSync(dir, { recursive: true });
+    const name = `${uuid()}.glb`; fs.copyFileSync(src, path.join(dir, name));
+    modelAsset = `/uploads/models/${name}`;
+  }
+  db.prepare('INSERT INTO posts (id, user_id, caption, image_url, media_type, edits, audience, model3d, model_asset) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+    .run(id, req.userId, cap, req.media.url, req.media.kind, req.media.kind === 'video' ? editsToJson(req.body.edits) : null, cleanAudience(req.body.audience), model3d, modelAsset);
   processMentionsAndHashtags({ text: cap, sourceType: 'post', sourceId: id, actorId: req.userId, io: req.app.get('io') });
   const row = db.prepare('SELECT * FROM posts WHERE id = ?').get(id);
   const coinStatus = safeCheckPost(id);
@@ -120,6 +145,7 @@ router.delete('/:id', requireAuth, (req, res) => {
   });
   tx();
   removeLocalUpload(row.image_url);
+  removeLocalUpload(row.model_asset);   // 3D Scanning Studio copy, if any
   res.json({ ok: true });
 });
 
@@ -155,9 +181,10 @@ const ownPostOr4xx = (req, res, next) => {
 };
 router.post('/:id/media', requireAuth, ownPostOr4xx, mediaMiddleware('posts', ['image', 'video']), (req, res) => {
   const row = req.postRow;
-  db.prepare("UPDATE posts SET image_url = ?, media_type = ?, edits = ?, edited_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?")
+  db.prepare("UPDATE posts SET image_url = ?, media_type = ?, edits = ?, model3d = NULL, model_asset = NULL, edited_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?")
     .run(req.media.url, req.media.kind, req.media.kind === 'video' ? editsToJson(req.body.edits) : null, row.id);
   removeLocalUpload(row.image_url);
+  removeLocalUpload(row.model_asset);
   safeCheckPost(row.id, { rehashMedia: true });
   const updated = db.prepare('SELECT * FROM posts WHERE id = ?').get(row.id);
   res.json({ post: postDTO(updated, req.userId), coinsEarned: updated.audience === 'public' ? safeAward(req.userId) : 0 });

@@ -13,6 +13,7 @@
   ],
   "shortcuts": [
     { "name": "Messages", "url": "/?open=messages" },
-    { "name": "Reels", "url": "/?open=reels" }
+    { "name": "Reels", "url": "/?open=reels" },
+    { "name": "CODEX AI", "url": "/?open=codexai" }
   ]
 }

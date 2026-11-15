@@ -13,6 +13,7 @@ export function useLongPress(onLongPress, { ms = 450, disabled = false } = {}) {
   useEffect(() => cancel, []);
 
   return {
+    'data-longpress': '', // lets Circle to Ask's own long-press stay out of the way of this element
     onPointerDown: (e) => {
       if (disabled || (e.button !== undefined && e.button > 0)) return;
       cancel();

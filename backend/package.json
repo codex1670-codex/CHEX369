@@ -8,7 +8,8 @@
     "seed": "tsx src/seed.js",
     "test": "tsx --test test/*.test.mjs",
     "dev": "tsx watch src/index.js",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "ai:check": "tsx scripts/ai-check.mjs"
   },
   "dependencies": {
     "@socket.io/redis-adapter": "^8.3.0",

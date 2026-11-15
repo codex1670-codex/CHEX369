@@ -7,6 +7,17 @@ services:
       NEXA_ACCESS_SECRET: ${NEXA_ACCESS_SECRET:?set NEXA_ACCESS_SECRET}
       NEXA_REFRESH_SECRET: ${NEXA_REFRESH_SECRET:?set NEXA_REFRESH_SECRET}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      # ---- CODEX AI (see docs/CODEX_AI.md). Everything is optional; engines without keys show "not set up". ----
+      FREE_ONLY_MODE: ${FREE_ONLY_MODE:-true}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}                                  # console.groq.com → API Keys
+      GROQ_TEXT_MODEL: ${GROQ_TEXT_MODEL:-openai/gpt-oss-120b}
+      GROQ_VISION_MODEL: ${GROQ_VISION_MODEL:-qwen/qwen3.8-27b}
+      CLOUDFLARE_ACCOUNT_ID: ${CLOUDFLARE_ACCOUNT_ID:-}
+      CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN:-}
+      CF_DAILY_NEURON_CAP: ${CF_DAILY_NEURON_CAP:-8000}
+      VIDEO_API_KEY: ${VIDEO_API_KEY:-}
+      VIDEO_FREE_MODELS: ${VIDEO_FREE_MODELS:-grok-video}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-}
       MONGODB_URI: mongodb://mongo:27017
       MONGODB_DB: chex
       DATABASE_URL: postgres://nexa:nexa@postgres:5432/nexa

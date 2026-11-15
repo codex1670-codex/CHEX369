@@ -16,11 +16,14 @@ import CoinStore from './pages/CoinStore.jsx';
 import Admin from './pages/Admin.jsx';
 import Stickies from './pages/Stickies.jsx';
 import PrivateSpace from './pages/PrivateSpace.jsx';   // password-protected second profile (replaces the old My life page)
+const Sim3D = lazy(() => import('./pages/Sim3D.jsx'));   // CHEX Simulation (3D objects): three.js loads only when opened
+const CodexAI = lazy(() => import('./pages/CodexAI.jsx'));       // CODEX AI platform: loaded only when opened
 const LearnPage = lazy(() => import('./pages/LearnPage.jsx'));   // CHEX learn: loaded only when opened
 import StickyAlerts from './components/StickyAlerts.jsx';
 import AlarmRinger from './components/AlarmRinger.jsx';
 import Avatar from './components/Avatar.jsx';
 import Codex from './components/Codex.jsx';
+import CircleAsk from './circleAsk/CircleAsk.jsx';
 import CallLayer from './components/CallLayer.jsx';
 import InstallBanner from './components/InstallBanner.jsx';
 import Splash from './components/Splash.jsx';
@@ -36,15 +39,28 @@ import { burstEmoji } from './emojiFx.js';
 import EmojiRain from './components/EmojiRain.jsx';
 import PermissionsPrompt from './components/PermissionsPrompt.jsx';
 import { syncPushIfAllowed, watchPush } from './push.js';
+import { compactEnabled } from './compact.js';
 
+// `label` is the full name (tooltip + screen readers). `short` is the one word shown on screen.
 const NAV = [
-  { key: 'feed', label: 'Home', icon: '🏠' },
-  { key: 'search', label: 'Search', icon: '🔍' },
-  { key: 'reels', label: 'Reels', icon: '🎬' },
-  { key: 'messages', label: 'Messages', icon: '💬' },
-  { key: 'notifications', label: 'Notifications', icon: '🔔' },
-  { key: 'games', label: 'Games', icon: '🎮' },
-  { key: 'profile', label: 'Profile', icon: '👤' },
+  { key: 'feed', label: 'Home', short: 'Home', icon: '🏠' },
+  { key: 'search', label: 'Search', short: 'Find', icon: '🔍' },
+  { key: 'reels', label: 'Reels', short: 'Reels', icon: '🎬' },
+  { key: 'messages', label: 'Messages', short: 'Chats', icon: '💬' },
+  { key: 'notifications', label: 'Notifications', short: 'Alerts', icon: '🔔' },
+  { key: 'games', label: 'Games', short: 'Games', icon: '🎮' },
+  { key: 'profile', label: 'Profile', short: 'Me', icon: '👤' },
+];
+// Everything else, one tap away in the launcher grid (＋ on desktop, ⋯ on phones).
+const MORE = [
+  { key: 'mylife', label: 'Private space', short: 'Private', icon: '🔒' },
+  { key: 'codexai', label: 'CODEX AI', short: 'AI', icon: '🧠' },
+  { key: 'learn', label: 'CHEX learn', short: 'Learn', icon: '🌍' },
+  { key: 'sim3d', label: 'CHEX Simulation', short: '3D', icon: '🧊' },
+  { key: 'stickies', label: 'Sticky notes', short: 'Notes', icon: '📌' },
+  { key: 'admin', label: 'Admin', short: 'Admin', icon: '🛡️', adminOnly: true },
+  { key: 'coins', label: 'CHEX Coins', short: 'Coins', icon: '🪙' },
+  { key: 'settings', label: 'Settings', short: 'Settings', icon: '⚙️' },
 ];
 
 export default function App() {
@@ -68,10 +84,39 @@ export default function App() {
     window.addEventListener('chex:alerts-changed', sync);
     return () => window.removeEventListener('chex:alerts-changed', sync);
   }, []);
+  // Compact mode (icons + short text) and the smart bottom bar: it tucks away while you scroll down
+  // and returns when you scroll up, change page, or reach the end of the page.
+  const [compactOn, setCompactOn] = useState(compactEnabled());
+  const [navHidden, setNavHidden] = useState(false);
+  useEffect(() => {
+    const sync = () => setCompactOn(compactEnabled());
+    window.addEventListener('chex:compact-changed', sync);
+    return () => window.removeEventListener('chex:compact-changed', sync);
+  }, []);
+  useEffect(() => {
+    let last = window.scrollY || 0;
+    const onScroll = () => {
+      const y = window.scrollY || 0;
+      const dy = y - last;
+      if (Math.abs(dy) < 8) return;
+      last = y;
+      const atEnd = window.innerHeight + y >= document.documentElement.scrollHeight - 8;
+      setNavHidden(dy > 0 && y > 90 && !atEnd);
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
   const routeRef = useRef('feed');          // current page, readable inside socket handlers
   routeRef.current = route;
   const announcedRef = useRef(null); // ids of unread notifications already spoken (null until first load)
   const [fabOpen, setFabOpen] = useState(false);
+  useEffect(() => { setNavHidden(false); }, [route]);
+  useEffect(() => {
+    if (!fabOpen) return undefined;
+    const onKey = (e) => { if (e.key === 'Escape') setFabOpen(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [fabOpen]);
   const [coinToast, setCoinToast] = useState('');
   const coinTimer = useRef(null);
   const swipeRef = useRef(null); // touch start point for swipe-to-change-page
@@ -113,7 +158,7 @@ export default function App() {
       return;
     }
     const target = params.get('open');
-    if (target && (target === 'stickies' || target === 'mylife' || target === 'learn' || NAV.some(n => n.key === target))) {
+    if (target && (target === 'stickies' || target === 'mylife' || target === 'learn' || target === 'sim3d' || target === 'codexai' || NAV.some(n => n.key === target))) {
       setRoute(target);
       setCodexContext({ screen: target });
       window.history.replaceState(null, '', window.location.pathname);
@@ -216,6 +261,7 @@ export default function App() {
   };
 
   const navigate = (key, param) => {
+    setFabOpen(false);
     historyRef.current.push({ route, profileUsername, profileView, gamesTab });
     const reelId = typeof param === 'object' ? param?.reelId : undefined;
     if (historyRef.current.length > 30) historyRef.current.shift();
@@ -249,6 +295,7 @@ export default function App() {
     setCodexContext({ screen: key });
   };
   const openSettings = () => navigate('settings');
+  const go = (key) => navigate(key, key === 'profile' ? user.username : undefined); // launcher tiles
   const badgeFor = (key) => (key === 'messages' ? counts.messages : key === 'notifications' ? counts.other : 0);
   const totalBadge = counts.messages + counts.other;
   const fmtCount = (n) => (n > 99 ? '99+' : String(n));
@@ -283,53 +330,50 @@ export default function App() {
       <nav className="nav-rail" aria-label="Main navigation">
         <img className="rail-logo" src="/logo.png" alt="CHEX" width="34" height="34" />
         {createPortal(
-        <div className="rail-fab-wrap">
+        <>
+          <div className="rail-fab-wrap">
+            <button className={`rail-fab ${fabOpen ? 'open' : ''}`} onPointerMove={tiltMove} onPointerLeave={tiltLeave} title="Menu" aria-label={totalBadge > 0 ? `Quick actions, ${totalBadge} new` : 'Quick actions'} aria-expanded={fabOpen} onClick={() => setFabOpen(o => !o)}>＋{totalBadge > 0 && !fabOpen && <span className="count-badge fab-badge">{fmtCount(totalBadge)}</span>}</button>
+          </div>
           {fabOpen && (
             <>
-              <div className="rail-scrim" onClick={() => setFabOpen(false)} />
-              <div className="rail-fab-menu" role="menu">
-                {NAV.map((n, i) => (
-                  <button key={n.key} role="menuitem" style={{ '--i': i }} onPointerMove={tiltMove} onPointerLeave={tiltLeave} className={route === n.key ? 'active' : ''} onClick={() => { setFabOpen(false); navigate(n.key, n.key === 'profile' ? user.username : undefined); }}>
-                    <span className="ico">{n.icon}</span><span className="lbl">{n.label}</span>
+              <div className="nav-scrim" onClick={() => setFabOpen(false)} />
+              <div className="rail-fab-menu nav-menu" role="menu">
+                {[...NAV.map(n => ({ ...n, core: true })), ...MORE.filter(m => !m.adminOnly || user.isAdmin)].map((n, i) => (
+                  <button key={n.key} role="menuitem" data-core={n.core ? '' : undefined} className={`nav-tile${route === n.key ? ' active' : ''}`} style={{ '--i': i }} title={n.label} aria-label={n.label}
+                    onPointerMove={tiltMove} onPointerLeave={tiltLeave} onClick={() => go(n.key)}>
+                    <span className="ico">{n.icon}</span><span className="lbl">{n.short}</span>
                     {badgeFor(n.key) > 0 && <span className="count-badge">{fmtCount(badgeFor(n.key))}</span>}
                   </button>
                 ))}
-                <button role="menuitem" style={{ '--i': NAV.length }} onPointerMove={tiltMove} onPointerLeave={tiltLeave} className={route === 'mylife' ? 'active' : ''} onClick={() => { setFabOpen(false); navigate('mylife'); }}>
-                  <span className="ico">🔒</span><span className="lbl">Private space</span>
+                <button role="menuitemcheckbox" aria-checked={aiAlerts} className="nav-tile alerts-toggle" style={{ '--i': NAV.length + MORE.length }} title={`AI alerts: ${aiAlerts ? 'on' : 'off'}`} aria-label={`AI alerts: ${aiAlerts ? 'On' : 'Off'}`}
+                  onPointerMove={tiltMove} onPointerLeave={tiltLeave} onClick={() => setAlertsEnabled(!aiAlerts)}>
+                  <span className="ico">{aiAlerts ? '🔊' : '🔇'}</span><span className="lbl">{aiAlerts ? 'Sound' : 'Muted'}</span>
                 </button>
-                <button role="menuitem" style={{ '--i': NAV.length + 1 }} onPointerMove={tiltMove} onPointerLeave={tiltLeave} className={route === 'learn' ? 'active' : ''} onClick={() => { setFabOpen(false); navigate('learn'); }}>
-                  <span className="ico">🌍</span><span className="lbl">CHEX learn</span>
-                </button>
-                <button role="menuitem" style={{ '--i': NAV.length + 2 }} onPointerMove={tiltMove} onPointerLeave={tiltLeave} className={route === 'stickies' ? 'active' : ''} onClick={() => { setFabOpen(false); navigate('stickies'); }}>
-                  <span className="ico">📌</span><span className="lbl">Sticky notes</span>
-                </button>
-                {user.isAdmin && (
-                  <button role="menuitem" style={{ '--i': NAV.length + 3 }} onPointerMove={tiltMove} onPointerLeave={tiltLeave} className={route === 'admin' ? 'active' : ''} onClick={() => { setFabOpen(false); navigate('admin'); }}>
-                    <span className="ico">🛡️</span><span className="lbl">Admin</span>
-                  </button>
-                )}
-                <button role="menuitemcheckbox" aria-checked={aiAlerts} className="alerts-toggle" style={{ '--i': NAV.length + (user.isAdmin ? 4 : 3) }} onPointerMove={tiltMove} onPointerLeave={tiltLeave} onClick={() => setAlertsEnabled(!aiAlerts)}>
-                  <span className="ico">{aiAlerts ? '🔊' : '🔇'}</span><span className="lbl">AI alerts: {aiAlerts ? 'On' : 'Off'}</span>
+                <button role="menuitem" data-phone="" className="nav-tile" style={{ '--i': NAV.length + MORE.length + 1 }} title="Log out" aria-label="Log out" onClick={() => { setFabOpen(false); logout(); }}>
+                  <span className="ico">⏻</span><span className="lbl">Out</span>
                 </button>
               </div>
             </>
           )}
-          <button className={`rail-fab ${fabOpen ? 'open' : ''}`}  onPointerMove={tiltMove} onPointerLeave={tiltLeave} aria-label={totalBadge > 0 ? `Quick actions, ${totalBadge} new` : 'Quick actions'} aria-expanded={fabOpen} onClick={() => setFabOpen(o => !o)}>＋{totalBadge > 0 && !fabOpen && <span className="count-badge fab-badge">{fmtCount(totalBadge)}</span>}</button>
-        </div>
+        </>
         , document.body)}
         <div style={{ flex: 1 }} />
         <button type="button" className="rail-user rail-user-btn" onClick={() => navigate('profile', user.username)} aria-label="Open my profile" title="My profile"><Avatar user={user} size={32} online /></button>
-        <button className="rail-item" onClick={logout} aria-label="Log out"><span className="pill">⏻</span><span className="rail-label">Log out</span></button>
+        <button className="rail-item" onClick={logout} aria-label="Log out" title="Log out"><span className="pill">⏻</span><span className="rail-label">Log out</span></button>
       </nav>
 
-      <nav className="nav-bar-mobile" aria-label="Main navigation (phone)">
+      <nav className={`nav-bar-mobile${navHidden && compactOn && !fabOpen ? ' nav-hidden' : ''}`} aria-label="Main navigation (phone)">
         {NAV.map((n) => (
-          <button key={n.key} type="button" className={route === n.key ? 'active' : ''} aria-label={n.label} aria-current={route === n.key ? 'page' : undefined}
+          <button key={n.key} type="button" className={route === n.key ? 'active' : ''} aria-label={n.label} title={n.label} aria-current={route === n.key ? 'page' : undefined}
             onClick={() => navigate(n.key, n.key === 'profile' ? user.username : undefined)}>
             <span className="nb-ico" aria-hidden>{n.icon}{badgeFor(n.key) > 0 && <span className="count-badge nb-badge">{fmtCount(badgeFor(n.key))}</span>}</span>
-            <span className="nb-lbl">{n.key === 'notifications' ? 'Alerts' : n.key === 'messages' ? 'Chats' : n.label}</span>
+            <span className="nb-lbl">{n.short}</span>
           </button>
         ))}
+        <button type="button" className="nb-more" aria-label="More" title="More" aria-expanded={fabOpen} aria-haspopup="menu" onClick={() => setFabOpen(o => !o)}>
+          <span className="nb-ico" aria-hidden>⋯</span>
+          <span className="nb-lbl">More</span>
+        </button>
       </nav>
 
       {coinToast && <div className="coin-toast coin-toast-fixed" role="status">{coinToast}</div>}
@@ -342,7 +386,9 @@ export default function App() {
         {route === 'settings' && <Settings onBack={() => navigate('profile', user.username)} onOpenProfile={(u) => navigate('profile', u)} onOpenCoins={() => navigate('coins')} onOpenStickies={() => navigate('stickies')} onOpenMyLife={() => navigate('mylife')} />}
         {route === 'stickies' && <Stickies onBack={() => navigate('feed')} />}
         {route === 'mylife' && <PrivateSpace onLayout={setPrivateFill} />}
+        {route === 'codexai' && <Suspense fallback={<Skeleton label="Loading CODEX AI" />}><CodexAI onBack={() => navigate('feed')} navigate={navigate} /></Suspense>}
         {route === 'learn' && <Suspense fallback={<Skeleton label="Loading Learn" />}><LearnPage onBack={() => navigate('feed')} onOpenProfile={(u) => navigate('profile', u)} /></Suspense>}
+        {route === 'sim3d' && <Suspense fallback={<Skeleton label="Loading CHEX Simulation" />}><Sim3D onBack={() => navigate('feed')} onPosted={() => navigate('feed')} /></Suspense>}
         {route === 'admin' && user.isAdmin && <Admin onBack={() => navigate('feed')} onOpenProfile={(u) => navigate('profile', u)} />}
         {route === 'coins' && <CoinStore onBack={() => navigate('settings')} onOpenSettings={() => navigate('settings')} />}
         {route === 'profile' && (
@@ -362,6 +408,7 @@ export default function App() {
       </PageTransition>
 
       <Codex navigate={navigate} goBack={goBack} currentUser={user} />
+      <CircleAsk navigate={navigate} route={route} />
       <StickyAlerts onOpen={() => navigate('stickies')} />
       <AlarmRinger />
       <EmojiRain />

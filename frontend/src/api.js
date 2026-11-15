@@ -77,17 +77,17 @@ async function tryRefresh() {
 // Multipart upload variant of request() — no Content-Type header (the browser sets the
 // correct multipart boundary itself for a FormData body), but the same auth/refresh-retry
 // behavior as the JSON path above.
-async function requestForm(path, formData, { retry = true } = {}) {
+async function requestForm(path, formData, { retry = true, method = 'POST' } = {}) {
   const headers = { 'X-Client-Id': CLIENT_ID };
   const tokenUsed = privateToken || accessToken;
   if (tokenUsed) headers.Authorization = `Bearer ${tokenUsed}`;
 
-  const res = await fetch(BASE + path, { method: 'POST', headers, body: formData });
+  const res = await fetch(BASE + path, { method, headers, body: formData });
 
   if (res.status === 401 && privateToken && tokenUsed === privateToken) { window.dispatchEvent(new Event('chex:private-expired')); }
   else if (res.status === 401 && retry && getStoredRefreshToken()) {
     const refreshed = await tryRefresh();
-    if (refreshed) return requestForm(path, formData, { retry: false });
+    if (refreshed) return requestForm(path, formData, { retry: false, method });
     onAuthLost();
   }
 
@@ -100,6 +100,17 @@ async function requestForm(path, formData, { retry = true } = {}) {
     throw err;
   }
   return data;
+}
+
+// Authenticated binary download (private scan models can't be used as a plain <img>/<a> URL).
+async function requestBlob(path, { retry = true } = {}) {
+  const headers = { 'X-Client-Id': CLIENT_ID };
+  const tokenUsed = privateToken || accessToken;
+  if (tokenUsed) headers.Authorization = `Bearer ${tokenUsed}`;
+  const res = await fetch(BASE + path, { headers });
+  if (res.status === 401 && retry && getStoredRefreshToken() && (await tryRefresh())) return requestBlob(path, { retry: false });
+  if (!res.ok) { let d = {}; try { d = await res.json(); } catch { /* not json */ } const e = new Error(d?.error?.message || 'Download failed.'); e.code = d?.error?.code; e.status = res.status; throw e; }
+  return res.blob();
 }
 
 // Builds the multipart body shared by every media endpoint: the file, plus optional text
@@ -135,6 +146,35 @@ function requestFormProgress(path, formData, onProgress, { retry = true } = {}) 
     xhr.send(formData);
   });
 }
+// Server-Sent Events over POST (CODEX AI chat). Calls onEvent(name, data) for each event as it arrives.
+// Honours AbortSignal, refreshes an expired login once, and throws the server's plain-language error for non-200 replies.
+async function streamSse(path, body, onEvent, { signal, retry = true } = {}) {
+  const headers = { 'Content-Type': 'application/json', Accept: 'text/event-stream', 'X-Client-Id': CLIENT_ID };
+  const tokenUsed = privateToken || accessToken;
+  if (tokenUsed) headers.Authorization = `Bearer ${tokenUsed}`;
+  const res = await fetch(BASE + path, { method: 'POST', headers, body: JSON.stringify(body), signal });
+  if (res.status === 401 && retry && getStoredRefreshToken()) {
+    if (await tryRefresh()) return streamSse(path, body, onEvent, { signal, retry: false });
+    onAuthLost();
+  }
+  if (!res.ok) {
+    let data = {}; try { data = await res.json(); } catch { /* not JSON */ }
+    const err = new Error(data?.error?.message || 'Something went wrong.'); err.code = data?.error?.code; err.status = res.status; throw err;
+  }
+  const reader = res.body.getReader(); const dec = new TextDecoder(); let buf = '';
+  const flush = (block) => {
+    let name = 'message'; const data = [];
+    for (const line of block.split('\n')) { if (line.startsWith('event:')) name = line.slice(6).trim(); else if (line.startsWith('data:')) data.push(line.slice(5).trimStart()); }
+    if (data.length) { try { onEvent(name, JSON.parse(data.join('\n'))); } catch { /* ignore a malformed block */ } }
+  };
+  for (;;) {
+    const { value, done } = await reader.read(); if (done) break;
+    buf += dec.decode(value, { stream: true });
+    let i; while ((i = buf.indexOf('\n\n')) >= 0) { flush(buf.slice(0, i)); buf = buf.slice(i + 2); }
+  }
+  if (buf.trim()) flush(buf);
+}
+
 export const MAX_CHAT_MEDIA_BYTES = 500 * 1024 * 1024;
 
 // Codex reads times like "at 5pm" in the person's own time zone.
@@ -173,6 +213,8 @@ export const api = {
   setShowOnline: (showOnline) => request('/users/me/presence', { method: 'PATCH', body: { showOnline } }),
   // Post with a photo or video from the device (gallery, camera, downloaded file).
   uploadPost: (file, caption, edits, audience) => requestForm('/posts/upload', mediaForm(file, { caption: caption || '', audience: audience || 'public' }, edits)),
+  // CHEX Simulation: a 3D post = the transparent PNG cut-out of the object + its shape/look settings.
+  uploadPost3D: (file, caption, model3d, audience) => requestForm('/posts/upload', mediaForm(file, { caption: caption || '', audience: audience || 'public', model3d: JSON.stringify(model3d || {}) })),
   replacePostMedia: (id, file, edits) => requestForm(`/posts/${id}/media`, mediaForm(file, {}, edits)),
   post: (id) => request(`/posts/${encodeURIComponent(id)}`),
   like: (id) => request(`/posts/${id}/like`, { method: 'POST' }),
@@ -391,12 +433,36 @@ export const api = {
   learnChooseLanguage: (lang) => request('/life/learn/language', { method: 'POST', body: { lang } }),   // pick your one free first language
   learnUnlockLanguage: (lang) => request('/life/learn/unlock', { method: 'POST', body: { lang } }),   // premium: 100 finished levels + 100 CHEX coins
   learnBoard: () => request('/life/learn-board'),   // CHEX learn leaderboard (you + people you follow)
+  // ---- CODEX AI platform (text / vision / image / video / audio / memory) ----
+  aiStatus: () => request('/ai/status'),
+  aiChat: (payload, onEvent, signal) => streamSse('/ai/chat', payload, onEvent, { signal }),
+  aiUpload: (file) => { const f = new FormData(); f.append('file', file); return requestForm('/ai/upload', f); },
+  aiTranscribe: (attachmentId, language) => request('/ai/transcribe', { method: 'POST', body: { attachmentId, language } }),
+  aiConversations: () => request('/ai/conversations'),
+  aiConversation: (id) => request(`/ai/conversations/${id}`),
+  aiRenameConversation: (id, title) => request(`/ai/conversations/${id}`, { method: 'PATCH', body: { title } }),
+  aiDeleteConversation: (id) => request(`/ai/conversations/${id}`, { method: 'DELETE' }),
+  aiMemory: () => request('/ai/memory'),
+  aiAddMemory: (text, source = 'user') => request('/ai/memory', { method: 'POST', body: { text, source } }),
+  aiDeleteMemory: (id) => request(`/ai/memory/${id}`, { method: 'DELETE' }),
+  aiClearMemory: () => request('/ai/memory', { method: 'DELETE' }),
+  aiMedia: (origin) => request(`/ai/media${origin ? `?origin=${origin}` : ''}`),
+  aiDeleteMedia: (id) => request(`/ai/media/${id}`, { method: 'DELETE' }),
+  aiDeleteAllData: () => request('/ai/data', { method: 'DELETE' }),
+  aiAdminOverview: () => request('/admin/ai/overview'),
+  aiAdminSetEngine: (engine, patch) => request(`/admin/ai/engines/${engine}`, { method: 'PUT', body: patch }),
+  aiAdminTest: (engine) => request(`/admin/ai/engines/${engine}/test`, { method: 'POST', body: {} }),
+  aiAdminReset: (engine) => request(`/admin/ai/engines/${engine}/reset`, { method: 'POST', body: {} }),
+  aiAdminModels: () => request('/admin/ai/groq-models'),
   codexStatus: () => request('/codex/status'),
   codexAct: (text, context, history) => request('/codex/act', { method: 'POST', body: { text, context: withClock(context), history } }),
   codexConfirm: (pendingAction, remainingActions, context) => request('/codex/act', { method: 'POST', body: { confirmedAction: pendingAction, remainingActions, context: withClock(context) } }),
   codexResolve: (resolvedAction, remainingActions, context) => request('/codex/act', { method: 'POST', body: { resolvedAction, remainingActions, context: withClock(context) } }),
   codexConfirmPlan: (plan, context) => request('/codex/act', { method: 'POST', body: { confirmedPlan: plan, context: withClock(context) } }),
   codexHistory: () => request('/codex/history'),
+  circleStatus: () => request('/codex/circle/status'),
+  // Circle to Ask: the user-approved crop (or text only) goes in; an explanation comes back. Nothing is stored server-side.
+  circleAsk: (payload) => request('/codex/circle', { method: 'POST', body: payload }),
   codexUiResolve: (payload) => request('/codex/ui-resolve', { method: 'POST', body: payload }),
   codexUiReport: (payload) => request('/codex/ui-report', { method: 'POST', body: payload }).catch(() => {}),
 
@@ -409,4 +475,25 @@ export const api = {
   getTournament: (id) => request(`/tournaments/${id}`),
   joinTournament: (id) => request(`/tournaments/${id}/join`, { method: 'POST' }),
   startTournament: (id) => request(`/tournaments/${id}/start`, { method: 'POST' }),
+  // CHEX Simulation — 3D Scanning Studio (private projects, reconstruction jobs). See backend/src/routes/scan3d.js.
+  scanCapabilities: () => request('/scan3d/capabilities'),
+  scanUsage: () => request('/scan3d/usage'),
+  scanProjects: () => request('/scan3d/projects'),
+  scanCreateProject: (name) => request('/scan3d/projects', { method: 'POST', body: { name } }),
+  scanGetProject: (id) => request(`/scan3d/projects/${id}`),
+  scanSaveProject: (id, patch) => request(`/scan3d/projects/${id}`, { method: 'PATCH', body: patch }),
+  scanDuplicateProject: (id) => request(`/scan3d/projects/${id}/duplicate`, { method: 'POST' }),
+  scanDeleteProject: (id) => request(`/scan3d/projects/${id}?confirm=1`, { method: 'DELETE' }),
+  scanPutModel: (id, blob, slot = 'current') => { const f = new FormData(); f.append('model', blob, `${slot}.glb`); return requestForm(`/scan3d/projects/${id}/model?slot=${slot}`, f, { method: 'PUT' }); },
+  scanGetModel: (id, slot = 'current') => requestBlob(`/scan3d/projects/${id}/model?slot=${slot}`),
+  scanPutThumb: (id, blob) => { const f = new FormData(); f.append('thumb', blob, 'thumb.png'); return requestForm(`/scan3d/projects/${id}/thumb`, f, { method: 'PUT' }); },
+  scanGetThumb: (id) => requestBlob(`/scan3d/projects/${id}/thumb`),
+  scanStartJob: (form, onProgress) => requestFormProgress('/scan3d/jobs', form, onProgress),
+  scanJob: (id) => request(`/scan3d/jobs/${id}`),
+  scanJobs: (projectId) => request(`/scan3d/jobs?projectId=${encodeURIComponent(projectId)}`),
+  scanCancelJob: (id) => request(`/scan3d/jobs/${id}/cancel`, { method: 'POST' }),
+  scanRetryJob: (id) => request(`/scan3d/jobs/${id}/retry`, { method: 'POST' }),
+  scanJobResult: (id) => requestBlob(`/scan3d/jobs/${id}/result`),
+  // Publish a studio model: the thumbnail is the post image, the GLB is copied server-side from the project.
+  publishScan3D: (thumb, projectId, caption, audience) => requestForm('/posts/upload', mediaForm(thumb, { caption: caption || '', audience: audience || 'public', modelProjectId: projectId, confirmPublish: 'true' })),
 };

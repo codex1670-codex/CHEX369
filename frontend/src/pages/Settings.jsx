@@ -3,8 +3,10 @@ import { api } from '../api.js';
 import { useAuth } from '../AuthContext.jsx';
 import { getStoredTheme, applyTheme } from '../theme.js';
 import { get3D, set3D } from '../ui3d.js';
+import { compactEnabled, setCompact } from '../compact.js';
 import Emoji3D from '../components/Emoji3D.jsx';
 import { floatingAiEnabled, setFloatingAi } from '../floatingAi.js';
+import { circleAskEnabled, setCircleAsk, loadPrefs, clearPrefs } from '../circleAsk/settings.js';
 import { getEmojiFx, setEmojiFx, splitEmojis, burstEmoji, DEFAULT_EMOJIS, EMOJI_PALETTE, MAX_EMOJIS } from '../emojiFx.js';
 import PermissionsPanel from '../components/PermissionsPanel.jsx';
 import SafetyLists from '../components/SafetyLists.jsx';
@@ -22,6 +24,7 @@ function Appearance({ onOpenCoins }) {
   const [motion, setMotionState] = useState(getMotion());
   const [theme, setThemeState] = useState(getStoredTheme());
   const [look3d, setLook3d] = useState(get3D());
+  const [compact, setCompactState] = useState(compactEnabled());
   const [wallet, setWallet] = useState(null);
   useEffect(() => { api.coins().then(setWallet).catch(() => {}); }, []);
   const unlocked = !!wallet?.unlocked?.includes('premium-themes');
@@ -108,6 +111,13 @@ function Appearance({ onOpenCoins }) {
         <button className={`btn-ghost${!look3d ? ' sel' : ''}`} style={{ width: 'auto', padding: '9px 18px' }} aria-pressed={!look3d} onClick={() => setLook3d(set3D(false))}>▭ Flat</button>
       </div>
       <p style={{ fontSize: 12.5, color: 'var(--text-mid)', margin: 0 }}>3D gives the menu and buttons depth, tilt and a press-down effect. Flat is the simple classic look.</p>
+
+      <div style={{ fontSize: 13.5, fontWeight: 700, margin: '18px 0 8px' }}>Compact</div>
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 6 }}>
+        <button className={`btn-ghost${compact ? ' sel' : ''}`} style={{ width: 'auto', padding: '9px 18px' }} aria-pressed={compact} onClick={() => setCompactState(setCompact(true))}>⚡ Compact</button>
+        <button className={`btn-ghost${!compact ? ' sel' : ''}`} style={{ width: 'auto', padding: '9px 18px' }} aria-pressed={!compact} onClick={() => setCompactState(setCompact(false))}>☰ Full</button>
+      </div>
+      <p style={{ fontSize: 12.5, color: 'var(--text-mid)', margin: 0 }}>Compact shows icons instead of button words (hold one to see its name), one-line notes you can tap to open, and a menu bar that hides while you scroll.</p>
     </div>
   );
 }
@@ -120,6 +130,27 @@ function FloatingAI() {
       <h3 style={{ margin: '0 0 4px', fontFamily: 'var(--font-display)', fontSize: 16 }}>🤖 Floating AI bar</h3>
       <p style={{ fontSize: 12.5, color: 'var(--text-mid)', margin: '0 0 12px' }}>The Codex AI bar that floats on every page so you can talk or type to it anywhere. It is <b>off by default</b> — switch it on to show it, and off to hide it again.</p>
       <button type="button" role="switch" aria-checked={on} className={`btn-ghost${on ? ' sel' : ''}`} style={{ width: 'auto', padding: '9px 18px' }} onClick={toggle}>{on ? '✓ Floating AI bar is ON' : 'Floating AI bar is OFF'}</button>
+    </div>
+  );
+}
+
+function CircleAskCard() {
+  const [on, setOn] = useState(circleAskEnabled());
+  const [saved, setSaved] = useState(loadPrefs().remember);
+  const toggle = () => setOn(setCircleAsk(!on));
+  const forget = () => { clearPrefs(); setSaved(false); };
+  return (
+    <div className="glass-card" style={{ padding: 20, marginBottom: 20 }} data-testid="circle-ask-card">
+      <h3 style={{ margin: '0 0 4px', fontFamily: 'var(--font-display)', fontSize: 16 }}>⭕ Circle to Ask</h3>
+      <p style={{ fontSize: 12.5, color: 'var(--text-mid)', margin: '0 0 8px' }}>Press and hold on an empty part of any page (or tap ⭕ on the Codex bar), circle something, and ask Codex what it is, how it works or what to do next. It is <b>off by default</b>.</p>
+      <ul style={{ fontSize: 12.5, color: 'var(--text-mid)', margin: '0 0 12px', paddingLeft: 18 }}>
+        <li>Only the circled area is captured, and only after you say yes.</li>
+        <li>You see a preview first; nothing is sent until you tap Send.</li>
+        <li>Passwords, card details and private messages are blacked out. Private space is never shared.</li>
+        <li>The picture is kept in memory only and deleted when you close the panel.</li>
+      </ul>
+      <button type="button" role="switch" aria-checked={on} className={`btn-ghost${on ? ' sel' : ''}`} style={{ width: 'auto', padding: '9px 18px' }} onClick={toggle}>{on ? '✓ Circle to Ask is ON' : 'Circle to Ask is OFF'}</button>
+      {saved && <button type="button" className="btn-ghost" style={{ width: 'auto', padding: '9px 18px', marginLeft: 8 }} onClick={forget}>Forget my saved language</button>}
     </div>
   );
 }
@@ -452,6 +483,7 @@ export default function Settings({ onBack, onOpenProfile, onOpenCoins, onOpenSti
 
       <Appearance onOpenCoins={onOpenCoins} />
       <FloatingAI />
+      <CircleAskCard />
       <EmojiEffects />
       <AccountPrivacy />
       <SafetyLists onOpenProfile={onOpenProfile} />

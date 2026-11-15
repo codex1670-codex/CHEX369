@@ -140,6 +140,7 @@ addColumnIfMissing('app_registry', 'ios_scheme', 'TEXT');
 seedAppCatalog(db);
 addColumnIfMissing('posts', 'media_type', "TEXT CHECK (media_type IN ('image','video'))");
 addColumnIfMissing('posts', 'edits', 'TEXT');
+addColumnIfMissing('posts', 'model3d', 'TEXT');   // CHEX Simulation: look/shape settings of a 3D post (the photo cut-out is the post's image)
 addColumnIfMissing('reels', 'edits', 'TEXT');
 // Post audience: 'public' (everyone) or 'followers' (only people who follow the author).
 // Existing posts stay public. Online status: people can hide it from Settings.
@@ -185,6 +186,45 @@ db.exec(`CREATE TABLE IF NOT EXISTS message_hidden (
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   PRIMARY KEY (message_id, user_id)
 )`);
+// CHEX 3D Scanning Studio: private scan projects (files live in the scan store, never under /uploads)
+// and reconstruction jobs (photogrammetry / single-image AI). See routes/scan3d.js.
+db.exec(`CREATE TABLE IF NOT EXISTS scan_projects (
+  id             TEXT PRIMARY KEY,
+  user_id        TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name           TEXT NOT NULL,
+  status         TEXT NOT NULL DEFAULT 'empty',
+  state_json     TEXT,
+  model_bytes    INTEGER NOT NULL DEFAULT 0,
+  original_bytes INTEGER NOT NULL DEFAULT 0,
+  thumb_bytes    INTEGER NOT NULL DEFAULT 0,
+  created_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  updated_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  deleted_at     TEXT
+)`);
+db.exec('CREATE INDEX IF NOT EXISTS idx_scan_projects_user ON scan_projects(user_id, updated_at)');
+db.exec(`CREATE TABLE IF NOT EXISTS scan_jobs (
+  id          TEXT PRIMARY KEY,
+  project_id  TEXT NOT NULL REFERENCES scan_projects(id) ON DELETE CASCADE,
+  user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  engine      TEXT NOT NULL,
+  sequential  INTEGER NOT NULL DEFAULT 0,
+  status      TEXT NOT NULL DEFAULT 'queued',
+  stage       TEXT NOT NULL DEFAULT 'validate',
+  progress    REAL NOT NULL DEFAULT 0,
+  message     TEXT,
+  error       TEXT,
+  note        TEXT,
+  result_ext  TEXT,
+  result_kind TEXT,
+  input_count INTEGER NOT NULL DEFAULT 0,
+  created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  updated_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+)`);
+db.exec('CREATE INDEX IF NOT EXISTS idx_scan_jobs_user ON scan_jobs(user_id, created_at)');
+addColumnIfMissing('scan_jobs', 'speed', 'TEXT');
+// A post that was published from the studio carries a copy of the GLB (an interactive 3D model in the feed).
+addColumnIfMissing('posts', 'model_asset', 'TEXT');
+
 // Profile Studio: theme / background / dim / blur chosen in the studio, stored as JSON so
 // every viewer of a profile sees the same look.
 addColumnIfMissing('users', 'profile_studio', 'TEXT');

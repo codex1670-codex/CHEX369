@@ -1,0 +1,64 @@
+/* CHEX Simulation — 3D object studio + the 3D viewer shown in posts */
+.sim-page { padding-bottom: 28px; max-width: 760px; margin: 0 auto; }
+
+.sim-viewer { position: relative; overflow: hidden; border-radius: 14px; touch-action: none; }
+.sim-viewer-main { width: 100%; aspect-ratio: 1 / 1; max-height: 64vh; }
+.sim-canvas { position: absolute; inset: 0; }
+.sim-poster { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; pointer-events: none; user-select: none; }
+.sim-loading, .sim-error { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 16px;
+  color: #fff; font-size: 13px; background: rgba(0, 0, 0, .25); pointer-events: none; }
+.sim-error { background: rgba(0, 0, 0, .55); }
+
+/* pick step */
+.sim-pick { text-align: center; padding: 34px 18px; border: 2px dashed var(--border-soft); border-radius: var(--radius-lg); background: var(--surface); }
+.sim-pick.over { border-color: var(--violet-bright); background: var(--surface-hover); }
+.sim-pick-art { font-size: 54px; animation: simFloat 3.2s ease-in-out infinite; }
+.sim-pick h3 { margin: 6px 0 4px; font-family: var(--font-display); }
+.sim-pick p { margin: 0 auto 14px; max-width: 420px; font-size: 13px; color: var(--text-mid); }
+.sim-pick-btns { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+@keyframes simFloat { 0%, 100% { transform: translateY(0) rotateY(0); } 50% { transform: translateY(-6px) rotateY(180deg); } }
+@media (prefers-reduced-motion: reduce) { .sim-pick-art { animation: none; } }
+
+/* editor */
+.sim-stage { position: relative; }
+.sim-views { position: absolute; left: 8px; right: 8px; bottom: 8px; display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
+.sim-views button { background: rgba(10, 12, 30, .68); color: #fff; border: 1px solid rgba(255, 255, 255, .25); border-radius: 999px; padding: 5px 12px; font-size: 12px; cursor: pointer; backdrop-filter: blur(6px); }
+.sim-views button.on { background: var(--violet); border-color: var(--violet-bright); }
+.sim-hint { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); font-size: 11px; color: #fff; background: rgba(10, 12, 30, .55); padding: 3px 10px; border-radius: 999px; pointer-events: none; white-space: nowrap; }
+.sim-note { margin: 10px 0 0; font-size: 12.5px; padding: 9px 12px; border-radius: 10px; border: 1px solid var(--border-soft); background: var(--surface); color: var(--text-mid); }
+
+.sim-tabs { display: flex; gap: 6px; margin: 14px 0 10px; overflow-x: auto; }
+.sim-tabs button { flex: 1 0 auto; border: 1px solid var(--border-soft); background: transparent; color: var(--text-hi); border-radius: 999px; padding: 8px 14px; font-size: 13px; cursor: pointer; }
+.sim-tabs button.on { background: var(--violet); border-color: var(--violet); color: #fff; }
+
+.sim-controls { border: 1px solid var(--border-soft); background: var(--surface); border-radius: var(--radius-md); padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+.sim-slider { display: block; }
+.sim-slider-top { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px; }
+.sim-slider-top b { font-variant-numeric: tabular-nums; color: var(--text-mid); font-weight: 600; }
+.sim-slider input[type=range] { width: 100%; accent-color: var(--violet-bright); height: 28px; }
+.sim-check { display: flex; gap: 8px; align-items: center; font-size: 13.5px; cursor: pointer; }
+.sim-help { margin: 0; font-size: 12px; color: var(--text-mid); }
+.sim-presets { display: flex; gap: 6px; flex-wrap: wrap; }
+.sim-presets .btn-ghost { width: auto; padding: 6px 12px; font-size: 12.5px; }
+.sim-seg { display: flex; border: 1px solid var(--border-soft); border-radius: 999px; overflow: hidden; }
+.sim-seg button { flex: 1; border: 0; background: transparent; color: var(--text-hi); padding: 8px; font-size: 13px; cursor: pointer; }
+.sim-seg button.on { background: var(--violet); color: #fff; }
+.sim-color { display: flex; align-items: center; justify-content: space-between; font-size: 13px; }
+.sim-color input, .sim-swatches input { width: 44px; height: 32px; border: 1px solid var(--border-soft); border-radius: 8px; background: none; padding: 0; cursor: pointer; }
+.sim-swatches { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.sim-swatches button { width: 32px; height: 32px; border-radius: 50%; border: 2px solid var(--border-soft); cursor: pointer; }
+.sim-swatches button.on { border-color: var(--violet-bright); box-shadow: 0 0 0 2px var(--violet-bright); }
+.sim-reset { align-self: flex-start; width: auto !important; padding: 6px 12px !important; font-size: 12.5px; }
+
+.sim-post { margin-top: 14px; display: flex; flex-direction: column; gap: 10px; }
+.sim-post textarea, .sim-post select { background: var(--surface); color: var(--text-hi); border: 1px solid var(--border-soft); border-radius: 12px; padding: 10px 12px; font: inherit; font-size: 14px; resize: vertical; }
+.sim-post-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.sim-post-row select { flex: 1 1 140px; }
+
+/* inside a post in the feed */
+.post-3d { position: relative; margin: 0 -4px 12px; border-radius: 12px; overflow: hidden; }
+.post-3d .sim-viewer { width: 100%; aspect-ratio: 1 / 1; max-height: min(80vh, 760px); border-radius: 0; touch-action: pan-y; }
+.post-3d-badge { position: absolute; top: 8px; left: 8px; z-index: 2; font-size: 11px; font-weight: 700; color: #fff; background: rgba(10, 12, 30, .65); padding: 3px 9px; border-radius: 999px; pointer-events: none; }
+.post-3d-hint { position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%); z-index: 2; font-size: 11px; color: #fff; background: rgba(10, 12, 30, .55); padding: 3px 10px; border-radius: 999px; pointer-events: none; white-space: nowrap; }
+.pg-3d-badge { position: absolute; top: 6px; right: 6px; font-size: 10px; font-weight: 800; color: #fff; background: rgba(10, 12, 30, .7); padding: 2px 6px; border-radius: 999px; }
+.pg-tile .sim-thumb { width: 100%; height: 100%; object-fit: contain; pointer-events: none; }

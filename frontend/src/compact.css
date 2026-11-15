@@ -1,0 +1,81 @@
+/* ===== Compact mode (see compact.js) =====
+   Loaded last so it wins over the theme files. Everything that is a *preference* is gated on
+   <html data-compact="on">; the launcher grid itself is always used. */
+
+/* ---- 1. Plain-text action buttons become one icon; the word lives in the tooltip ---- */
+:root[data-compact="on"] button[data-ico] {
+  font-size: 0 !important; line-height: 0;
+  width: auto !important; flex: 0 0 auto !important;
+  min-width: 40px; min-height: 38px; padding-left: 10px !important; padding-right: 10px !important;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+:root[data-compact="on"] button[data-ico]::before {
+  content: attr(data-ico); font-size: 17px; line-height: 1; letter-spacing: 0;
+}
+
+/* ---- 2. Long explanations fold to one line; tap to open ---- */
+:root[data-compact="on"] [data-hint]:not([data-open]) {
+  display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden;
+  cursor: pointer; margin-bottom: 8px !important;
+}
+:root[data-compact="on"] [data-hint]:not([data-open])::after { content: " ⌄"; opacity: .6; }
+:root[data-compact="on"] [data-hint][data-open] { cursor: pointer; }
+
+/* ---- 3. Launcher grid (the ＋ menu on desktop, the ⋯ sheet on phones) ---- */
+.nav-scrim { position: fixed; inset: 0; z-index: 79; background: rgba(0, 0, 0, .35); }
+.nav-menu.rail-fab-menu {
+  position: fixed; z-index: 81; top: 64px; left: 84px;
+  display: grid; grid-template-columns: repeat(4, 60px); gap: 6px; padding: 10px;
+  border-radius: 22px; background: var(--bg-deep); border: 1px solid var(--border-soft);
+  box-shadow: 0 16px 44px rgba(0, 0, 0, .45);
+}
+.nav-menu.rail-fab-menu button.nav-tile {
+  position: relative; width: 60px; height: 58px; padding: 4px 2px; gap: 3px;
+  flex-direction: column; justify-content: center; align-items: center;
+  font-size: 10.5px; font-weight: 700; border-radius: 15px; box-shadow: none;
+  background: transparent; border-color: transparent; animation: tileIn .18s ease-out backwards;
+  animation-delay: calc(var(--i, 0) * 12ms);
+}
+.nav-menu.rail-fab-menu button.nav-tile.alerts-toggle { margin-top: 0; font-weight: 700; color: inherit; }
+.nav-menu .nav-tile .ico { font-size: 21px; line-height: 1; height: 24px; display: flex; align-items: center; justify-content: center; }
+.nav-menu .nav-tile .lbl { max-width: 100%; overflow: hidden; text-overflow: ellipsis; line-height: 1.1; }
+.nav-menu .nav-tile .count-badge { z-index: 3; position: absolute; top: 2px; right: 5px; min-width: 16px; height: 16px; padding: 0 4px; font-size: 10px; }
+.nav-menu.rail-fab-menu button.nav-tile:hover { background: var(--surface-hover); }
+.nav-menu.rail-fab-menu button.nav-tile.active { background: rgba(63, 111, 224, .28); border-color: var(--violet); }
+/* the 3D theme's chunky shadows, teal pip and forward-pushed icons are too heavy for a dense grid */
+:root[data-3d="on"] .nav-menu.rail-fab-menu button.nav-tile { background: transparent; box-shadow: none; animation: tileIn .18s ease-out backwards; animation-delay: calc(var(--i, 0) * 12ms); }
+:root[data-3d="on"] .nav-menu.rail-fab-menu button.nav-tile:hover { background: var(--surface-hover); box-shadow: none; }
+:root[data-3d="on"] .nav-menu.rail-fab-menu button.nav-tile.active { background: rgba(63, 111, 224, .28); color: var(--text-hi); box-shadow: inset 0 0 0 1.5px var(--violet); }
+:root[data-3d="on"] .nav-menu.rail-fab-menu button.nav-tile.active::before { display: none; }
+:root[data-3d="on"] .nav-menu.rail-fab-menu button.nav-tile:active { transform: scale(.94); box-shadow: none; }
+:root[data-3d="on"] .nav-menu .nav-tile .ico { transform: none; }
+:root[data-3d="on"] .nav-menu .nav-tile:hover .ico { transform: scale(1.18); }
+@keyframes tileIn { from { opacity: 0; transform: scale(.85); } to { opacity: 1; transform: none; } }
+@media (min-width: 801px) { .nav-tile[data-phone] { display: none; } }
+
+/* ---- 4. Phone: smart bottom bar ---- */
+.nav-bar-mobile { transition: transform .28s cubic-bezier(.3, .9, .3, 1); will-change: transform; }
+@media (max-width: 800px) {
+  /* the ⋯ sheet opens right above the bar; the bar's own pages are not repeated inside it */
+  .nav-menu.rail-fab-menu {
+    top: auto; left: 8px; right: 8px; bottom: calc(66px + env(safe-area-inset-bottom, 0px));
+    grid-template-columns: repeat(4, minmax(0, 1fr)); animation: sheetUp .2s ease-out;
+  }
+  .nav-menu.rail-fab-menu button.nav-tile { width: auto; height: 58px; }
+  .nav-tile[data-core] { display: none; }
+  @keyframes sheetUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+
+  /* scrolling down tucks the bar away; scrolling up (or changing page) brings it back */
+  :root[data-compact="on"] .nav-bar-mobile.nav-hidden { transform: translateY(115%); }
+
+  /* icons only — the page you are on shows its one-word name */
+  :root[data-compact="on"] .nav-bar-mobile { padding-top: 4px; padding-bottom: calc(4px + env(safe-area-inset-bottom, 0px)); gap: 0; overflow: visible; }
+  :root[data-compact="on"] .nav-bar-mobile > button { flex: 1 1 0; min-width: 0; min-height: 46px; }
+  :root[data-compact="on"] .nav-bar-mobile .nb-lbl { display: none; }
+  :root[data-compact="on"] .nav-bar-mobile > button.active .nb-lbl { display: block; font-size: 9.5px; font-weight: 800; line-height: 1; }
+  .nav-bar-mobile > button.nb-more { flex: 0 0 40px; min-width: 40px; }
+  .nav-bar-mobile > button.nb-more[aria-expanded="true"] { background: rgba(63, 111, 224, .24); color: var(--text-hi); }
+}
+
+/* ---- 5. Desktop rail: icons only (names are tooltips) ---- */
+:root[data-compact="on"] .rail-label { display: none; }

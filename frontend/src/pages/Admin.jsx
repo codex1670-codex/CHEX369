@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import AiAdmin from './AiAdmin.jsx';
 import { api } from '../api.js';
 
 const TYPE_LABEL = { post: 'Post', reel: 'Reel', comment: 'Comment', reel_comment: 'Reel comment', story: 'Story', note: 'Note', message: 'Message', user: 'User' };
@@ -26,7 +27,7 @@ export default function Admin({ onBack, onOpenProfile }) {
           {ov ? `${fmt(ov.openReports)} open report${ov.openReports === 1 ? '' : 's'} · ${fmt(ov.users)} users · ${fmt(ov.posts)} posts · ${fmt(ov.reels)} reels` : 'Loading…'}
         </div>
         <div style={{ ...row, marginTop: 12 }}>
-          {[['reports', `🚩 Reports${ov?.openReports ? ` (${ov.openReports})` : ''}`], ['users', '👥 Users & gifts'], ['delete', '🗑️ Delete by ID']].map(([k, label]) => (
+          {[['reports', `🚩 Reports${ov?.openReports ? ` (${ov.openReports})` : ''}`], ['users', '👥 Users & gifts'], ['delete', '🗑️ Delete by ID'], ['ai', '🧠 AI']].map(([k, label]) => (
             <button key={k} className={tab === k ? 'btn-primary' : 'btn-ghost'} style={small} onClick={() => setTab(k)}>{label}</button>
           ))}
         </div>
@@ -36,6 +37,7 @@ export default function Admin({ onBack, onOpenProfile }) {
       {tab === 'reports' && <Reports flash={flash} fail={fail} refresh={loadOverview} onOpenProfile={onOpenProfile} />}
       {tab === 'users' && <Users ov={ov} flash={flash} fail={fail} refresh={loadOverview} onOpenProfile={onOpenProfile} />}
       {tab === 'delete' && <DeleteById flash={flash} fail={fail} refresh={loadOverview} />}
+      {tab === 'ai' && <AiAdmin flash={flash} fail={fail} />}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState, useEffect, lazy, Suspense } from 'react';
 import { useLive } from '../live.js';
 import { saveToPrivate } from '../privateSave.js';
 import Avatar from './Avatar.jsx';
@@ -6,6 +6,9 @@ import { api } from '../api.js';
 import { useAuth } from '../AuthContext.jsx';
 import { updateCodexContext } from '../codexContext.js';
 import EditedMedia from './EditedMedia.jsx';
+import Model3DViewer from '../sim3d/Model3DViewer.jsx';
+const GlbPostViewer = lazy(() => import('../sim3d/studio/GlbPostViewer.jsx'));   // 3D Scanning Studio models: three.js GLB loader only when one is on screen
+import '../sim3d/sim3d.css';
 import PhotoEditor from './PhotoEditor.jsx';
 import VideoEditor from './VideoEditor.jsx';
 import { fileKind, MAX_IMAGE_BYTES, MAX_VIDEO_BYTES } from '../editSettings.js';
@@ -237,7 +240,7 @@ export default function PostCard({ post, onOpenProfile, onDeleted }) {
 
   // Only files we host can be re-edited as pixels: an external image URL would taint the
   // canvas (browsers block exporting it), so those can only be replaced with an upload.
-  const canEditPixels = p.mediaType === 'image' && p.mediaUrl?.startsWith('/uploads/');
+  const canEditPixels = p.mediaType === 'image' && !p.model3d && !p.modelAsset && p.mediaUrl?.startsWith('/uploads/');
   const canEditMedia = p.mediaType === 'video' || canEditPixels;
 
   const saveMediaFile = async (file) => {
@@ -343,7 +346,23 @@ export default function PostCard({ post, onOpenProfile, onDeleted }) {
         p.caption && <p className="post-caption">{p.caption}</p>
       )}
 
-      {p.mediaUrl && (
+      {p.mediaUrl && p.model3d && (
+        <div className="post-3d" data-noswipe="">
+          <span className="post-3d-badge">🧊 3D</span>
+          <Model3DViewer url={p.mediaUrl} params={p.model3d} lazy lockScroll />
+          <span className="post-3d-hint">Drag to rotate</span>
+        </div>
+      )}
+      {p.mediaUrl && p.modelAsset && (
+        <div className="post-3d" data-noswipe="">
+          <span className="post-3d-badge">🧊 3D model</span>
+          <Suspense fallback={<div className="sim-viewer" style={{ aspectRatio: '1 / 1' }}><img src={p.mediaUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} /></div>}>
+            <GlbPostViewer url={p.modelAsset} poster={p.mediaUrl} name={p.caption?.slice(0, 60) || '3D model'} />
+          </Suspense>
+          <span className="post-3d-hint">Drag to rotate</span>
+        </div>
+      )}
+      {p.mediaUrl && !p.model3d && !p.modelAsset && (
         <div className="post-media-wrap tap-media" ref={mediaWrapRef} {...mediaTap} {...longPress}
           role="button" aria-label="Open full screen. Double tap to like." style={{ margin: '0 -4px 12px', borderRadius: 12, overflow: 'hidden' }}>
           <EditedMedia

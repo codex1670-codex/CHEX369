@@ -337,6 +337,12 @@ SQLite file at `backend/nexa.db`. Delete it and re-run `npm run seed` to reset. 
 in `backend/src/schema.sql`.
 
 
+## CODEX AI
+One AI platform inside CHEX: Text + Vision (Groq), Image + Speech (Cloudflare Workers AI), experimental Video, and Memory (MongoDB), all routed automatically by CODEX, free-only by default. Chat at ☰ → CODEX AI; manage under Admin → 🧠 AI. Setup, environment variables, limits (and what is unverified) in [`docs/CODEX_AI.md`](docs/CODEX_AI.md); check your keys with `cd backend && npm run ai:check`.
+
+## Circle to Ask
+Circle part of any screen and ask Codex about it (Explain / Simplify / Deep Explain / Translate / Show Steps / Take Me There, plus free questions). Opt-in under Settings → Circle to Ask. Permission and a preview come before anything is sent, private content is blacked out, and nothing is stored. Full details, privacy model, open-weight model setup and QA checklist: [`docs/CIRCLE_TO_ASK.md`](docs/CIRCLE_TO_ASK.md).
+
 ## Profile Studio
 
 The Profile page header is now the **Profile Studio** (`frontend/src/components/ProfileStudio.jsx`).

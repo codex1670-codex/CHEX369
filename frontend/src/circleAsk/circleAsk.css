@@ -1,0 +1,45 @@
+/* Circle to Ask — overlay, permission sheets and the floating assistant panel. Uses the app's own colour variables. */
+.circle-overlay { position: fixed; inset: 0; z-index: 9000; background: rgba(8, 10, 24, .45); touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; cursor: crosshair; }
+.circle-svg { position: absolute; inset: 0; pointer-events: none; }
+.circle-stroke { fill: rgba(255, 255, 255, .10); stroke: #ffd36b; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; filter: drop-shadow(0 0 6px rgba(255, 211, 107, .8)); }
+.circle-banner { position: absolute; left: 50%; top: calc(12px + env(safe-area-inset-top, 0px)); transform: translateX(-50%); width: min(420px, calc(100vw - 24px)); padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; text-align: center; cursor: default; font-size: 13px; color: var(--text-mid); }
+.circle-banner b { color: var(--text-hi); font-size: 14.5px; }
+.circle-hole { position: fixed; z-index: 8990; border: 2px solid #ffd36b; border-radius: 16px; box-shadow: 0 0 0 9999px rgba(8, 10, 24, .5), 0 0 14px rgba(255, 211, 107, .7); pointer-events: none; }
+
+.circle-sheet, .circle-panel { position: fixed; z-index: 9100; left: 50%; transform: translateX(-50%); width: min(440px, calc(100vw - 20px)); bottom: calc(10px + env(safe-area-inset-bottom, 0px)); padding: 14px; color: var(--text-mid); font-size: 13px; max-height: calc(100vh - 24px); overflow: auto; }
+.circle-sheet h3 { margin: 0 0 6px; font-size: 16px; color: var(--text-hi); }
+.circle-sheet p { margin: 0 0 8px; line-height: 1.45; }
+.circle-panel { display: flex; flex-direction: column; gap: 8px; height: min(560px, calc(100vh - 24px)); }
+@media (min-width: 900px) { .circle-panel { left: auto; right: 18px; transform: none; bottom: 18px; } }
+.circle-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.circle-small { width: auto !important; padding: 8px 14px !important; font-size: 13px !important; }
+.circle-check { display: flex; gap: 6px; align-items: flex-start; font-size: 12px; margin: 4px 0; cursor: pointer; }
+.circle-dim { color: var(--text-low); font-size: 12px; }
+.circle-thumb { display: block; max-width: 100%; max-height: 38vh; margin: 0 auto 8px; border-radius: 12px; border: 1px solid var(--border-soft); }
+.circle-text { max-height: 110px; overflow: auto; font-size: 12px; background: var(--surface-hover); border-radius: 8px; padding: 8px; }
+details summary { cursor: pointer; font-size: 12px; margin-bottom: 6px; }
+
+.circle-head { display: flex; gap: 10px; align-items: center; }
+.circle-mini { width: 44px; height: 44px; border-radius: 10px; object-fit: cover; border: 1px solid var(--border-soft); flex: none; }
+.circle-mini-ph { display: grid; place-items: center; background: var(--surface-hover); font-size: 20px; }
+.circle-title { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.circle-title b { color: var(--text-hi); font-size: 14.5px; }
+.circle-title span { font-size: 11px; color: var(--text-low); }
+.circle-icon { background: transparent; border: 0; font-size: 16px; cursor: pointer; padding: 6px; color: var(--text-mid); }
+.circle-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.circle-chip { border: 1px solid var(--border-soft); background: var(--surface-hover); color: var(--text-hi); border-radius: 999px; padding: 6px 11px; font-size: 12px; cursor: pointer; }
+.circle-chip.soft { color: var(--text-mid); }
+.circle-chip:disabled { opacity: .5; cursor: default; }
+.circle-lang { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; font-size: 12px; }
+.circle-lang select { background: var(--surface-hover); border: 1px solid var(--border-soft); border-radius: 6px; color: var(--text-mid); font-size: 12px; padding: 3px 6px; }
+.circle-log { flex: 1; min-height: 80px; overflow: auto; display: flex; flex-direction: column; gap: 8px; }
+.circle-msg { max-width: 94%; padding: 8px 11px; border-radius: 12px; line-height: 1.45; font-size: 13px; white-space: pre-wrap; word-break: break-word; }
+.circle-msg.me { align-self: flex-end; background: var(--surface-hover); color: var(--text-hi); }
+.circle-msg.codex { align-self: flex-start; background: rgba(255, 211, 107, .09); border: 1px solid rgba(255, 211, 107, .25); color: var(--text-hi); }
+.circle-msg.err { border-color: rgba(255, 90, 90, .5); }
+.circle-steps { margin: 6px 0 0; padding-left: 20px; }
+.circle-nav { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border-soft); }
+.circle-ask { display: flex; gap: 6px; }
+.circle-ask input { flex: 1; min-width: 0; background: var(--surface-hover); border: 1px solid var(--border-soft); border-radius: 999px; color: var(--text-hi); padding: 9px 14px; font-size: 13px; }
+.circle-toast { position: fixed; z-index: 9200; left: 50%; transform: translateX(-50%); top: calc(14px + env(safe-area-inset-top, 0px)); padding: 9px 16px; font-size: 13px; color: var(--text-hi); max-width: calc(100vw - 24px); }
+@media print { .circle-overlay, .circle-sheet, .circle-panel, .circle-hole, .circle-toast { display: none !important; } }

@@ -295,6 +295,45 @@ export function sanitizeEdits(input) {
   return out;
 }
 
+// ---------------------------------------------------------------------------------------
+// CHEX Simulation (3D posts). A 3D post is a normal image post (a transparent PNG cut-out of the
+// object) plus these small look/shape settings. Viewers rebuild the rotatable 3D model from the
+// cut-out and the settings, so nothing heavy is stored. Everything is clamped/whitelisted here:
+// the client only ever receives numbers, booleans, hex colours and one of three finish names.
+// Keep the ranges in step with frontend/src/sim3d/model3d.js (RANGES).
+// ---------------------------------------------------------------------------------------
+export const MODEL3D_RANGES = {
+  depth: [0.05, 1.2, 0.45], roundness: [0.15, 1, 0.7], width: [0.5, 1.6, 1], height: [0.5, 1.6, 1],
+  twist: [-180, 180, 0], bend: [-90, 90, 0], wave: [0, 0.3, 0], tintAmount: [0, 1, 0], spinSpeed: [0, 4, 1.2],
+};
+const HEX6 = /^#[0-9a-f]{6}$/i;
+export function sanitizeModel3d(input) {
+  if (input === undefined || input === null || input === '') return null;
+  let m = input;
+  if (typeof m === 'string') {
+    if (m.length > 2000) return null;
+    try { m = JSON.parse(m); } catch { return null; }
+  }
+  if (!m || typeof m !== 'object' || Array.isArray(m)) return null;
+  const out = { v: 1 };
+  for (const [k, [min, max, def]] of Object.entries(MODEL3D_RANGES)) out[k] = Math.round(clamp(m[k], min, max, def) * 1000) / 1000;
+  out.tint = HEX6.test(m.tint) ? m.tint.toLowerCase() : '#ffffff';
+  out.bg = HEX6.test(m.bg) ? m.bg.toLowerCase() : '#101847';
+  out.finish = ['matte', 'glossy', 'metal'].includes(m.finish) ? m.finish : 'matte';
+  out.clay = m.clay === true;
+  out.wireframe = m.wireframe === true;
+  out.spin = m.spin !== false;
+  return out;
+}
+export const model3dToJson = (input) => {
+  const clean = sanitizeModel3d(input);
+  return clean ? JSON.stringify(clean) : null;
+};
+export const parseModel3d = (json) => {
+  if (!json) return null;
+  try { return JSON.parse(json); } catch { return null; }
+};
+
 export const editsToJson = (input) => {
   const clean = sanitizeEdits(input);
   return clean ? JSON.stringify(clean) : null;

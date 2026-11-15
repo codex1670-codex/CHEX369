@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { v4 as uuid } from 'uuid';
 import db from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
+import circleRouter from './circle.js';
 import { resolveIntent, pickControl, isConfigured } from '../llm.js';
 import { parseCommand, editDistance, SPLIT_RE } from '../nlu.js';
 import { sanitizeControls, resolveControl, resolveField, resolveLandmark, planMixed, riskOf } from '../uiAgent.js';
@@ -20,6 +21,9 @@ import {
 } from '../nicknames.js';
 
 const router = Router();
+
+// Circle to Ask (circle part of the screen → explain / simplify / steps / take me there). Lives in its own file.
+router.use('/circle', circleRouter);
 
 // The complete allowlisted action registry Codex may choose from. Nothing outside this
 // list can ever be executed, regardless of what the model outputs — executeAction() below
