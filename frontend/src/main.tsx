@@ -16,6 +16,11 @@ import './games/games3d.css';
 import './polish.css';
 import './tailwind.css';
 import './compact.css';
+import './gestures/gestures.css';   // smart gestures: quick-send circle, voice search, settings card
+import './orbit/orbit.css';   // CHEX Orbit: 3D glass launcher (double-tap any screen)
+import './glassnav.css';   // floating glass bottom bar + launcher menu
+import './moremenu.css';   // launcher menu: round glass orbs + line icons (matches Orbit)
+import './premiumglass.css';   // all glass: cards, posts, reels, games, buttons (must stay last)
 import { getStoredTheme, applyTheme } from './theme.js';
 import { initPremium } from './premiumThemes.js';
 import { apply3D } from './ui3d.js';

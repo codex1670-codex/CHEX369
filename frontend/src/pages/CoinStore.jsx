@@ -5,18 +5,18 @@ import GiftModal from '../components/GiftModal.jsx';
 const fmt = (n) => Number(n).toLocaleString();
 
 // CHEX Coins: balance, how to earn them, the store, and recent activity.
-export default function CoinStore({ onBack, onOpenSettings }) {
+export default function CoinStore({ onBack, onOpenSettings, onOpenStudio }) {
   const [w, setW] = useState(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  const [justUnlocked, setJustUnlocked] = useState(false);
+  const [justUnlocked, setJustUnlocked] = useState('');
   const [gifting, setGifting] = useState(false);
 
   useEffect(() => { api.coins().then(setW).catch(e => setError(e.message)); }, []);
 
   const unlock = async (item) => {
     setBusy(true); setError('');
-    try { setW(await api.unlockCoinItem(item.id)); setJustUnlocked(true); }
+    try { setW(await api.unlockCoinItem(item.id)); setJustUnlocked(item.id); }
     catch (e) { setError(e.message); }
     finally { setBusy(false); }
   };
@@ -61,25 +61,24 @@ export default function CoinStore({ onBack, onOpenSettings }) {
       </div>
 
       <div className="glass-card" style={{ padding: 20, marginBottom: 16 }}>
-        <div style={{ fontFamily: 'var(--font-display)', fontSize: 16, marginBottom: 10 }}>Store</div>
-        {w.items.map(item => {
+        <div style={{ fontFamily: 'var(--font-display)', fontSize: 16, marginBottom: 10 }}>Premium store</div>
+
+        {w.items.filter(i => i.kind === 'studio').map(item => {
           const short = w.unlimited ? 0 : item.price - w.balance;
           return (
             <div key={item.id} className="coin-item">
-              <div className="coin-item-icon" aria-hidden="true">{item.owned ? '🔓' : '🔒'}</div>
+              <div className="coin-item-icon" aria-hidden="true">{item.owned ? '🔓' : '🧊'}</div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 800 }}>{item.name}</div>
+                <div style={{ fontWeight: 800 }}>{item.name} <span style={{ color: 'var(--text-mid)', fontWeight: 600 }}>· 🪙 {fmt(item.price)}</span></div>
                 <div style={{ fontSize: 12.5, color: 'var(--text-mid)', margin: '2px 0 8px' }}>{item.description}</div>
                 {item.owned ? (
                   <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-                    <b style={{ fontSize: 13 }}>✓ {justUnlocked ? 'Unlocked! ' : 'Unlocked'}</b>
-                    <button className="btn-primary" style={{ width: 'auto', padding: '8px 16px' }} onClick={onOpenSettings}>{item.id === 'premium-frames' ? 'Choose a frame' : 'Choose a theme'}</button>
+                    <b style={{ fontSize: 13 }}>✓ {justUnlocked === item.id ? 'Unlocked! ' : 'Unlocked'}</b>
+                    <button className="btn-primary" style={{ width: 'auto', padding: '8px 16px' }} onClick={onOpenStudio}>Open the 3D Studio</button>
                   </div>
                 ) : (
                   <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-                    <button className="btn-primary" style={{ width: 'auto', padding: '8px 18px' }} disabled={busy || short > 0} onClick={() => unlock(item)}>
-                      🪙 Unlock for {fmt(item.price)}
-                    </button>
+                    <button className="btn-primary" style={{ width: 'auto', padding: '8px 18px' }} disabled={busy || short > 0} onClick={() => unlock(item)}>🪙 Unlock for {fmt(item.price)}</button>
                     {short > 0 && <span style={{ fontSize: 12.5, color: 'var(--text-mid)' }}>{fmt(short)} more coins needed</span>}
                   </div>
                 )}
@@ -87,11 +86,36 @@ export default function CoinStore({ onBack, onOpenSettings }) {
             </div>
           );
         })}
+
+        {[['theme', '✨ Premium themes', 'Each animated theme is unlocked on its own.', 'Choose a theme'], ['frame', '🖼️ Premium profile frames', 'Each animated frame is unlocked on its own and shows around your photo everywhere on CHEX.', 'Choose a frame']].map(([kind, title, hint, cta]) => {
+          const list = w.items.filter(i => i.kind === kind);
+          const price = list[0]?.price;
+          return (
+            <div key={kind} style={{ marginTop: 18, paddingTop: 14, borderTop: '1px solid color-mix(in srgb, var(--text-hi) 10%, transparent)' }}>
+              <div style={{ fontWeight: 800 }}>{title} <span style={{ color: 'var(--text-mid)', fontWeight: 600 }}>· 🪙 {fmt(price)} each</span></div>
+              <div style={{ fontSize: 12.5, color: 'var(--text-mid)', margin: '2px 0 10px' }}>{hint}</div>
+              <div style={{ display: 'grid', gap: 8 }}>
+                {list.map(item => {
+                  const short = w.unlimited ? 0 : item.price - w.balance;
+                  return (
+                    <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'space-between', flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: 13.5, fontWeight: 700 }}>{item.owned ? '🔓' : '🔒'} {item.name.replace(/ (theme|frame)$/, '')}</span>
+                      {item.owned
+                        ? <b style={{ fontSize: 12.5 }}>✓ {justUnlocked === item.id ? 'Unlocked!' : 'Yours'}</b>
+                        : <button className="btn-primary" style={{ width: 'auto', padding: '6px 14px', fontSize: 13 }} disabled={busy || short > 0} onClick={() => unlock(item)} title={short > 0 ? `${fmt(short)} more coins needed` : undefined}>🪙 {fmt(item.price)}</button>}
+                    </div>
+                  );
+                })}
+              </div>
+              {list.some(i => i.owned) && <button className="btn-ghost" style={{ width: 'auto', padding: '8px 16px', marginTop: 12 }} onClick={onOpenSettings}>{cta}</button>}
+            </div>
+          );
+        })}
       </div>
 
       <div className="glass-card" style={{ padding: 20, marginBottom: 16 }}>
         <div style={{ fontFamily: 'var(--font-display)', fontSize: 16, marginBottom: 4 }}>🎁 Send a gift</div>
-        <p style={{ fontSize: 13, color: 'var(--text-mid)', margin: '0 0 12px' }}>Give a friend CHEX coins, Premium Themes, Premium Frames or a CHEX learn language. It’s paid from your coins. You can also tap 🎁 Gift on anyone’s profile.</p>
+        <p style={{ fontSize: 13, color: 'var(--text-mid)', margin: '0 0 12px' }}>Give a friend CHEX coins, one premium theme (1,000), one premium frame (2,000) or one CHEX learn language (1,000). It’s paid from your coins, plus a 10-coin fee on every gift. You can also tap 🎁 Gift on anyone’s profile.</p>
         <button className="btn-primary" style={{ width: 'auto', padding: '8px 18px' }} onClick={() => setGifting(true)}>🎁 Send a gift</button>
       </div>
       {gifting && <GiftModal onClose={() => setGifting(false)} onSent={() => api.coins().then(setW).catch(() => {})} />}

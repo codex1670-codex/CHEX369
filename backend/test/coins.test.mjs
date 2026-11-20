@@ -38,14 +38,14 @@ test('follower-only posts do not count toward the goal', () => {
   assert.equal(coins.getBalance(u), 0);
 });
 
-test('unlock needs 1,000 coins, charges once and is not repeatable', () => {
+test('one theme needs 1,000 coins, charges once and is not repeatable', () => {
   const u = mk('cat');
-  assert.equal(coins.unlockItem(u, 'premium-themes').error.code, 'NOT_ENOUGH_COINS');
+  assert.equal(coins.unlockItem(u, 'theme:aurora').error.code, 'NOT_ENOUGH_COINS');
   db.prepare("INSERT INTO coin_ledger (user_id, amount, reason) VALUES (?, 1050, 'test')").run(u);
-  assert.equal(coins.unlockItem(u, 'premium-themes').ok, true);
+  assert.equal(coins.unlockItem(u, 'theme:aurora').ok, true);
   assert.equal(coins.getBalance(u), 50);
-  assert.deepEqual(coins.ownedItems(u), ['premium-themes']);
-  assert.equal(coins.unlockItem(u, 'premium-themes').error.code, 'ALREADY_OWNED');
+  assert.deepEqual(coins.ownedItems(u), ['theme:aurora']);          // only that one theme, not the others
+  assert.equal(coins.unlockItem(u, 'theme:aurora').error.code, 'ALREADY_OWNED');
   assert.equal(coins.getBalance(u), 50);
   assert.equal(coins.unlockItem(u, 'nope').error.code, 'UNKNOWN_ITEM');
 });
@@ -56,8 +56,10 @@ test('summary shows progress and store state', () => {
   const s = coins.coinsSummary(u);
   assert.equal(s.monthly.count, 12);
   assert.equal(s.monthly.goal, 30);
-  assert.equal(s.items[0].owned, false);
-  assert.equal(s.items[0].price, 1000);
+  const amber = s.items.find(i => i.id === 'theme:amber');
+  assert.equal(amber.owned, false);
+  assert.equal(amber.price, 1000);
+  assert.equal(s.items.find(i => i.id === 'scan-studio').price, 5000);
 });
 
 // ── repeated / copied posts ───────────────────────────────────────────────────────────────────
@@ -239,18 +241,20 @@ test('same reel video twice is a repeat; a post reusing someone else’s reel is
   assert.equal(coins.checkPostContent(pid).counted, false);
 });
 
-test('premium frames cost 2,000 coins, need the unlock to be equipped, and show on the public user', () => {
+test('one premium frame costs 2,000 coins, needs its own unlock to be equipped, and shows on the public user', () => {
   const u = mk('frida');
-  const item = coins.STORE_ITEMS.find(i => i.id === 'premium-frames');
+  const item = coins.STORE_ITEMS.find(i => i.id === 'frame:galaxy');
   assert.equal(item.price, 2000);
   assert.equal(coins.PROFILE_FRAMES.length >= 10, true);
-  assert.equal(coins.STORE_ITEMS.find(i => i.id === 'premium-themes').price, 1000);
-  assert.equal(coins.setFrame(u, 'golden').error.code, 'FRAMES_LOCKED');
+  assert.equal(coins.STORE_ITEMS.find(i => i.id === 'theme:neon').price, 1000);
+  assert.equal(coins.STORE_ITEMS.find(i => i.id === 'scan-studio').price, 5000);
+  assert.equal(coins.setFrame(u, 'galaxy').error.code, 'FRAMES_LOCKED');
   db.prepare("INSERT INTO coin_ledger (user_id, amount, reason) VALUES (?, 2100, 'test')").run(u);
-  assert.equal(coins.unlockItem(u, 'premium-frames').ok, true);
+  assert.equal(coins.unlockItem(u, 'frame:galaxy').ok, true);
   assert.equal(coins.getBalance(u), 100);
-  assert.equal(coins.unlockItem(u, 'premium-frames').error.code, 'ALREADY_OWNED');
+  assert.equal(coins.unlockItem(u, 'frame:galaxy').error.code, 'ALREADY_OWNED');
   assert.equal(coins.setFrame(u, 'nope').error.code, 'UNKNOWN_FRAME');
+  assert.equal(coins.setFrame(u, 'golden').error.code, 'FRAMES_LOCKED');   // owning one frame does not unlock the others
   assert.equal(coins.setFrame(u, 'galaxy').ok, true);
   assert.equal(coins.coinsSummary(u).frame, 'galaxy');
   const row = db.prepare('SELECT id, username, display_name, avatar_color, avatar_photo_url, profile_frame FROM users WHERE id = ?').get(u);
@@ -259,4 +263,18 @@ test('premium frames cost 2,000 coins, need the unlock to be equipped, and show 
     assert.equal(coins.setFrame(u, null).ok, true);
     assert.equal(coins.coinsSummary(u).frame, null);
   });
+});
+
+test('the 3D Scanning Studio costs 5,000 coins; old theme/frame packs still unlock every theme/frame', () => {
+  const u = mk('studiofan');
+  assert.equal(coins.unlockItem(u, 'scan-studio').error.code, 'NOT_ENOUGH_COINS');
+  db.prepare("INSERT INTO coin_ledger (user_id, amount, reason) VALUES (?, 5000, 'test')").run(u);
+  assert.equal(coins.unlockItem(u, 'scan-studio').ok, true);
+  assert.equal(coins.getBalance(u), 0);
+  assert.equal(coins.ownsItem(u, 'scan-studio'), true);
+  const old = mk('oldtimer');
+  db.prepare("INSERT INTO coin_unlocks (user_id, item_id, price) VALUES (?, 'premium-themes', 1000), (?, 'premium-frames', 2000)").run(old, old);
+  assert.equal(coins.ownsItem(old, 'theme:pearl'), true); assert.equal(coins.ownsItem(old, 'frame:inferno'), true);
+  assert.equal(coins.setFrame(old, 'inferno').ok, true);
+  assert.equal(coins.ownsItem(old, 'scan-studio'), false);
 });

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { PERMS, getAllStatuses, requestPermission, requestAll } from '../permissions.js';
 import { needsInstall, sendTestPush } from '../push.js';
+import PermIcon from './PermIcon.jsx';
 
 const BADGE = {
   granted: { text: '✓ Allowed', cls: 'ok' },
@@ -44,7 +45,7 @@ export default function PermissionsPanel({ onChange }) {
         const b = BADGE[s] || BADGE.prompt;
         return (
           <div className="perm-row" key={p.key}>
-            <span className="perm-ico" aria-hidden>{p.icon}</span>
+            <span className="perm-ico" aria-hidden><PermIcon name={p.key} /></span>
             <div className="perm-txt"><b>{p.label}</b><small>{p.why}</small></div>
             {s === 'prompt'
               ? <button className="pwa-btn" disabled={busy} onClick={() => allowOne(p.key)}>Allow</button>
@@ -53,7 +54,7 @@ export default function PermissionsPanel({ onChange }) {
         );
       })}
       <div className="perm-row">
-        <span className="perm-ico" aria-hidden>🖼</span>
+        <span className="perm-ico" aria-hidden><PermIcon name="gallery" /></span>
         <div className="perm-txt"><b>Gallery &amp; files</b><small>Photos and videos from your phone gallery open whenever you tap upload. No permission needed.</small></div>
         <span className="perm-badge ok">✓ Ready</span>
       </div>

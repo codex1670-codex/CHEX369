@@ -7,6 +7,8 @@ import { compactEnabled, setCompact } from '../compact.js';
 import Emoji3D from '../components/Emoji3D.jsx';
 import { floatingAiEnabled, setFloatingAi } from '../floatingAi.js';
 import { circleAskEnabled, setCircleAsk, loadPrefs, clearPrefs } from '../circleAsk/settings.js';
+import SmartGestures from '../gestures/SmartGestures.jsx';
+import OrbitSettings from '../orbit/OrbitSettings.jsx';
 import { getEmojiFx, setEmojiFx, splitEmojis, burstEmoji, DEFAULT_EMOJIS, EMOJI_PALETTE, MAX_EMOJIS } from '../emojiFx.js';
 import PermissionsPanel from '../components/PermissionsPanel.jsx';
 import SafetyLists from '../components/SafetyLists.jsx';
@@ -27,13 +29,15 @@ function Appearance({ onOpenCoins }) {
   const [compact, setCompactState] = useState(compactEnabled());
   const [wallet, setWallet] = useState(null);
   useEffect(() => { api.coins().then(setWallet).catch(() => {}); }, []);
-  const unlocked = !!wallet?.unlocked?.includes('premium-themes');
-  const item = wallet?.items?.find(i => i.id === 'premium-themes');
-  const framesOwned = !!wallet?.unlocked?.includes('premium-frames');
-  const frameItem = wallet?.items?.find(i => i.id === 'premium-frames');
+  // Every premium theme and every frame is unlocked on its own (1,000 / 2,000 coins each).
+  const ownsTheme = (id) => !!wallet?.unlocked?.includes(`theme:${id}`);
+  const ownsFrame = (id) => !!wallet?.unlocked?.includes(`frame:${id}`);
+  const themeCount = PREMIUM_THEMES.filter(t => ownsTheme(t.id)).length;
+  const frameCount = PROFILE_FRAMES.filter(f => ownsFrame(f.id)).length;
+  const themePrice = wallet?.prices?.theme ?? 1000, framePrice = wallet?.prices?.frame ?? 2000;
   const currentFrame = wallet?.frame ?? user?.frame ?? null;
   const pickFrame = async (id) => {
-    if (!framesOwned) { onOpenCoins(); return; }
+    if (id !== null && !ownsFrame(id)) { onOpenCoins(); return; }
     setFrameBusy(true);
     try {
       const w = await api.setProfileFrame(id);
@@ -45,7 +49,7 @@ function Appearance({ onOpenCoins }) {
 
   const pickMode = (t) => { setPremium(''); setThemeState(applyTheme(t, true)); };
   const pickPremium = (id) => {
-    if (!unlocked) { onOpenCoins(); return; }
+    if (!ownsTheme(id)) { onOpenCoins(); return; }
     applyPremium(id); setPremium(id); setThemeState(getStoredTheme());
   };
   const leavePremium = () => { setThemeState(applyTheme(getStoredTheme(), true)); setPremium(''); };
@@ -61,21 +65,21 @@ function Appearance({ onOpenCoins }) {
       </div>
 
       <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>
-        ✨ Premium themes <span style={{ color: 'var(--text-mid)', fontWeight: 600 }}>· animated · {unlocked ? '🔓 unlocked' : '🔒 locked'}</span>
+        ✨ Premium themes <span style={{ color: 'var(--text-mid)', fontWeight: 600 }}>· animated · {themeCount} of {PREMIUM_THEMES.length} unlocked</span>
       </div>
-      {wallet && !unlocked && (
+      {wallet && themeCount < PREMIUM_THEMES.length && (
         <div className="coin-lockbar">
-          <span>🔒 Unlock all premium themes &amp; animations for <b>{(item?.price || 1000).toLocaleString()}</b> CHEX coins. You have <b>{wallet.unlimited ? '∞' : wallet.balance.toLocaleString()}</b>.</span>
+          <span>🔒 Each premium theme costs <b>{themePrice.toLocaleString()}</b> CHEX coins — unlock just the ones you like. You have <b>{wallet.unlimited ? '∞' : wallet.balance.toLocaleString()}</b>.</span>
           <button className="btn-primary" style={{ width: 'auto', padding: '8px 16px' }} onClick={onOpenCoins}>🪙 Open CHEX Coins store</button>
         </div>
       )}
       <div className="pt-grid">
         {PREMIUM_THEMES.map(t => (
-          <button key={t.id} className={`pt-card${premium === t.id ? ' on' : ''}${unlocked ? '' : ' locked'}`} aria-pressed={premium === t.id}
-            aria-label={unlocked ? t.name : `${t.name} (locked — unlock in the CHEX Coins store)`} onClick={() => pickPremium(t.id)}
+          <button key={t.id} className={`pt-card${premium === t.id ? ' on' : ''}${ownsTheme(t.id) ? '' : ' locked'}`} aria-pressed={premium === t.id}
+            aria-label={ownsTheme(t.id) ? t.name : `${t.name} (locked — ${themePrice.toLocaleString()} coins in the CHEX Coins store)`} onClick={() => pickPremium(t.id)}
             style={{ '--a': t.a, '--b': t.b, '--c': t.c, '--bgA': t.bgA, '--bgB': t.bgB }}>
-            <div className="pt-prev"><i className="p1" /><i className="p2" /><i className="ring" /><i className="pill" />{!unlocked && <span className="pt-lock">🔒</span>}</div>
-            <div className="pt-name"><b>{t.name}</b><span>{t.tag}</span></div>
+            <div className="pt-prev"><i className="p1" /><i className="p2" /><i className="ring" /><i className="pill" />{!ownsTheme(t.id) && <span className="pt-lock">🔒</span>}</div>
+            <div className="pt-name"><b>{t.name}</b><span>{ownsTheme(t.id) ? t.tag : `🪙 ${themePrice.toLocaleString()}`}</span></div>
           </button>
         ))}
       </div>
@@ -85,25 +89,25 @@ function Appearance({ onOpenCoins }) {
       </div>
 
       <div style={{ fontSize: 13, fontWeight: 700, margin: '4px 0 8px' }}>
-        🖼️ Premium profile frames <span style={{ color: 'var(--text-mid)', fontWeight: 600 }}>· animated · {framesOwned ? '🔓 unlocked' : '🔒 locked'}</span>
+        🖼️ Premium profile frames <span style={{ color: 'var(--text-mid)', fontWeight: 600 }}>· animated · {frameCount} of {PROFILE_FRAMES.length} unlocked</span>
       </div>
-      {wallet && !framesOwned && (
+      {wallet && frameCount < PROFILE_FRAMES.length && (
         <div className="coin-lockbar">
-          <span>🔒 Unlock all {PROFILE_FRAMES.length} animated profile frames for <b>{(frameItem?.price || 2000).toLocaleString()}</b> CHEX coins. You have <b>{wallet.unlimited ? '∞' : wallet.balance.toLocaleString()}</b>.</span>
+          <span>🔒 Each animated profile frame costs <b>{framePrice.toLocaleString()}</b> CHEX coins — unlock just the ones you like. You have <b>{wallet.unlimited ? '∞' : wallet.balance.toLocaleString()}</b>.</span>
           <button className="btn-primary" style={{ width: 'auto', padding: '8px 16px' }} onClick={onOpenCoins}>🪙 Open CHEX Coins store</button>
         </div>
       )}
       <div className="pf-grid">
         {PROFILE_FRAMES.map(f => (
-          <button key={f.id} className={`pf-card${currentFrame === f.id ? ' on' : ''}${framesOwned ? '' : ' locked'}`} aria-pressed={currentFrame === f.id} disabled={frameBusy}
-            aria-label={framesOwned ? f.name : `${f.name} (locked — unlock in the CHEX Coins store)`} onClick={() => pickFrame(f.id)}>
-            {!framesOwned && <span className="pf-lock">🔒</span>}
+          <button key={f.id} className={`pf-card${currentFrame === f.id ? ' on' : ''}${ownsFrame(f.id) ? '' : ' locked'}`} aria-pressed={currentFrame === f.id} disabled={frameBusy}
+            aria-label={ownsFrame(f.id) ? f.name : `${f.name} (locked — ${framePrice.toLocaleString()} coins in the CHEX Coins store)`} onClick={() => pickFrame(f.id)}>
+            {!ownsFrame(f.id) && <span className="pf-lock">🔒</span>}
             <span className="pf-sample-wrap"><Avatar user={user ? { ...user, frame: f.id } : null} name={user?.displayName} size={44} showPresence={false} /></span>
-            <span className="pf-name"><b>{f.name}</b><span>{f.tag}</span></span>
+            <span className="pf-name"><b>{f.name}</b><span>{ownsFrame(f.id) ? f.tag : `🪙 ${framePrice.toLocaleString()}`}</span></span>
           </button>
         ))}
       </div>
-      {framesOwned && currentFrame && <div style={{ marginBottom: 18 }}><button className="btn-ghost" style={{ width: 'auto', padding: '9px 18px' }} disabled={frameBusy} onClick={() => pickFrame(null)}>Remove my frame</button></div>}
+      {currentFrame && <div style={{ marginBottom: 18 }}><button className="btn-ghost" style={{ width: 'auto', padding: '9px 18px' }} disabled={frameBusy} onClick={() => pickFrame(null)}>Remove my frame</button></div>}
 
       <div style={{ fontSize: 13.5, fontWeight: 700, margin: '18px 0 8px' }}>Navigation &amp; buttons</div>
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 6 }}>
@@ -484,6 +488,8 @@ export default function Settings({ onBack, onOpenProfile, onOpenCoins, onOpenSti
       <Appearance onOpenCoins={onOpenCoins} />
       <FloatingAI />
       <CircleAskCard />
+      <SmartGestures />
+      <OrbitSettings />
       <EmojiEffects />
       <AccountPrivacy />
       <SafetyLists onOpenProfile={onOpenProfile} />

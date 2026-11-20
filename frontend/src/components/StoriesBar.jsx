@@ -72,7 +72,7 @@ export default function StoriesBar() {
       </div>
 
       {composing && (
-        <form className="glass-card" style={{ padding: 16, marginBottom: 16 }} onSubmit={submit}>
+        <form className="glass-card story-composer" style={{ padding: 16, marginBottom: 16 }} onSubmit={submit}>
           <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
             {[['text', 'Aa Text'], ['media', '📷 Photo / video']].map(([k, label]) => (
               <button key={k} type="button" onClick={() => setKind(k)}

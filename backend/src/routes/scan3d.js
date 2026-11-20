@@ -8,13 +8,19 @@ import path from 'path';
 import { v4 as uuid } from 'uuid';
 import db from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
+import { ownsItem, STUDIO_ITEM, PRICES } from '../coins.js';
 import {
   SCAN_ROOT, LIMITS, projectDir, jobDir, safeJoin, sniffImage, sniffGlb, rm, cleanName, cleanState,
 } from '../scan3d/store.js';
-import { capabilities, runColmap, runMeshy, STAGES, SPEEDS, stageStart, stageWeight } from '../scan3d/providers.js';
+import { capabilities, runColmap, runTripo, STAGES, SPEEDS, stageStart, stageWeight } from '../scan3d/providers.js';
 
 const router = Router();
 router.use(requireAuth);
+// The 3D Scanning Studio is a premium unlock (CHEX Coins store). Quick 3D from a photo is separate and stays free.
+router.use((req, res, next) => {
+  if (ownsItem(req.userId, STUDIO_ITEM)) return next();
+  res.status(403).json({ error: { code: 'STUDIO_LOCKED', message: `Unlock the 3D Scanning Studio in the CHEX Coins store (${PRICES.studio.toLocaleString()} coins) to use it.` } });
+});
 
 const err = (res, status, code, message) => res.status(status).json({ error: { code, message } });
 const wrap = (fn) => (req, res) => Promise.resolve(fn(req, res)).catch((e) => { console.error('[scan3d]', e); err(res, 500, 'SCAN_FAILED', 'Something went wrong. Please try again.'); });
@@ -188,7 +194,7 @@ async function execute(id) {
     fs.rmSync(work, { recursive: true, force: true }); fs.mkdirSync(work, { recursive: true });
     const out = job.engine === 'photogrammetry'
       ? await runColmap({ inDir, workDir: work, signal: ctrl.signal, report, sequential: !!job.sequential })
-      : await runMeshy({ imagePath: path.join(inDir, files[0]), workDir: work, signal: ctrl.signal, report, speed: job.speed || 'fast' });
+      : await runTripo({ imagePath: path.join(inDir, files[0]), workDir: work, signal: ctrl.signal, report, speed: job.speed || 'fast' });
     report('optimize', 1, 'Saving result');
     fs.copyFileSync(out.file, path.join(dir, `result${out.ext}`));
     rm(inDir); rm(work);                                    // storage cleanup: inputs are not kept after success

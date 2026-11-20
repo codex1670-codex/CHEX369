@@ -67,7 +67,8 @@ test('private account: owner and people the owner follows still see everything',
     assert.equal((await get('/search/hashtags/secret', uid)).body.posts.length, 1);
     assert.equal((await get('/reels/feed', uid)).body.reels.length, 1);
   }
-  assert.equal((await get('/feed/following', friend)).body.posts.length, 1);
+  // The post feed now also carries reels: the owner's 1 post + 1 reel.
+  assert.equal((await get('/feed/following', friend)).body.posts.length, 2);
   assert.equal((await get('/users/owner', stranger)).body.user.canSeePosts, false);
 });
 

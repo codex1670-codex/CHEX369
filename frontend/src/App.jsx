@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useRef, useState } from 'react';
+import { Suspense, lazy, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuth } from './AuthContext.jsx';
 import Auth from './pages/Auth.jsx';
@@ -17,13 +17,16 @@ import Admin from './pages/Admin.jsx';
 import Stickies from './pages/Stickies.jsx';
 import PrivateSpace from './pages/PrivateSpace.jsx';   // password-protected second profile (replaces the old My life page)
 const Sim3D = lazy(() => import('./pages/Sim3D.jsx'));   // CHEX Simulation (3D objects): three.js loads only when opened
-const CodexAI = lazy(() => import('./pages/CodexAI.jsx'));       // CODEX AI platform: loaded only when opened
 const LearnPage = lazy(() => import('./pages/LearnPage.jsx'));   // CHEX learn: loaded only when opened
 import StickyAlerts from './components/StickyAlerts.jsx';
 import AlarmRinger from './components/AlarmRinger.jsx';
 import Avatar from './components/Avatar.jsx';
+import NavIcon, { PowerIcon } from './components/NavIcon.jsx';
+import OrbitIcon from './orbit/OrbitIcon.jsx';
 import Codex from './components/Codex.jsx';
 import CircleAsk from './circleAsk/CircleAsk.jsx';
+import GestureHub from './gestures/GestureHub.jsx';
+import { holdProps, registerTap } from './gestures/gestureStore.js';
 import CallLayer from './components/CallLayer.jsx';
 import InstallBanner from './components/InstallBanner.jsx';
 import Splash from './components/Splash.jsx';
@@ -41,6 +44,18 @@ import PermissionsPrompt from './components/PermissionsPrompt.jsx';
 import { syncPushIfAllowed, watchPush } from './push.js';
 import { compactEnabled } from './compact.js';
 
+// Tells the CSS which way the new page should slide in (see premiumglass.css, html[data-nav-dir]).
+let navDirTimer;
+function setNavDir(dir) {
+  const el = document.documentElement;
+  el.dataset.navDir = dir;
+  clearTimeout(navDirTimer);
+  navDirTimer = setTimeout(() => { delete el.dataset.navDir; }, 700);
+}
+
+// Which bottom-bar icons carry a customizable long-press (Settings → Smart gestures).
+const HOLD_GESTURE = { feed: 'homeHold', search: 'searchHold', reels: 'reelsHold', messages: 'chatsHold', notifications: 'alertsHold', profile: 'profileHold' };
+
 // `label` is the full name (tooltip + screen readers). `short` is the one word shown on screen.
 const NAV = [
   { key: 'feed', label: 'Home', short: 'Home', icon: '🏠' },
@@ -52,9 +67,10 @@ const NAV = [
   { key: 'profile', label: 'Profile', short: 'Me', icon: '👤' },
 ];
 // Everything else, one tap away in the launcher grid (＋ on desktop, ⋯ on phones).
+// Line icon for each launcher tile (same family as the Orbit quick-action orbs).
+const MENU_ICON = { feed: 'home', search: 'search', reels: 'reels', messages: 'chat', notifications: 'bell', games: 'games', profile: 'profile', mylife: 'lock', learn: 'learn', sim3d: 'cube', stickies: 'note', admin: 'shield', coins: 'coinline', settings: 'gear' };
 const MORE = [
   { key: 'mylife', label: 'Private space', short: 'Private', icon: '🔒' },
-  { key: 'codexai', label: 'CODEX AI', short: 'AI', icon: '🧠' },
   { key: 'learn', label: 'CHEX learn', short: 'Learn', icon: '🌍' },
   { key: 'sim3d', label: 'CHEX Simulation', short: '3D', icon: '🧊' },
   { key: 'stickies', label: 'Sticky notes', short: 'Notes', icon: '📌' },
@@ -88,6 +104,7 @@ export default function App() {
   // and returns when you scroll up, change page, or reach the end of the page.
   const [compactOn, setCompactOn] = useState(compactEnabled());
   const [navHidden, setNavHidden] = useState(false);
+  const navBarRef = useRef(null);   // glass bottom bar: measured so the bubble can glide under the active tab
   useEffect(() => {
     const sync = () => setCompactOn(compactEnabled());
     window.addEventListener('chex:compact-changed', sync);
@@ -158,7 +175,7 @@ export default function App() {
       return;
     }
     const target = params.get('open');
-    if (target && (target === 'stickies' || target === 'mylife' || target === 'learn' || target === 'sim3d' || target === 'codexai' || NAV.some(n => n.key === target))) {
+    if (target && (target === 'stickies' || target === 'mylife' || target === 'learn' || target === 'sim3d' || NAV.some(n => n.key === target))) {
       setRoute(target);
       setCodexContext({ screen: target });
       window.history.replaceState(null, '', window.location.pathname);
@@ -236,8 +253,10 @@ export default function App() {
   // Premium themes are a paid unlock: if this account hasn't unlocked them (new login on a shared
   // browser, edited storage), fall back to the plain Light/Dark look.
   useEffect(() => {
-    if (!user || !getPremiumId()) return;
-    api.coins().then(c => { if (!c.unlocked.includes('premium-themes')) applyTheme(getStoredTheme(), true); }).catch(() => {});
+    const id = getPremiumId();
+    if (!user || !id) return;
+    // Each premium theme is bought (or gifted) on its own, so check the one that is switched on.
+    api.coins().then(c => { if (!c.unlocked.includes(`theme:${id}`)) applyTheme(getStoredTheme(), true); }).catch(() => {});
   }, [user?.id]);
 
   // Keep the AI's idea of the current page right on every route change, however it happened:
@@ -246,12 +265,32 @@ export default function App() {
     if (user) updateCodexContext({ screen: route });
   }, [route, user]);
 
+  // Glass bar: slide the bubble under the active tab (CSS transitions do the animation).
+  useLayoutEffect(() => {
+    const bar = navBarRef.current;
+    if (!bar) return undefined;
+    const place = () => {
+      const el = bar.querySelector('button.active');
+      if (!el) { bar.style.setProperty('--bo', '0'); return; }
+      bar.style.setProperty('--bx', `${el.offsetLeft}px`);
+      bar.style.setProperty('--bw', `${el.offsetWidth}px`);
+      bar.style.setProperty('--bo', '1');
+    };
+    place();
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(place) : null;
+    ro?.observe(bar);
+    window.addEventListener('resize', place);
+    const t = setTimeout(place, 260);   // once the active label has finished appearing
+    return () => { ro?.disconnect(); window.removeEventListener('resize', place); clearTimeout(t); };
+  }, [route, compactOn, user, booting, splashDone]);
+
   if (booting || !splashDone) return <Splash leaving={!booting && splashLeaving} />;
   if (!user) return <Auth />;
 
   const goBack = () => {
     const prev = historyRef.current.pop();
     if (!prev) return false;
+    setNavDir('prev');
     setProfileUsername(prev.profileUsername);
     setProfileView(prev.profileView);
     setGamesTab(prev.gamesTab);
@@ -262,6 +301,10 @@ export default function App() {
 
   const navigate = (key, param) => {
     setFabOpen(false);
+    if (key !== route) {
+      const from = NAV.findIndex(n => n.key === route), to = NAV.findIndex(n => n.key === key);
+      setNavDir(from !== -1 && to !== -1 ? (to > from ? 'next' : 'prev') : 'push');
+    }
     historyRef.current.push({ route, profileUsername, profileView, gamesTab });
     const reelId = typeof param === 'object' ? param?.reelId : undefined;
     if (historyRef.current.length > 30) historyRef.current.shift();
@@ -309,20 +352,42 @@ export default function App() {
   };
   const onSwipeStart = (e) => {
     const t = e.touches[0];
-    swipeRef.current = e.touches.length === 1 && window.innerWidth <= 800 && !swipeBlocked(e.target) ? { x: t.clientX, y: t.clientY, t: Date.now() } : null;
+    swipeRef.current = e.touches.length === 1 && window.innerWidth <= 800 && !swipeBlocked(e.target)
+      ? { x: t.clientX, y: t.clientY, t: Date.now(), el: e.currentTarget, lock: null } : null;
+  };
+  // The page follows the finger (with rubber-band resistance at the ends), then springs back or changes page.
+  const onSwipeMove = (e) => {
+    const st = swipeRef.current; if (!st || !st.el) return;
+    const t = e.touches[0];
+    const dx = t.clientX - st.x, dy = t.clientY - st.y;
+    if (!st.lock) {
+      if (Math.abs(dx) > 12 && Math.abs(dx) > Math.abs(dy) * 1.8) st.lock = 'x';
+      else if (Math.abs(dy) > 12) st.lock = 'y';
+    }
+    if (st.lock !== 'x') return;
+    const i = NAV.findIndex(n => n.key === route);
+    const hasNext = i !== -1 && NAV[i + (dx < 0 ? 1 : -1)];
+    st.el.style.transition = 'none';
+    st.el.style.translate = `${Math.max(-140, Math.min(140, dx * (hasNext ? 0.42 : 0.14)))}px 0`;
+  };
+  const settleSwipe = (st) => {
+    const el = st?.el; if (!el || !el.style.translate) return;
+    el.style.transition = 'translate .45s cubic-bezier(.22, 1.25, .36, 1)';
+    el.style.translate = '0px 0';
+    setTimeout(() => { el.style.translate = ''; el.style.transition = ''; }, 480);
   };
   const onSwipeEnd = (e) => {
     const st = swipeRef.current; swipeRef.current = null;
     if (!st) return;
     const t = e.changedTouches[0];
     const dx = t.clientX - st.x, dy = t.clientY - st.y;
-    if (Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 1.8 || Date.now() - st.t > 700) return;
     const i = NAV.findIndex(n => n.key === route);
-    if (i === -1) return;
-    const next = NAV[i + (dx < 0 ? 1 : -1)];
-    if (next) navigate(next.key, next.key === 'profile' ? user.username : undefined);
+    const next = i === -1 ? null : NAV[i + (dx < 0 ? 1 : -1)];
+    if (!next || Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 1.8 || Date.now() - st.t > 700) { settleSwipe(st); return; }
+    if (st.el) { st.el.style.translate = ''; st.el.style.transition = ''; }
+    navigate(next.key, next.key === 'profile' ? user.username : undefined);
   };
-
+  const onSwipeCancel = () => { const st = swipeRef.current; swipeRef.current = null; settleSwipe(st); };
 
   return (
     <PresenceProvider>
@@ -341,16 +406,16 @@ export default function App() {
                 {[...NAV.map(n => ({ ...n, core: true })), ...MORE.filter(m => !m.adminOnly || user.isAdmin)].map((n, i) => (
                   <button key={n.key} role="menuitem" data-core={n.core ? '' : undefined} className={`nav-tile${route === n.key ? ' active' : ''}`} style={{ '--i': i }} title={n.label} aria-label={n.label}
                     onPointerMove={tiltMove} onPointerLeave={tiltLeave} onClick={() => go(n.key)}>
-                    <span className="ico">{n.icon}</span><span className="lbl">{n.short}</span>
+                    <span className="ico"><OrbitIcon name={MENU_ICON[n.key]} size={22} /></span><span className="lbl">{n.short}</span>
                     {badgeFor(n.key) > 0 && <span className="count-badge">{fmtCount(badgeFor(n.key))}</span>}
                   </button>
                 ))}
                 <button role="menuitemcheckbox" aria-checked={aiAlerts} className="nav-tile alerts-toggle" style={{ '--i': NAV.length + MORE.length }} title={`AI alerts: ${aiAlerts ? 'on' : 'off'}`} aria-label={`AI alerts: ${aiAlerts ? 'On' : 'Off'}`}
                   onPointerMove={tiltMove} onPointerLeave={tiltLeave} onClick={() => setAlertsEnabled(!aiAlerts)}>
-                  <span className="ico">{aiAlerts ? '🔊' : '🔇'}</span><span className="lbl">{aiAlerts ? 'Sound' : 'Muted'}</span>
+                  <span className="ico"><OrbitIcon name={aiAlerts ? 'volume' : 'mute'} size={22} /></span><span className="lbl">{aiAlerts ? 'Sound' : 'Muted'}</span>
                 </button>
                 <button role="menuitem" data-phone="" className="nav-tile" style={{ '--i': NAV.length + MORE.length + 1 }} title="Log out" aria-label="Log out" onClick={() => { setFabOpen(false); logout(); }}>
-                  <span className="ico">⏻</span><span className="lbl">Out</span>
+                  <span className="ico"><OrbitIcon name="power" size={22} /></span><span className="lbl">Out</span>
                 </button>
               </div>
             </>
@@ -359,25 +424,27 @@ export default function App() {
         , document.body)}
         <div style={{ flex: 1 }} />
         <button type="button" className="rail-user rail-user-btn" onClick={() => navigate('profile', user.username)} aria-label="Open my profile" title="My profile"><Avatar user={user} size={32} online /></button>
-        <button className="rail-item" onClick={logout} aria-label="Log out" title="Log out"><span className="pill">⏻</span><span className="rail-label">Log out</span></button>
+        <button className="rail-item" onClick={logout} aria-label="Log out" title="Log out"><span className="pill"><PowerIcon /></span><span className="rail-label">Log out</span></button>
       </nav>
 
-      <nav className={`nav-bar-mobile${navHidden && compactOn && !fabOpen ? ' nav-hidden' : ''}`} aria-label="Main navigation (phone)">
+      <nav ref={navBarRef} className={`nav-bar-mobile${navHidden && compactOn && !fabOpen ? ' nav-hidden' : ''}`} aria-label="Main navigation (phone)">
+        <span className="nb-bubble" aria-hidden="true" />
         {NAV.map((n) => (
           <button key={n.key} type="button" className={route === n.key ? 'active' : ''} aria-label={n.label} title={n.label} aria-current={route === n.key ? 'page' : undefined}
-            onClick={() => navigate(n.key, n.key === 'profile' ? user.username : undefined)}>
-            <span className="nb-ico" aria-hidden>{n.icon}{badgeFor(n.key) > 0 && <span className="count-badge nb-badge">{fmtCount(badgeFor(n.key))}</span>}</span>
+            {...(HOLD_GESTURE[n.key] ? holdProps(HOLD_GESTURE[n.key]) : {})}
+            onClick={() => { if (n.key === 'feed') registerTap('homeDouble'); navigate(n.key, n.key === 'profile' ? user.username : undefined); }}>
+            <span className="nb-ico" aria-hidden><NavIcon name={n.key} />{badgeFor(n.key) > 0 && <span className="count-badge nb-badge">{fmtCount(badgeFor(n.key))}</span>}</span>
             <span className="nb-lbl">{n.short}</span>
           </button>
         ))}
-        <button type="button" className="nb-more" aria-label="More" title="More" aria-expanded={fabOpen} aria-haspopup="menu" onClick={() => setFabOpen(o => !o)}>
-          <span className="nb-ico" aria-hidden>⋯</span>
+        <button type="button" className="nb-more" aria-label="More" title="More" aria-expanded={fabOpen} aria-haspopup="menu" {...holdProps('moreHold')} onClick={() => setFabOpen(o => !o)}>
+          <span className="nb-ico" aria-hidden><NavIcon name="more" /></span>
           <span className="nb-lbl">More</span>
         </button>
       </nav>
 
       {coinToast && <div className="coin-toast coin-toast-fixed" role="status">{coinToast}</div>}
-      <PageTransition routeKey={route} className={`main-col ${route === 'messages' || (route === 'mylife' && privateFill) ? 'fixed-page' : ''}`} onTouchStart={onSwipeStart} onTouchEnd={onSwipeEnd}>
+      <PageTransition routeKey={route} className={`main-col ${route === 'messages' || (route === 'mylife' && privateFill) ? 'fixed-page' : ''}`} onTouchStart={onSwipeStart} onTouchMove={onSwipeMove} onTouchEnd={onSwipeEnd} onTouchCancel={onSwipeCancel}>
         {route === 'feed' && <Feed onOpenProfile={(u) => navigate('profile', u)} onOpenStickies={() => navigate('stickies')} onOpenLearn={() => navigate('learn')} onOpenAdmin={() => navigate('admin')} />}
         {route === 'search' && <Search onOpenProfile={(u) => navigate('profile', u)} onOpenReel={(id) => navigate('reels', { reelId: id })} initialQuery={searchQuery} initialScope={searchScope} onConsumeQuery={() => setSearchQuery(null)} />}
         {route === 'reels' && <Reels startReelId={startReelId} onConsumeStart={() => setStartReelId(null)} />}
@@ -386,11 +453,10 @@ export default function App() {
         {route === 'settings' && <Settings onBack={() => navigate('profile', user.username)} onOpenProfile={(u) => navigate('profile', u)} onOpenCoins={() => navigate('coins')} onOpenStickies={() => navigate('stickies')} onOpenMyLife={() => navigate('mylife')} />}
         {route === 'stickies' && <Stickies onBack={() => navigate('feed')} />}
         {route === 'mylife' && <PrivateSpace onLayout={setPrivateFill} />}
-        {route === 'codexai' && <Suspense fallback={<Skeleton label="Loading CODEX AI" />}><CodexAI onBack={() => navigate('feed')} navigate={navigate} /></Suspense>}
         {route === 'learn' && <Suspense fallback={<Skeleton label="Loading Learn" />}><LearnPage onBack={() => navigate('feed')} onOpenProfile={(u) => navigate('profile', u)} /></Suspense>}
         {route === 'sim3d' && <Suspense fallback={<Skeleton label="Loading CHEX Simulation" />}><Sim3D onBack={() => navigate('feed')} onPosted={() => navigate('feed')} /></Suspense>}
         {route === 'admin' && user.isAdmin && <Admin onBack={() => navigate('feed')} onOpenProfile={(u) => navigate('profile', u)} />}
-        {route === 'coins' && <CoinStore onBack={() => navigate('settings')} onOpenSettings={() => navigate('settings')} />}
+        {route === 'coins' && <CoinStore onBack={() => navigate('settings')} onOpenSettings={() => navigate('settings')} onOpenStudio={() => navigate('sim3d')} />}
         {route === 'profile' && (
           <Profile
             username={profileUsername || user.username}
@@ -409,6 +475,7 @@ export default function App() {
 
       <Codex navigate={navigate} goBack={goBack} currentUser={user} />
       <CircleAsk navigate={navigate} route={route} />
+      <GestureHub navigate={navigate} user={user} route={route} />
       <StickyAlerts onOpen={() => navigate('stickies')} />
       <AlarmRinger />
       <EmojiRain />

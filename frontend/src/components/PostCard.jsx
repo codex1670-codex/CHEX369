@@ -18,6 +18,7 @@ import ReactionPicker from './ReactionPicker.jsx';
 import { loadQuickReactions } from '../quickReactions.js';
 import { useLongPress } from './useLongPress.js';
 import ShareSheet from './ShareSheet.jsx';
+import { useShareGesture } from '../gestures/useShareGesture.js';
 import ActionSheet, { ConfirmSheet } from './ActionSheet.jsx';
 
 function timeAgo(iso) {
@@ -124,6 +125,8 @@ export default function PostCard({ post, onOpenProfile, onDeleted }) {
   }, [p.mediaType, p.id]);
   const [showComments, setShowComments] = useState(false);
   const [sharing, setSharing] = useState(false);
+  // Hold Share → quick-send circle (Settings → Smart gestures). A plain tap still opens the share sheet.
+  const shareHold = useShareGesture({ kind: 'post', id: p.id, thumb: p.model3d ? null : p.mediaUrl, thumbType: p.mediaType === 'video' ? 'video' : 'image' });
   const [comments, setComments] = useState(null);
   const [commentText, setCommentText] = useState('');
   const [replyTo, setReplyTo] = useState(null);
@@ -390,7 +393,7 @@ export default function PostCard({ post, onOpenProfile, onDeleted }) {
         </button>
         <button onClick={openComments}>💬 {p.commentCount}</button>
         <button onClick={openPicker} aria-label="React with an emoji" aria-haspopup="dialog">{myReaction || '😊'} <span className="lbl">React</span></button>
-        <button onClick={() => setSharing(true)} aria-label="Share this post" aria-haspopup="dialog">↗ <span className="lbl">Share</span></button>
+        <button {...shareHold} onClick={() => setSharing(true)} aria-label="Share this post" aria-haspopup="dialog">↗ <span className="lbl">Share</span></button>
         <button type="button" className={`post-save${p.savedByMe ? ' on' : ''}`} onClick={toggleSave} aria-pressed={!!p.savedByMe} aria-label={p.savedByMe ? 'Remove from saved' : 'Save post'}>🔖</button>
       </div>
       {sharing && <ShareSheet kind="post" id={p.id} onClose={() => setSharing(false)} />}

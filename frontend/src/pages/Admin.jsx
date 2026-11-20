@@ -94,7 +94,7 @@ function Users({ ov, flash, fail, refresh, onOpenProfile }) {
   const [q, setQ] = useState('');
   const [users, setUsers] = useState(null);
   const [amounts, setAmounts] = useState({});
-  const [frames, setFrames] = useState({});
+  const [picks, setPicks] = useState({});        // per user: which store item the admin is about to gift
   const load = useCallback((query) => api.adminUsers(query).then(r => setUsers(r.users)).catch(fail), []);
   useEffect(() => { const t = setTimeout(() => load(q), 250); return () => clearTimeout(t); }, [q, load]);
 
@@ -103,8 +103,11 @@ function Users({ ov, flash, fail, refresh, onOpenProfile }) {
     try { const r = await api.adminGiftCoins(u.username, amount); flash(`🪙 Gave ${fmt(amount)} coins to @${u.username} (now ${fmt(r.balance)})`); load(q); }
     catch (e) { fail(e); }
   };
-  const giftItem = async (u, itemId) => {
-    try { const r = await api.adminGiftItem(u.username, itemId, itemId === 'premium-frames' ? (frames[u.id] || undefined) : undefined); flash(r.alreadyOwned ? `@${u.username} already had it${frames[u.id] ? ' (frame selected)' : ''}.` : `🎁 Gifted to @${u.username}`); load(q); }
+  const giftItem = async (u) => {
+    const itemId = picks[u.id];
+    if (!itemId) { flash('Choose an item to gift first.'); return; }
+    const isFrame = itemId.startsWith('frame:');
+    try { const r = await api.adminGiftItem(u.username, itemId, isFrame ? true : undefined); flash(r.alreadyOwned ? `@${u.username} already had it.` : `🎁 Gifted to @${u.username}`); load(q); }
     catch (e) { fail(e); }
   };
   const del = async (u) => {
@@ -126,7 +129,7 @@ function Users({ ov, flash, fail, refresh, onOpenProfile }) {
               <b>{isMaster ? '🪙 ∞' : `🪙 ${fmt(u.coins)}`}</b>
             </div>
             <div style={{ fontSize: 12.5, color: 'var(--text-mid)', margin: '4px 0 10px' }}>
-              {u.posts} posts · {u.reels} reels · {u.unlocked.includes('premium-frames') ? '🖼️ frames' : 'no frames'} · {u.unlocked.includes('premium-themes') ? '✨ themes' : 'no themes'}{u.frame ? ` · wearing ${u.frame}` : ''}
+              {u.posts} posts · {u.reels} reels · {u.unlocked.filter(i => i.startsWith('frame:')).length} frames · {u.unlocked.filter(i => i.startsWith('theme:')).length} themes · {u.unlocked.includes('scan-studio') ? '🧊 3D Studio' : 'no 3D Studio'}{u.frame ? ` · wearing ${u.frame}` : ''}
             </div>
             {!isMaster && (
               <>
@@ -135,12 +138,11 @@ function Users({ ov, flash, fail, refresh, onOpenProfile }) {
                   <button className="btn-primary" style={small} onClick={() => gift(u)}>🪙 Gift coins</button>
                 </div>
                 <div style={{ ...row, marginBottom: 8 }}>
-                  <button className="btn-ghost" style={small} onClick={() => giftItem(u, 'premium-themes')}>✨ Gift premium themes</button>
-                  <select value={frames[u.id] || ''} onChange={e => setFrames(f => ({ ...f, [u.id]: e.target.value }))} aria-label="Frame to select" style={{ fontSize: 12.5 }}>
-                    <option value="">Frames (don’t pick one)</option>
-                    {(ov?.frames || []).map(f => <option key={f} value={f}>{f}</option>)}
+                  <select value={picks[u.id] || ''} onChange={e => setPicks(p => ({ ...p, [u.id]: e.target.value }))} aria-label={`Item to gift @${u.username}`} style={{ fontSize: 12.5, maxWidth: 220 }}>
+                    <option value="">Pick one item to gift…</option>
+                    {(ov?.items || []).filter(i => !u.unlocked.includes(i.id)).map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
                   </select>
-                  <button className="btn-ghost" style={small} onClick={() => giftItem(u, 'premium-frames')}>🖼️ Gift premium frames</button>
+                  <button className="btn-ghost" style={small} onClick={() => giftItem(u)}>🎁 Gift item</button>
                 </div>
                 <button className="btn-ghost" style={{ ...small, color: '#ff8a8a' }} onClick={() => del(u)}>⛔ Delete user</button>
               </>

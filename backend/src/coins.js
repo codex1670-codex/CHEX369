@@ -17,15 +17,28 @@ export const COIN_RULES = {
   copiedCaptionMinLength: 25,  // a text post only counts as 'copied from someone' when it is this long
 };
 
-export const STORE_ITEMS = [
-  { id: 'premium-themes', name: 'Premium Themes & Animations', price: 1000,
-    description: 'Unlocks all 9 animated premium themes — Amber Noir, Teal Slate, Aurora, Obsidian Gold, Neon Noir, Emerald Velvet, Sunset Glass, Rose Quartz and Ocean Pearl.' },
-  { id: 'premium-frames', name: 'Premium Profile Frames', price: 2000,
-    description: 'Unlocks all 12 animated profile frames — Golden Halo, Aurora Spin, Neon Pulse, Royal Crown, Emerald Flame, Rainbow Orbit, Diamond Sparkle, Inferno, Ocean Wave, Cherry Blossom, Cyber Glitch and Galaxy Orbit. Your frame shows around your photo everywhere on CHEX.' },
-];
-
+// Premium catalogue. Every theme and every frame is bought (or gifted) ONE at a time.
+export const THEME_IDS = ['amber', 'slate', 'aurora', 'obsidian', 'neon', 'emerald', 'sunset', 'rose', 'pearl'];
+const THEME_NAMES = { amber: 'Amber Noir', slate: 'Teal Slate', aurora: 'Aurora', obsidian: 'Obsidian Gold', neon: 'Neon Noir', emerald: 'Emerald Velvet', sunset: 'Sunset Glass', rose: 'Rose Quartz', pearl: 'Ocean Pearl' };
 // Animated profile frames (the artwork lives in frontend/src/profileFrames.js + frames.css).
 export const PROFILE_FRAMES = ['golden', 'aurora', 'neon', 'crown', 'emerald', 'rainbow', 'diamond', 'inferno', 'ocean', 'blossom', 'glitch', 'galaxy'];
+const FRAME_NAMES = { golden: 'Golden Halo', aurora: 'Aurora Spin', neon: 'Neon Pulse', crown: 'Royal Crown', emerald: 'Emerald Flame', rainbow: 'Rainbow Orbit', diamond: 'Diamond Sparkle', inferno: 'Inferno', ocean: 'Ocean Wave', blossom: 'Cherry Blossom', glitch: 'Cyber Glitch', galaxy: 'Galaxy Orbit' };
+
+export const PRICES = { theme: 1000, frame: 2000, studio: 5000, language: 1000 };   // language = price of GIFTING one language
+export const themeItemId = (id) => `theme:${id}`;
+export const frameItemId = (id) => `frame:${id}`;
+export const STUDIO_ITEM = 'scan-studio';
+
+export const STORE_ITEMS = [
+  { id: STUDIO_ITEM, kind: 'studio', name: '3D Scanning Studio', price: PRICES.studio,
+    description: 'Unlocks the full 3D Scanning Studio in CHEX Simulation — capture, reconstruct, edit, simulate, measure, export and publish 3D models. (Quick 3D from a photo stays free.)' },
+  ...THEME_IDS.map(id => ({ id: themeItemId(id), kind: 'theme', ref: id, name: `${THEME_NAMES[id]} theme`, price: PRICES.theme,
+    description: `Unlocks the animated ${THEME_NAMES[id]} premium theme.` })),
+  ...PROFILE_FRAMES.map(id => ({ id: frameItemId(id), kind: 'frame', ref: id, name: `${FRAME_NAMES[id]} frame`, price: PRICES.frame,
+    description: `Unlocks the animated ${FRAME_NAMES[id]} profile frame. It shows around your photo everywhere on CHEX.` })),
+];
+// Old accounts bought whole packs before items were split up: those packs keep unlocking every theme / frame.
+const LEGACY_PACKS = { 'premium-themes': THEME_IDS.map(themeItemId), 'premium-frames': PROFILE_FRAMES.map(frameItemId) };
 
 export const monthKey = (d = new Date()) => d.toISOString().slice(0, 7);
 
@@ -55,15 +68,19 @@ export function safeAward(userId) {
   try { return awardMonthlyIfEarned(userId); } catch (e) { console.error('coin award failed', e); return 0; }
 }
 
-export const ownedItems = (userId) =>
-  isMasterId(userId) ? STORE_ITEMS.map(i => i.id)
-    : db.prepare('SELECT item_id FROM coin_unlocks WHERE user_id = ?').all(userId).map(r => r.item_id);
+export const ownedItems = (userId) => {
+  if (isMasterId(userId)) return STORE_ITEMS.map(i => i.id);
+  const own = new Set(db.prepare('SELECT item_id FROM coin_unlocks WHERE user_id = ?').all(userId).map(r => r.item_id));
+  for (const [pack, ids] of Object.entries(LEGACY_PACKS)) if (own.has(pack)) ids.forEach(x => own.add(x));
+  return [...own];
+};
+export const ownsItem = (userId, itemId) => ownedItems(userId).includes(itemId);
 
 export function unlockItem(userId, itemId) {
   const item = STORE_ITEMS.find(i => i.id === itemId);
   if (!item) return { error: { status: 400, code: 'UNKNOWN_ITEM', message: 'That item is not in the store.' } };
   const tx = db.transaction(() => {
-    if (isMasterId(userId) || db.prepare('SELECT 1 FROM coin_unlocks WHERE user_id = ? AND item_id = ?').get(userId, itemId)) {
+    if (ownsItem(userId, itemId)) {
       return { error: { status: 409, code: 'ALREADY_OWNED', message: 'You already unlocked this.' } };
     }
     const balance = getBalance(userId);
@@ -80,8 +97,8 @@ export function unlockItem(userId, itemId) {
 // Pick (or remove, with null) the frame shown around your avatar. Needs the frames unlock.
 export function setFrame(userId, frame) {
   if (frame !== null && !PROFILE_FRAMES.includes(frame)) return { error: { status: 400, code: 'UNKNOWN_FRAME', message: 'That frame does not exist.' } };
-  if (frame !== null && !ownedItems(userId).includes('premium-frames')) {
-    return { error: { status: 403, code: 'FRAMES_LOCKED', message: 'Unlock Premium Profile Frames in the CHEX Coins store first.' } };
+  if (frame !== null && !ownsItem(userId, frameItemId(frame))) {
+    return { error: { status: 403, code: 'FRAMES_LOCKED', message: 'Unlock this frame in the CHEX Coins store first.' } };
   }
   db.prepare('UPDATE users SET profile_frame = ? WHERE id = ?').run(frame, userId);
   return { ok: true };
@@ -96,6 +113,7 @@ export function coinsSummary(userId) {
     balance: getBalance(userId),
     unlimited: isMasterId(userId),
     unlocked: [...owned],
+    prices: PRICES,
     frame: db.prepare('SELECT profile_frame AS f FROM users WHERE id = ?').get(userId)?.f || null,
     learn: { reward: COIN_RULES.learnSectionReward, levels: COIN_RULES.learnSectionLevels, unlockLevels: COIN_RULES.learnUnlockLevels, unlockPrice: COIN_RULES.learnUnlockPrice },
     game: { reward: COIN_RULES.gameWinReward, dailyCap: COIN_RULES.gameWinDailyCap, today: db.prepare("SELECT COUNT(*) AS c FROM coin_ledger WHERE user_id = ? AND ref LIKE 'game-win:%' AND substr(created_at, 1, 10) = ?").get(userId, new Date().toISOString().slice(0, 10)).c },
@@ -357,21 +375,31 @@ export function recordLearnLevel(userId, lang, level, now = Date.now()) {
 }
 
 // ── Gifts between people ─────────────────────────────────────────────────────────────────────────
-// The sender PAYS from their own wallet (coins gift = that many coins; theme/frame pack = its store price;
-// a language = the 100-coin unlock price). The receiver gets it for free. The master account sends for free.
+// The sender PAYS from their own wallet: the gift's price PLUS a 10-coin fee on every gift.
+//   coins gift  = that many coins        one theme    = 1,000     one frame = 2,000     one language = 1,000
+// One theme, one frame or one language per gift. The receiver gets it for free. The master account sends for free.
 // Coin gifts are capped per day so two accounts can't be used to shuffle coins around endlessly.
-export const GIFT_RULES = { minCoins: 1, maxCoinsPerGift: 500, dailyCoinCap: 500 };
+export const GIFT_RULES = { minCoins: 1, maxCoinsPerGift: 500, dailyCoinCap: 500, fee: 10, themePrice: PRICES.theme, framePrice: PRICES.frame, languagePrice: PRICES.language };
 export const LEARN_LANGUAGES = Object.entries(LEARN_NAMES).map(([code, name]) => ({ code, name }));
+export const giftOptions = () => ({
+  rules: GIFT_RULES, languages: LEARN_LANGUAGES,
+  themes: THEME_IDS.map(id => ({ id, name: THEME_NAMES[id], price: PRICES.theme })),
+  frames: PROFILE_FRAMES.map(id => ({ id, name: FRAME_NAMES[id], price: PRICES.frame })),
+});
 
 export function sendGift(fromId, to, spec) {
   const master = isMasterId(fromId);
   const bad = (status, code, message) => ({ error: { status, code, message } });
   const tx = db.transaction(() => {
+    // Charges price + fee in one go (two ledger rows so the daily coin cap only sees the gift itself).
     const charge = (amount, reason, ref) => {
       if (master) return null;
+      const total = amount + GIFT_RULES.fee;
       const balance = getBalance(fromId);
-      if (balance < amount) return bad(402, 'NOT_ENOUGH_COINS', `You need ${amount - balance} more CHEX coins for this gift.`);
-      db.prepare('INSERT INTO coin_ledger (user_id, amount, reason, ref) VALUES (?, ?, ?, ?)').run(fromId, -amount, reason, `${ref}:${to.id}:${Date.now()}:${Math.random()}`);
+      if (balance < total) return bad(402, 'NOT_ENOUGH_COINS', `You need ${total - balance} more CHEX coins for this gift (${amount} + ${GIFT_RULES.fee} gift fee).`);
+      const tag = `${to.id}:${Date.now()}:${Math.random()}`;
+      db.prepare('INSERT INTO coin_ledger (user_id, amount, reason, ref) VALUES (?, ?, ?, ?)').run(fromId, -amount, reason, `${ref}:${tag}`);
+      db.prepare('INSERT INTO coin_ledger (user_id, amount, reason, ref) VALUES (?, ?, ?, ?)').run(fromId, -GIFT_RULES.fee, `Gift fee (${GIFT_RULES.fee} coins)`, `gift-fee:${tag}`);
       return null;
     };
     const who = `@${to.username}`;
@@ -387,23 +415,27 @@ export function sendGift(fromId, to, spec) {
       db.prepare('INSERT INTO coin_ledger (user_id, amount, reason, ref) VALUES (?, ?, ?, ?)').run(to.id, n, `Gift from @${spec.fromName}`, `gift-coins-recv:${fromId}:${Date.now()}:${Math.random()}`);
       return { ok: true, label: `${n} CHEX coins`, text: `🎁 @${spec.fromName} sent you ${n} CHEX coins!`, amount: n };
     }
-    if (spec.type === 'premium-themes' || spec.type === 'premium-frames') {
-      const item = STORE_ITEMS.find(i => i.id === spec.type);
-      if (db.prepare('SELECT 1 FROM coin_unlocks WHERE user_id = ? AND item_id = ?').get(to.id, item.id)) return bad(409, 'ALREADY_OWNED', `${who} already has ${item.name}.`);
+    if (spec.type === 'theme' || spec.type === 'frame') {
+      const isTheme = spec.type === 'theme';
+      const ok = isTheme ? THEME_IDS.includes(spec.id) : PROFILE_FRAMES.includes(spec.id);
+      if (!ok) return bad(400, 'UNKNOWN_ITEM', `Choose one ${spec.type} to gift.`);
+      const itemId = isTheme ? themeItemId(spec.id) : frameItemId(spec.id);
+      const item = STORE_ITEMS.find(i => i.id === itemId);
+      if (ownsItem(to.id, itemId)) return bad(409, 'ALREADY_OWNED', `${who} already has ${item.name}.`);
       const e = charge(item.price, `Gift of ${item.name} to ${who}`, 'gift-item-sent'); if (e) return e;
       db.prepare('INSERT INTO coin_unlocks (user_id, item_id, price) VALUES (?, ?, 0)').run(to.id, item.id);
-      return { ok: true, label: item.name, text: `🎁 @${spec.fromName} gifted you ${item.name}!` };
+      return { ok: true, label: item.name, text: `🎁 @${spec.fromName} gifted you the ${item.name}!` };
     }
     if (spec.type === 'language') {
       if (!isLearnLang(spec.lang)) return bad(400, 'BAD_LANG', 'That language does not exist.');
       const owned = ownedLearnLangs(to.id);
       if (!owned.length) return bad(409, 'NO_FIRST_LANGUAGE', `${who} hasn’t picked their first CHEX learn language yet — they get that one free.`);
       if (owned.includes(spec.lang)) return bad(409, 'ALREADY_OWNED', `${who} already has ${LEARN_NAMES[spec.lang]}.`);
-      const e = charge(COIN_RULES.learnUnlockPrice, `Gift of ${LEARN_NAMES[spec.lang]} to ${who}`, 'gift-lang-sent'); if (e) return e;
+      const e = charge(PRICES.language, `Gift of ${LEARN_NAMES[spec.lang]} to ${who}`, 'gift-lang-sent'); if (e) return e;
       db.prepare("INSERT INTO learn_langs (user_id, lang, kind) VALUES (?, ?, 'unlocked')").run(to.id, spec.lang);
       return { ok: true, label: LEARN_NAMES[spec.lang], text: `🎁 @${spec.fromName} gifted you ${LEARN_NAMES[spec.lang]} in CHEX learn!` };
     }
-    return bad(400, 'INVALID_GIFT', 'Choose coins, premium themes, premium frames or a language.');
+    return bad(400, 'INVALID_GIFT', 'Choose coins, one theme, one frame or one language.');
   });
   return tx.immediate();
 }

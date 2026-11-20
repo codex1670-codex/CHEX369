@@ -1,3 +1,35 @@
+## CHEX ORBIT — 3D spatial launcher (double-tap any screen)
+- New `frontend/src/orbit/` (Orbit.jsx, orbitStore.js, OrbitIcon.jsx, OrbitSettings.jsx, orbit.css) + `test/orbit.test.jsx`.
+- Double-tap / double-click a quiet part of any screen to open ORBIT (photos, videos, reels, buttons, fields and game boards keep their own taps, so double-tap-to-like is untouched).
+- 3D glass ring of Home, Messages, Codex, Gallery, Reels, Profile, Alerts, Search with drag/inertia/wheel/keyboard, swipe-down to close, swipe-up or tap to expand into a live workspace; floating satellite cards for the rest; radial quick-action orb.
+- Settings → CHEX Orbit: on/off and Automatic / 3D / Flat. Reduced motion, no-3D browsers and slow GPUs get the flat grid or a no-blur look automatically.
+- Touched: GestureHub.jsx (mounts Orbit), App.jsx (passes `route`), Settings.jsx (settings card), main.tsx (css import).
+
+# Elegant glass on every page (v5.20)
+
+- **Elegant glass section appended to `frontend/src/premiumglass.css`** (single glass file, imported last in `main.tsx`): one glass material for the whole app, in both light and dark themes.
+- **Posts:** curved 30px glass boxes with a bright rim and top sheen; the picture sits inside with its own rounded, rimmed frame; like/comment/save buttons sit in a glass pill.
+- **Reels:** the video is now a curved glass frame on phones too (it was a flat black slab). Author row, caption and side buttons are glass; the black backdrop is gone so the soft background shows around the frame.
+- **Games lobby:** rows, category pills, chips and Play buttons are glass (gold-tinted for the main action).
+- **Game boards (full screen):** the candy-3D look is replaced by glass: soft light background, frosted game panel, glass header/stats/buttons, rounded boards, calm start / game-over overlay. Follows light and dark theme.
+- **Everywhere else:** page titles, primary buttons (gold glass), other buttons (frosted pills), tabs, chat bubbles, nav highlight, Learn page buttons and answer cards.
+- **Tuning:** `--eg-card-blur` (default 14px) controls real blur behind cards; set `0px` on slow phones. `--eg-radius` sets the main curve.
+- No component or logic changes.
+
+# Premium store, gift fee, no AI page
+
+- **3D Scanning Studio is premium: 5,000 CHEX coins** (store item `scan-studio`). The Studio tab in CHEX Simulation shows a lock card with an Unlock button until it is bought; the server also refuses every `/api/scan3d/*` request without the unlock (HTTP 403 `STUDIO_LOCKED`). Quick 3D from a photo stays free.
+- **Themes and frames are bought one at a time:** each premium theme = 1,000 coins (`theme:<id>`), each profile frame = 2,000 coins (`frame:<id>`). Settings shows a lock + price on every card; you can only wear a frame you own. Accounts that bought the old whole packs keep every theme and frame.
+- **Gifts:** a gift is now ONE theme (1,000), ONE frame (2,000), ONE language (1,000) or coins (1-500, 500/day). **Every gift also costs a 10-coin fee** (shown as its own line in the sender's history; the master account still gifts for free). The receiver can't be gifted something they already own.
+- **Admin:** the gift-item control now picks any single store item (theme, frame or the Studio).
+- **CODEX AI page removed:** the menu entry, the page, the `?open=codexai` link and the 🧠 shortcut in the floating assistant are gone. The floating assistant, Circle to Ask and the admin AI-provider settings are untouched.
+
+# Tripo AI + Quick 3D crop
+
+- **Meshy is off, Tripo is on.** The single-photo AI engine in the 3D Scanning Studio now uses Tripo (`TRIPO_API_KEY`, optional `TRIPO_MODEL`, default `v3.1-20260211`). `MESHY_API_KEY` is ignored. Speeds map to Tripo options: Fastest = shape only, Fast = coloured texture, Best quality = PBR. With no key, the API still answers HTTP 503 honestly.
+- **Where to put the key:** `backend/.env` (`TRIPO_API_KEY=...`) or the Render dashboard (`render.yaml` now lists it).
+- **Quick 3D crop:** new **🔲 Crop** tab. Drag the box, drag any handle, pick Free / Original / 1:1 / 4:3 / 3:4 / 16:9, or trim each edge with sliders. The cut-out and 3D shape update from the cropped area; Reset crop restores the whole photo. Files: `sim3d/CropTool.jsx`, `pages/Sim3D.jsx`, `sim3d/sim3d.css`.
+
 ## Compact mode — smart navigation, icon buttons, short notes
 - **Phone menu bar:** icons only; the current page shows its one-word name (Home, Find, Reels, Chats, Alerts, Games, Me). It slides away while you scroll down and returns when you scroll up, change page, or reach the end of the page.
 - **New ⋯ launcher:** phones had no way to reach Private space, CODEX AI, CHEX learn, 3D, Sticky notes, Admin, Coins or Settings. They are now one tap away in a grid of one-word tiles (plus sound on/off and Log out). On desktop the ＋ menu is the same grid instead of a long list. Esc closes it.
@@ -426,7 +458,7 @@
 - **Where:** menu ▸ **CHEX Simulation** now opens two workspaces: **⚡ Quick 3D from a photo** (the previous page, unchanged) and **🧊 3D Scanning Studio** (new). Nothing existing was removed or replaced.
 - **Studio tabs:** Capture · Reconstruct · 3D Studio · Parts · Edit · What-If Lab · Simulate · Measure · Export · Publish, with a projects screen, top bar (name, save state, undo/redo, save, export, publish), left tools, right properties + scan assistant, and a bottom timeline (photos, job progress, history).
 - **Capture:** live camera (permission asked only on "Start camera", front/rear, flash where supported, orbit ring guide, live sharpness/exposure hint, photo + video recording), multi-photo drag & drop with reorder/replace/remove/exclude, blur/exposure/duplicate flags, video → frame extraction with best-frame picking, one-photo mode, GLB/glTF/OBJ/STL/PLY import.
-- **Reconstruct (server):** `POST /api/scan3d/jobs` runs COLMAP (needs the binary on the server; dense meshing needs a CUDA build, otherwise you get a sparse point cloud) or a single-photo AI provider (Meshy, needs `MESHY_API_KEY`). Nine named stages with real progress, cancel, retry, one active job per user, 20/day, inputs deleted after success, jobs purged after 7 days. With no provider installed the API says so (HTTP 503) instead of faking a result.
+- **Reconstruct (server):** `POST /api/scan3d/jobs` runs COLMAP (needs the binary on the server; dense meshing needs a CUDA build, otherwise you get a sparse point cloud) or a single-photo AI provider (Tripo, needs `TRIPO_API_KEY`; Meshy has been switched off). Nine named stages with real progress, cancel, retry, one active job per user, 20/day, inputs deleted after success, jobs purged after 7 days. With no provider installed the API says so (HTTP 503) instead of faking a result.
 - **Viewport:** orbit/pan/zoom, perspective/orthographic, six standard views, textured/solid/wireframe/X-ray/points, grid/axes/bounding box, lighting + background, screenshot, full screen, move/rotate/scale gizmo with snapping, click-to-select.
 - **Parts / Edit / What-If:** parts from the file's own structure plus "separate disconnected pieces"; rename, hide, lock, duplicate, delete (undoable), group. Colour/material presets/metal/roughness/transparency/texture replace+scale+rotate. Smooth, flat subdivide, simplify, repair (merge vertices). Variants (original is locked; editing it starts a variant), before/after table, version history, restore original geometry.
 - **Simulate:** simplified box-based gravity + collisions, hinge demo, keyframe timeline — labelled as a visual preview, not engineering analysis.
@@ -437,3 +469,12 @@
 - **Not included yet:** ML part segmentation, damage detection, extrude/inset/boolean, smooth subdivision, automatic hole filling, UV texture projection from photos, structural simulation, remix permissions, private share links, HEIC photos, non-English assistant commands.
 - **Faster one-photo jobs:** speed choice (Fast = plain colours, default; Fastest = shape only; Best quality = PBR), photo shrunk to ≤1536 px before upload, provider polled every 1.5 s, one smooth progress bar for the AI provider, and the result opens automatically when the job finishes. New column `scan_jobs.speed`.
 - **Large photos:** up to 60 MB per photo are accepted; they are resized in the browser (≤3200 px for photogrammetry, ≤1536 px for one-photo AI) before upload; server per-photo cap raised to 25 MB.
+
+## Smart gestures (hold Share → quick-send circle, hold Search → voice search, shake → Codex)
+- **Hold the Share button** (post card, reel card, full-screen reel): a frosted-glass ring of your **top 5 people** opens around your finger. Keep the finger down and **drag the video onto a profile, then let go to send** (the video snaps onto the profile you are over, with a haptic tick). Let go on empty space and the ring stays open: tap a profile to send, tap the middle for the full share sheet, tap outside to close. A normal tap still opens the share sheet. Sends through the existing `POST /api/messages/share` (message-request rules unchanged).
+- **Top 5 people:** Settings → Smart gestures → *Automatic* (recent 1:1 chats, then people you follow) or *My five* (search and pick up to five; empty slots are filled automatically).
+- **Hold the Search icon** (bottom bar): voice search sheet (listens at once, live words, language picker, "Type instead"); what it hears opens Search with the text filled in.
+- **Shake the phone:** opens a configurable Codex shortcut (default: the Codex bar, even when the Floating AI bar is off; it can be hidden again with ✕). iPhone asks for motion access once (button in Settings). Sensitivity: Firm / Normal / Light.
+- **Settings → Smart gestures:** the 10 customizable gestures — Hold Share, Hold Search, Shake, Double-tap Home, Hold Home / Reels / Chats / Alerts / Profile / More — each bound to any action: quick-send circle, full share sheet, voice search, Codex bar / full panel / talk to Codex, Circle to Ask, scroll to top, mute AI alerts, or open any page. "Try it" button on each non-share gesture; reset button.
+- New code: `frontend/src/gestures/` (`gestureStore.js`, `GestureHub.jsx`, `QuickShare.jsx`, `VoiceSearch.jsx`, `SmartGestures.jsx`, `useShareGesture.js`, `gestures.css`). Small edits in `App.jsx` (bottom-bar hold/double-tap, hub), `Codex.jsx` (`chex:codex-open` event), `Settings.jsx`, `main.tsx`, `PostCard.jsx`, `ReelFeedCard.jsx`, `pages/Reels.jsx`. Preferences are kept on this device (`chex.gestures`).
+- Tests: `frontend/test/smartGestures.test.jsx` (16).

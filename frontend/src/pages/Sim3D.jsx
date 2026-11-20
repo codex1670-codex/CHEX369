@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { api } from '../api.js';
 import CameraCapture, { cameraSupported } from '../components/CameraCapture.jsx';
 import Model3DViewer from '../sim3d/Model3DViewer.jsx';
+import CropTool, { applyCrop, isFullCrop } from '../sim3d/CropTool.jsx';
 import { BACKGROUNDS, DEFAULT_PARAMS, FINISHES, PRESETS, RANGES, clampParams, demoPhoto, loadImageToCanvas, makeCutout } from '../sim3d/model3d.js';
 import '../sim3d/sim3d.css';
 
@@ -22,6 +23,7 @@ function Slider({ label, name, value, onChange, step = 0.01, unit = '', digits =
 
 function QuickPhoto3D({ onBack, onPosted }) {
   const [photo, setPhoto] = useState(null);                 // decoded photo canvas
+  const [crop, setCrop] = useState(null);                   // null = whole photo, else { x, y, w, h } fractions
   const [cutout, setCutout] = useState(null);               // { canvas, version, fallback }
   const [sensitivity, setSensitivity] = useState(0.5);
   const [keepAll, setKeepAll] = useState(false);
@@ -42,18 +44,21 @@ function QuickPhoto3D({ onBack, onPosted }) {
   const set = useCallback((k, v) => setParams((p) => ({ ...p, [k]: v })), []);
   const patch = useCallback((o) => setParams((p) => ({ ...p, ...o })), []);
 
-  // Cut the object out of the photo (again whenever the photo or the cut-out settings change).
+  // The part of the photo that is used (the whole photo unless the person cropped it).
+  const working = useMemo(() => (photo ? applyCrop(photo, crop) : null), [photo, crop]);
+
+  // Cut the object out of the photo (again whenever the photo, the crop or the cut-out settings change).
   useEffect(() => {
-    if (!photo) return undefined;
+    if (!working) return undefined;
     const t = setTimeout(() => {
       try {
-        const res = makeCutout(photo, { sensitivity, keepAll });
+        const res = makeCutout(working, { sensitivity, keepAll });
         version.current += 1;
         setCutout({ canvas: res.canvas, version: version.current, fallback: res.fallback });
       } catch (e) { setError(e.message || 'Could not process this photo.'); }
     }, 150);
     return () => clearTimeout(t);
-  }, [photo, sensitivity, keepAll]);
+  }, [working, sensitivity, keepAll]);
 
   const loadFile = async (file) => {
     if (!file) return;
@@ -62,14 +67,14 @@ function QuickPhoto3D({ onBack, onPosted }) {
       setError('Choose a photo of an object (JPG, PNG, WebP…).'); return;
     }
     setLoading(true);
-    try { setCutout(null); setPhoto(await loadImageToCanvas(file)); setKeepAll(false); setSensitivity(0.5); }
+    try { setCutout(null); setCrop(null); setPhoto(await loadImageToCanvas(file)); setKeepAll(false); setSensitivity(0.5); }
     catch (e) { setError(e.message || 'Could not open that photo.'); }
     finally { setLoading(false); }
   };
-  const loadSample = () => { setError(''); setCutout(null); setPhoto(demoPhoto()); setKeepAll(false); setSensitivity(0.5); };
+  const loadSample = () => { setError(''); setCutout(null); setCrop(null); setPhoto(demoPhoto()); setKeepAll(false); setSensitivity(0.5); };
   const openCamera = () => { if (cameraSupported()) setCameraOpen(true); else camRef.current?.click(); };
   const onDrop = (e) => { e.preventDefault(); setDragOver(false); loadFile(e.dataTransfer?.files?.[0]); };
-  const startOver = () => { setPhoto(null); setCutout(null); setError(''); setCaption(''); };
+  const startOver = () => { setPhoto(null); setCrop(null); setCutout(null); setError(''); setCaption(''); };
   const resetShape = () => setParams({ ...DEFAULT_PARAMS });
 
   const post = async () => {
@@ -130,20 +135,21 @@ function QuickPhoto3D({ onBack, onPosted }) {
           {cutout?.fallback && <div className="sim-note" role="status">Couldn't find a clear outline, so the whole photo is being used. Try a plainer background, or move “Background removal” in the Cutout tab.</div>}
 
           <div className="sim-tabs" role="tablist">
-            {[['cutout', '✂️ Cutout'], ['shape', '📐 Shape'], ['look', '🎨 Look'], ['scene', '💡 Scene']].map(([k, l]) => (
+            {[['crop', isFullCrop(crop) ? '🔲 Crop' : '🔲 Crop •'], ['cutout', '✂️ Cutout'], ['shape', '📐 Shape'], ['look', '🎨 Look'], ['scene', '💡 Scene']].map(([k, l]) => (
               <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{l}</button>
             ))}
           </div>
 
           <div className="sim-controls" role="tabpanel">
+            {tab === 'crop' && <CropTool photo={photo} crop={crop} onChange={setCrop} />}
             {tab === 'cutout' && (
               <>
                 <label className="sim-slider">
                   <span className="sim-slider-top"><span>Background removal</span><b>{Math.round(sensitivity * 100)}%</b></span>
-                  <input type="range" min="0" max="1" step="0.01" value={sensitivity} disabled={keepAll} onChange={(e) => setSensitivity(Number(e.target.value))} aria-label="Background removal" />
+                  <input type="range" min="0" max="1" step="0.01" value={sensitivity} disabled={keepAll || !!crop?.path} onChange={(e) => setSensitivity(Number(e.target.value))} aria-label="Background removal" />
                 </label>
-                <label className="sim-check"><input type="checkbox" checked={keepAll} onChange={(e) => setKeepAll(e.target.checked)} /> Keep the whole photo (no cut-out)</label>
-                <p className="sim-help">Too much of the object removed? Lower the slider. Background left behind? Raise it.</p>
+                <label className="sim-check"><input type="checkbox" checked={keepAll} disabled={!!crop?.path} onChange={(e) => setKeepAll(e.target.checked)} /> Keep the whole photo (no cut-out)</label>
+                <p className="sim-help">{crop?.path ? 'You drew the outline yourself in the Crop tab, so it is used as the cut-out. Clear the drawing there to go back to automatic removal.' : 'Too much of the object removed? Lower the slider. Background left behind? Raise it.'}</p>
               </>
             )}
             {tab === 'shape' && (
@@ -207,6 +213,38 @@ function QuickPhoto3D({ onBack, onPosted }) {
   );
 }
 
+// The 3D Scanning Studio is a premium unlock (5,000 CHEX coins). Quick 3D from a photo stays free.
+function StudioGate({ children }) {
+  const [wallet, setWallet] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  useEffect(() => { api.coins().then(setWallet).catch((e) => setError(e.message || 'Could not check your coins.')); }, []);
+  if (!wallet) return <p className="ss-help" role="status">{error || 'Checking your unlocks…'}</p>;
+  if (wallet.unlocked?.includes('scan-studio')) return children;
+  const item = wallet.items?.find((i) => i.id === 'scan-studio');
+  const price = item?.price ?? 5000;
+  const short = wallet.unlimited ? 0 : price - wallet.balance;
+  const unlock = async () => {
+    setBusy(true); setError('');
+    try { setWallet(await api.unlockCoinItem('scan-studio')); toast('🧊 3D Scanning Studio unlocked!'); }
+    catch (e) { setError(e.message || 'Could not unlock. Please try again.'); }
+    finally { setBusy(false); }
+  };
+  return (
+    <div className="sim-pick" style={{ textAlign: 'center' }}>
+      <div className="sim-pick-art" aria-hidden="true">🔒</div>
+      <h3>3D Scanning Studio · Premium</h3>
+      <p>Capture, reconstruct, edit, simulate, measure, export and publish 3D models. Unlock it once for <b>{price.toLocaleString()}</b> CHEX coins. You have <b>{wallet.unlimited ? '∞' : wallet.balance.toLocaleString()}</b>.</p>
+      {error && <div className="error-banner" role="alert">{error}</div>}
+      <div className="sim-pick-btns">
+        <button type="button" className="btn-primary" style={{ width: 'auto', padding: '10px 18px' }} disabled={busy || short > 0} onClick={unlock}>{busy ? 'Unlocking…' : `🪙 Unlock for ${price.toLocaleString()}`}</button>
+      </div>
+      {short > 0 && <p className="sim-help">{short.toLocaleString()} more coins needed. Earn coins by posting, winning games and finishing CHEX learn sections.</p>}
+      <p className="sim-help">⚡ Quick 3D from a photo is free — switch to it above any time.</p>
+    </div>
+  );
+}
+
 /**
  * CHEX Simulation. Two workspaces live here: the original one-photo "Quick 3D" maker (unchanged) and the
  * full 3D Scanning Studio (capture → reconstruct → edit → simulate → measure → export → publish).
@@ -217,7 +255,7 @@ export default function Sim3D({ onBack, onPosted }) {
   const bar = (
     <div className="sim-modebar" role="tablist" aria-label="CHEX Simulation workspace">
       <button type="button" role="tab" aria-selected={mode === 'quick'} className={mode === 'quick' ? 'on' : ''} onClick={() => pick('quick')}>⚡ Quick 3D from a photo</button>
-      <button type="button" role="tab" aria-selected={mode === 'studio'} className={mode === 'studio' ? 'on' : ''} onClick={() => pick('studio')}>🧊 3D Scanning Studio</button>
+      <button type="button" role="tab" aria-selected={mode === 'studio'} className={mode === 'studio' ? 'on' : ''} onClick={() => pick('studio')}>🧊 3D Scanning Studio ✨</button>
     </div>
   );
   if (mode === 'studio') {
@@ -228,7 +266,7 @@ export default function Sim3D({ onBack, onPosted }) {
           <h2>🧊 CHEX Simulation</h2>
         </div>
         {bar}
-        <Suspense fallback={<p className="ss-help">Loading the 3D Scanning Studio…</p>}><ScanStudio /></Suspense>
+        <StudioGate><Suspense fallback={<p className="ss-help">Loading the 3D Scanning Studio…</p>}><ScanStudio /></Suspense></StudioGate>
       </div>
     );
   }

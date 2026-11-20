@@ -3,6 +3,7 @@ import { useLive } from '../live.js';
 import { createPortal } from 'react-dom';
 import { api } from '../api.js';
 import PostCard from '../components/PostCard.jsx';
+import ReelFeedCard from '../components/ReelFeedCard.jsx';
 import Avatar from '../components/Avatar.jsx';
 import { useAuth } from '../AuthContext.jsx';
 import StoriesBar from '../components/StoriesBar.jsx';
@@ -50,9 +51,10 @@ export default function Feed({ onOpenProfile, onOpenStickies, onOpenLearn, onOpe
 
   // Live: when anyone posts / likes / comments / edits / deletes, quietly merge a fresh first page into
   // what is on screen. Scroll position, loaded older posts and open comment boxes are kept.
-  useLive(['posts', 'users', 'feed'], async (ev) => {
+  useLive(['posts', 'reels', 'users', 'feed'], async (ev) => {
     // A deleted post disappears at once; a deactivated/deleted account's posts vanish too (no refresh).
-    if (ev?.action === 'delete' && ev.postId) setPosts(old => (old ? old.filter(x => x.id !== ev.postId) : old));
+    const goneId = ev?.postId || ev?.reelId;
+    if (ev?.action === 'delete' && goneId) setPosts(old => (old ? old.filter(x => x.id !== goneId) : old));
     if (ev?.action === 'account' && ev.status !== 'active') setPosts(old => (old ? old.filter(x => x.author?.id !== ev.userId) : old));
     try {
       const fetcher = tab === 'following' ? api.feedFollowing : api.feedForYou;
@@ -60,7 +62,7 @@ export default function Feed({ onOpenProfile, onOpenStickies, onOpenLearn, onOpe
       setPosts(old => {
         if (!old) return res.posts;
         const fresh = new Map(res.posts.map(x => [x.id, x]));
-        const gone = ev?.action === 'delete' ? ev.postId : null;
+        const gone = ev?.action === 'delete' ? (ev.postId || ev.reelId) : null;
         const tail = old.slice(res.posts.length).filter(x => !fresh.has(x.id) && x.id !== gone && !(ev?.action === 'account' && ev.status !== 'active' && x.author?.id === ev.userId));
         return [...res.posts, ...tail];
       });
@@ -165,7 +167,12 @@ export default function Feed({ onOpenProfile, onOpenStickies, onOpenLearn, onOpe
         </div>
       )}
 
-      {posts?.map(p => <PostCard key={p.id} post={p} onOpenProfile={onOpenProfile} onDeleted={(id) => setPosts(list => (list || []).filter(x => x.id !== id))} />)}
+      {posts?.map(p => {
+        const drop = (id) => setPosts(list => (list || []).filter(x => x.id !== id));
+        return p.kind === 'reel'
+          ? <ReelFeedCard key={`reel-${p.id}`} reel={p} onOpenProfile={onOpenProfile} onDeleted={drop} />
+          : <PostCard key={p.id} post={p} onOpenProfile={onOpenProfile} onDeleted={drop} />;
+      })}
 
       {cursor && posts?.length > 0 && (
         <div style={{ textAlign: 'center' }}>

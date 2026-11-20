@@ -1,0 +1,18 @@
+CHEX - run on your PC (Windows)
+
+1. Extract this zip into an EMPTY folder with a short path, e.g. C:\chex  (avoid folders with spaces).
+2. Install Node.js 18+ from https://nodejs.org if you don't have it.
+3. Double-click START-CHEX.bat  (first run installs packages, takes a few minutes).
+4. Open http://localhost:5173  - double-tap/double-click an empty area to open CHEX ORBIT.
+
+Manual way (two terminals):
+  cd backend  ->  npm install  ->  npm start
+  cd frontend ->  npm install  ->  npm run dev
+
+Push to GitHub (inside the nexa folder):
+  git init
+  git add .
+  git commit -m "Add CHEX ORBIT"
+  git branch -M main
+  git remote add origin https://github.com/YOUR-USERNAME/YOUR-REPO.git
+  git push -u origin main

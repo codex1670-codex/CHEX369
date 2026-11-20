@@ -4,7 +4,7 @@ import { Router } from 'express';
 import { v4 as uuid } from 'uuid';
 import db from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
-import { STORE_ITEMS, PROFILE_FRAMES, getBalance } from '../coins.js';
+import { STORE_ITEMS, PROFILE_FRAMES, getBalance, ownedItems } from '../coins.js';
 import { deleteUserPermanently, disconnectUserSockets } from '../accountService.js';
 import { describeTarget, removeContent, isMaster } from '../admin.js';
 import persistence from '../persistence.js';
@@ -35,7 +35,7 @@ router.get('/overview', (_req, res) => {
     users: c("SELECT COUNT(*) c FROM users WHERE role = 'user' AND account_status != 'deleted'"),
     posts: c('SELECT COUNT(*) c FROM posts WHERE deleted_at IS NULL'),
     reels: c('SELECT COUNT(*) c FROM reels WHERE deleted_at IS NULL'),
-    items: STORE_ITEMS.map(i => ({ id: i.id, name: i.name })),
+    items: STORE_ITEMS.map(i => ({ id: i.id, name: i.name, kind: i.kind, price: i.price })),
     frames: PROFILE_FRAMES,
   });
 });
@@ -88,7 +88,7 @@ router.get('/users', (req, res) => {
   res.json({ users: rows.map(u => ({
     ...userBrief(u),
     coins: u.role === 'master' ? null : getBalance(u.id),
-    unlocked: u.role === 'master' ? STORE_ITEMS.map(i => i.id) : db.prepare('SELECT item_id FROM coin_unlocks WHERE user_id = ?').all(u.id).map(r => r.item_id),
+    unlocked: ownedItems(u.id),
     frame: u.profile_frame || null,
     posts: db.prepare('SELECT COUNT(*) c FROM posts WHERE user_id = ? AND deleted_at IS NULL').get(u.id).c,
     reels: db.prepare('SELECT COUNT(*) c FROM reels WHERE user_id = ? AND deleted_at IS NULL').get(u.id).c,
@@ -116,17 +116,14 @@ router.post('/gift/coins', (req, res) => {
   res.json({ ok: true, username: u.username, balance: getBalance(u.id) });
 });
 
-// itemId: 'premium-themes' | 'premium-frames'. For frames you may also pre-select one with `frame`.
+// itemId: any store item id ('theme:<id>', 'frame:<id>', 'scan-studio'). For a frame you may also pre-select it with `frame: true`.
 router.post('/gift/item', (req, res) => {
   const u = findUser(req.body?.username ?? req.body?.userId);
   if (!u) return err(res, 404, 'NOT_FOUND', 'User not found.');
   if (u.role !== 'user') return err(res, 400, 'INVALID_INPUT', 'That account already has everything.');
   const item = STORE_ITEMS.find(i => i.id === req.body?.itemId);
   if (!item) return err(res, 400, 'UNKNOWN_ITEM', `itemId must be one of: ${STORE_ITEMS.map(i => i.id).join(', ')}.`);
-  const frame = req.body?.frame;
-  if (frame !== undefined && frame !== null && frame !== '' && (item.id !== 'premium-frames' || !PROFILE_FRAMES.includes(frame))) {
-    return err(res, 400, 'UNKNOWN_FRAME', 'That frame does not exist (or the item is not the frames pack).');
-  }
+  const frame = item.kind === 'frame' && req.body?.frame ? item.ref : null;
   const r = db.prepare('INSERT OR IGNORE INTO coin_unlocks (user_id, item_id, price) VALUES (?, ?, 0)').run(u.id, item.id);
   if (frame) db.prepare('UPDATE users SET profile_frame = ? WHERE id = ?').run(frame, u.id);
   persistence.syncUsersSoon();

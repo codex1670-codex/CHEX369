@@ -329,6 +329,9 @@ export default function Codex({ navigate, goBack, currentUser }) {
   const [showReply, setShowReply] = useState(false); // small reply square under/over the type box
   // The floating bar is off until the person switches it on in Settings (default OFF).
   const [floatOn, setFloatOn] = useState(floatingAiEnabled());
+  // Smart gestures (shake / hold) can summon Codex even while the floating bar is switched off; it goes away when closed.
+  const [summoned, setSummoned] = useState(false);
+  const shown = floatOn || summoned;
   // Circle to Ask is its own opt-in feature (Settings → Circle to Ask); when on, the bar gets a ⭕ shortcut for it.
   const [circleOn, setCircleOn] = useState(circleAskEnabled());
   useEffect(() => {
@@ -674,6 +677,20 @@ export default function Codex({ navigate, goBack, currentUser }) {
   const SUGGESTIONS = ['Open Messages', 'game store open pannu', 'reels', 'scroll down', 'like button click pannu'];
 
   useEffect(() => { runTextRef.current = runText; });
+  // "chex:codex-open" comes from Smart gestures (shake, holding an icon …): show the bar or the full panel, optionally with the mic on.
+  const toggleListeningRef = useRef(null);
+  const miniInputRef = useRef(null);
+  useEffect(() => {
+    const onOpen = (e) => {
+      const { mode = 'mini', talk = false } = e.detail || {};
+      setSummoned(true);
+      setOpen(mode === 'full');
+      if (talk) setTimeout(() => toggleListeningRef.current?.(), 350);
+      else if (mode !== 'full') setTimeout(() => miniInputRef.current?.focus?.(), 200);
+    };
+    window.addEventListener('chex:codex-open', onOpen);
+    return () => window.removeEventListener('chex:codex-open', onOpen);
+  }, []);
 
   // Send button: enabled once there is something to send. Pressing it must NOT steal focus from the
   // text box — on a phone that would close the keyboard, shift the layout and swallow the tap.
@@ -757,6 +774,7 @@ export default function Codex({ navigate, goBack, currentUser }) {
     recognitionRef.current = recognition;
     try { recognition.start(); } catch { setListening(false); }
   };
+  toggleListeningRef.current = toggleListening;   // always the latest, for the gesture listener above
 
   const interactiveJsx = (
     <>
@@ -829,7 +847,7 @@ export default function Codex({ navigate, goBack, currentUser }) {
 
   return (
     <>
-      {floatOn && !open && (
+      {shown && !open && (
         <div className={`codex-mini-wrap ${dragging ? 'dragging' : ''}`} ref={wrapRef} style={pos ? { left: pos.x, bottom: pos.y, top: 'auto' } : undefined}>
           {replyVisible && (
             <div className="glass-card codex-mini-reply" role="status">
@@ -844,7 +862,7 @@ export default function Codex({ navigate, goBack, currentUser }) {
               style={{ background: listening ? 'var(--pink)' : 'transparent' }}>{listening ? '⏹' : '🎙'}</button>
             <input
               placeholder={pending || uiPrompt ? 'Answer above…' : agentRunning ? 'Working…' : listening ? 'Listening…' : 'Ask Codex… (type help)'}
-              value={listening && interim ? interim : input} onChange={onMiniChange} disabled={!!pending || !!uiPrompt || agentRunning} aria-label="Ask Codex"
+              value={listening && interim ? interim : input} onChange={onMiniChange} disabled={!!pending || !!uiPrompt || agentRunning} aria-label="Ask Codex" ref={miniInputRef}
               enterKeyHint="send" autoComplete="off" autoCorrect="on" autoCapitalize="sentences"
             />
             <button type="submit" className="codex-send" disabled={!canSend} aria-label="Send to Codex" title="Send" onMouseDown={keepFocus} onTouchStart={keepFocus}>➤</button>
@@ -858,13 +876,13 @@ export default function Codex({ navigate, goBack, currentUser }) {
               <option value="ko-KR">KO</option><option value="ru-RU">RU</option>
             </select>
             <button type="button" className="codex-mini-btn codex-bell" onClick={() => setAlertsEnabled(!alertsOn)} aria-label={alertsOn ? 'Mute AI alerts' : 'Unmute AI alerts'} aria-pressed={!alertsOn} title={alertsOn ? 'Mute alerts' : 'Alerts muted — tap to unmute'}>{alertsOn ? '🔔' : '🔕'}</button>
-            <button type="button" className="codex-mini-btn" onClick={() => navigate('codexai')} aria-label="Open CODEX AI" title="CODEX AI — chat, images, voice, memory">🧠</button>
             {circleOn && <button type="button" className="codex-mini-btn" onClick={() => window.dispatchEvent(new Event('chex:circle-ask-start'))} aria-label="Circle to Ask" title="Circle part of the screen and ask about it">⭕</button>}
             <button type="button" className="codex-mini-btn" onClick={() => setOpen(true)} aria-label="Open full Codex" title="Open full Codex">⤢</button>
+            {summoned && !floatOn && <button type="button" className="codex-mini-btn" onClick={() => { setSummoned(false); setShowReply(false); }} aria-label="Hide Codex" title="Hide Codex">✕</button>}
           </form>
         </div>
       )}
-      {floatOn && open && (
+      {shown && open && (
         <div className="glass-card codex-panel">
           <div className="codex-panel-header">
             <span className="t">Codex</span>
@@ -890,7 +908,7 @@ export default function Codex({ navigate, goBack, currentUser }) {
               </select>
               <button onClick={() => setVoiceOutOn(v => !v)} title="Toggle spoken replies" style={{ opacity: voiceOutOn ? 1 : 0.4 }}>🔊</button>
               <button onClick={toggleHistory} title="Recent AI actions" style={{ opacity: showHistory ? 1 : 0.6 }}>📜</button>
-              <button onClick={() => setOpen(false)}>✕</button>
+              <button onClick={() => { setOpen(false); setSummoned(false); }}>✕</button>
             </div>
           </div>
           {showHistory ? (

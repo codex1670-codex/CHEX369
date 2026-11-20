@@ -5,6 +5,7 @@ import { requireAuth, optionalAuth } from '../middleware/auth.js';
 import { processMentionsAndHashtags } from '../content.js';
 import { safeCheckReel, safeStreakTick } from '../coins.js';
 import { canViewAccountContent, PRIVATE_OK_SQL } from './users.js';
+import { postDTO, VISIBLE_SQL, visibleParams } from './posts.js';
 import { reelUpload, MAX_REEL_UPLOAD_BYTES, MAX_REEL_VIDEO_BYTES, mediaMiddleware, removeLocalUpload, editsToJson, parseEdits } from '../uploads.js';
 
 const router = Router();
@@ -19,6 +20,17 @@ export function reelDTO(row, viewerId) {
     id: row.id, videoUrl: row.video_url, caption: row.caption, edits: parseEdits(row.edits), createdAt: row.created_at, editedAt: row.edited_at,
     likeCount, commentCount, likedByMe, savedByMe,
     author: toPublicUser(author),
+  };
+}
+
+// A video post shown inside the Reels page: same shape as a reel, tagged kind:'post' so the client
+// sends likes / comments / saves to the post endpoints.
+export function postAsReelDTO(row, viewerId) {
+  const d = postDTO(row, viewerId);
+  return {
+    kind: 'post', id: d.id, videoUrl: d.mediaUrl, caption: d.caption, edits: d.edits,
+    createdAt: d.createdAt, editedAt: d.editedAt, likeCount: d.likeCount, commentCount: d.commentCount,
+    likedByMe: d.likedByMe, savedByMe: d.savedByMe, author: d.author,
   };
 }
 
@@ -64,14 +76,25 @@ router.get('/feed', optionalAuth, (req, res) => {
     ? db.prepare('SELECT blocked_id AS id FROM blocks WHERE blocker_id = ? UNION SELECT blocker_id AS id FROM blocks WHERE blocked_id = ?').all(req.userId, req.userId).map(r => r.id)
     : [];
   const placeholders = blocked.length ? blocked.map(() => '?').join(',') : null;
-  const rows = db.prepare(`
+  const reelRows = db.prepare(`
     SELECT * FROM reels WHERE deleted_at IS NULL AND created_at < ? AND ${PRIVATE_OK_SQL('user_id')}
     ${placeholders ? `AND user_id NOT IN (${placeholders})` : ''}
     ORDER BY created_at DESC LIMIT 11
   `).all(cursor, req.userId ?? null, req.userId ?? null, ...(blocked.length ? blocked : []));
-  const hasMore = rows.length > 10;
-  const page = rows.slice(0, 10);
-  res.json({ reels: page.map(r => reelDTO(r, req.userId)), nextCursor: hasMore ? page[page.length - 1].created_at : null });
+  // Video posts also play in the Reels page.
+  const postRows = db.prepare(`
+    SELECT p.* FROM posts p WHERE p.deleted_at IS NULL AND p.media_type = 'video' AND p.image_url IS NOT NULL
+      AND p.model_asset IS NULL AND p.created_at < ? AND ${VISIBLE_SQL}
+    ${placeholders ? `AND p.user_id NOT IN (${placeholders})` : ''}
+    ORDER BY p.created_at DESC LIMIT 11
+  `).all(cursor, ...visibleParams(req.userId), ...(blocked.length ? blocked : []));
+  const merged = [
+    ...reelRows.map(r => ({ at: r.created_at, dto: () => ({ kind: 'reel', ...reelDTO(r, req.userId) }) })),
+    ...postRows.map(r => ({ at: r.created_at, dto: () => postAsReelDTO(r, req.userId) })),
+  ].sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
+  const hasMore = merged.length > 10;
+  const page = merged.slice(0, 10);
+  res.json({ reels: page.map(x => x.dto()), nextCursor: hasMore ? page[page.length - 1].at : null });
 });
 
 // A single reel by id — used when a search result is opened.

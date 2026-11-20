@@ -8,7 +8,7 @@ process.env.NEXA_DB_PATH = path.join(os.tmpdir(), `nexa-scan3d-test-${process.pi
 process.env.NEXA_UPLOADS_DIR = path.join(os.tmpdir(), `nexa-scan3d-uploads-${process.pid}`);
 process.env.NEXA_SCAN_DIR = path.join(os.tmpdir(), `nexa-scan3d-private-${process.pid}`);
 process.env.COLMAP_BIN = '/nonexistent/colmap';          // force "provider not installed"
-delete process.env.MESHY_API_KEY;
+delete process.env.MESHY_API_KEY; delete process.env.TRIPO_API_KEY;
 (await import('node:fs')).rmSync(process.env.NEXA_DB_PATH, { force: true });
 
 const { default: db } = await import('../src/db.js');
@@ -19,6 +19,9 @@ const { default: postsRouter } = await import('../src/routes/posts.js');
 const { ACCESS_SECRET } = await import('../src/middleware/auth.js');
 
 for (const [id, n] of [['u1', 'ann'], ['u2', 'bob']]) db.prepare('INSERT INTO users (id, username, email, password_hash, display_name) VALUES (?,?,?,?,?)').run(id, n, `${n}@x.com`, 'x', n);
+// The Studio is a premium unlock: u1 and u2 own it; u3 does not.
+db.prepare('INSERT INTO users (id, username, email, password_hash, display_name) VALUES (?,?,?,?,?)').run('u3', 'cat', 'cat@x.com', 'x', 'cat');
+for (const u of ['u1', 'u2']) db.prepare('INSERT INTO coin_unlocks (user_id, item_id, price) VALUES (?,?,0)').run(u, 'scan-studio');
 const app = express(); app.use(express.json({ limit: '2mb' })); app.use('/scan3d', scanRouter); app.use('/posts', postsRouter);
 const server = app.listen(0); const base = `http://127.0.0.1:${server.address().port}`;
 const as = (u) => ({ Authorization: `Bearer ${jwt.sign({ sub: u }, ACCESS_SECRET)}` });
@@ -33,6 +36,11 @@ function glb() {
 }
 const PNG = Buffer.from('89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d49444154789c6360000002000001e221bc330000000049454e44ae426082', 'hex');
 const form = (name, buf, fname, type) => { const f = new FormData(); f.append(name, new Blob([buf], { type }), fname); return f; };
+
+test('the studio is locked until it is unlocked with coins', async () => {
+  const r = await json('u3', 'GET', '/scan3d/projects'); assert.equal(r.status, 403); assert.equal((await r.json()).error.code, 'STUDIO_LOCKED');
+  assert.equal((await json('u3', 'POST', '/scan3d/projects', { name: 'x' })).status, 403);
+});
 
 test('requires sign-in', async () => { assert.equal((await fetch(`${base}/scan3d/projects`)).status, 401); });
 

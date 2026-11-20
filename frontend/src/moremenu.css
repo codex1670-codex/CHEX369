@@ -1,0 +1,44 @@
+/* Launcher menu (＋ on desktop, ⋯ on phones): floating round glass orbs with line icons,
+   the same look as the Orbit quick-action menu. Loaded after glassnav.css, so it wins. */
+:root:root:root:root .nav-menu.rail-fab-menu {
+  gap: 14px 6px; padding: 14px 10px; border-radius: 30px;
+  background: linear-gradient(160deg, rgba(14, 18, 52, .78), rgba(30, 20, 70, .66));
+  border: 1px solid rgba(255, 255, 255, .16);
+  -webkit-backdrop-filter: blur(26px) saturate(170%); backdrop-filter: blur(26px) saturate(170%);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, .5), inset 0 1px 0 rgba(255, 255, 255, .3);
+}
+:root:root:root:root .nav-menu.rail-fab-menu::before { background: radial-gradient(120% 70% at 50% 0%, rgba(160, 140, 255, .22), transparent 60%); }
+
+:root:root:root:root .nav-menu.rail-fab-menu button.nav-tile {
+  height: auto; min-height: 76px; padding: 2px 0; gap: 7px; border-radius: 0; background: none; border: 0; box-shadow: none;
+  color: #eef3ff; font-size: 11px; font-weight: 600; letter-spacing: .01em;
+}
+/* the round glass orb behind every icon */
+:root:root:root:root .nav-menu .nav-tile .ico {
+  width: 50px; height: 50px; border-radius: 50%; color: #fff;
+  background: radial-gradient(circle at 32% 26%, rgba(255, 255, 255, .30), rgba(255, 255, 255, .07) 70%);
+  border: 1px solid rgba(255, 255, 255, .30);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .55), 0 8px 18px rgba(0, 0, 0, .38);
+  transition: transform .35s cubic-bezier(.2, 1.35, .35, 1), box-shadow .25s ease, background .25s ease, border-color .25s ease;
+}
+:root:root:root:root .nav-menu .nav-tile .ico .ob-svg { filter: none; }
+:root:root:root:root .nav-menu.rail-fab-menu button.nav-tile:hover { background: none; box-shadow: none; transform: none; }
+:root:root:root:root .nav-menu .nav-tile:hover .ico,
+:root:root:root:root .nav-menu .nav-tile:focus-visible .ico {
+  transform: scale(1.12); filter: none; border-color: rgba(38, 224, 201, .9);
+  background: radial-gradient(circle at 32% 26%, rgba(38, 224, 201, .55), rgba(111, 149, 255, .22) 75%);
+  box-shadow: 0 0 0 2px rgba(38, 224, 201, .55), 0 0 22px rgba(38, 224, 201, .55);
+}
+:root:root:root:root .nav-menu.rail-fab-menu button.nav-tile:active .ico { transform: scale(.92); }
+/* current page */
+:root:root:root:root .nav-menu.rail-fab-menu button.nav-tile.active { background: none; border: 0; box-shadow: none; }
+:root:root:root:root .nav-menu .nav-tile.active .ico {
+  border-color: #26e0c9; background: radial-gradient(circle at 32% 26%, rgba(38, 224, 201, .6), rgba(111, 149, 255, .25) 75%);
+  box-shadow: 0 0 0 2px rgba(38, 224, 201, .7), 0 0 20px rgba(38, 224, 201, .6);
+}
+:root:root:root:root .nav-menu .nav-tile .lbl { color: #eef3ff; text-shadow: 0 1px 6px rgba(0, 0, 0, .5); }
+:root:root:root:root .nav-menu .nav-tile .count-badge { top: 0; right: calc(50% - 32px); z-index: 3; }
+@media (max-width: 800px) {
+  :root:root:root:root .nav-menu.rail-fab-menu button.nav-tile { height: auto; }
+}
+@media (prefers-reduced-motion: reduce) { .nav-menu .nav-tile .ico { transition: none !important; } }

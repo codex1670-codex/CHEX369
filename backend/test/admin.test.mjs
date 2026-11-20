@@ -115,13 +115,13 @@ test('gifts: coins, premium frames + themes; master has unlimited coins', async 
   const u = await signup('lucky');
   assert.equal((await call('POST', '/admin/gift/coins', { token: m.accessToken, body: { username: 'lucky', amount: 100 } })).data.balance, 100);
   assert.equal((await call('POST', '/admin/gift/coins', { token: m.accessToken, body: { username: 'lucky', amount: -5 } })).status, 400);
-  assert.equal((await call('POST', '/admin/gift/item', { token: m.accessToken, body: { username: 'lucky', itemId: 'premium-frames', frame: 'galaxy' } })).status, 200);
-  assert.equal((await call('POST', '/admin/gift/item', { token: m.accessToken, body: { username: 'lucky', itemId: 'premium-themes' } })).status, 200);
+  assert.equal((await call('POST', '/admin/gift/item', { token: m.accessToken, body: { username: 'lucky', itemId: 'frame:galaxy', frame: true } })).status, 200);
+  assert.equal((await call('POST', '/admin/gift/item', { token: m.accessToken, body: { username: 'lucky', itemId: 'theme:aurora' } })).status, 200);
   const w = (await call('GET', '/coins/me', { token: u.accessToken })).data;
-  assert.deepEqual(w.unlocked.sort(), ['premium-frames', 'premium-themes']);
+  assert.deepEqual(w.unlocked.sort(), ['frame:galaxy', 'theme:aurora']);
   assert.equal(w.frame, 'galaxy'); assert.equal(w.balance, 100); assert.equal(w.unlimited, false);
   const mw = (await call('GET', '/coins/me', { token: m.accessToken })).data;
-  assert.equal(mw.unlimited, true); assert.equal(mw.unlocked.length, 2); assert.ok(mw.balance > 1e12);
+  assert.equal(mw.unlimited, true); assert.ok(mw.unlocked.includes('scan-studio') && mw.unlocked.length > 20); assert.ok(mw.balance > 1e12);
   assert.equal((await call('POST', '/admin/gift/coins', { token: u.accessToken, body: { username: 'lucky', amount: 1e6 } })).status, 403);
 });
 
@@ -132,22 +132,24 @@ test('users can gift coins, themes, frames and languages to each other (paid by 
   db.prepare("INSERT INTO coin_ledger (user_id, amount, reason, ref) VALUES (?, 5000, 'seed', 'seed-giver')").run(a.user.id);
 
   assert.equal((await give({ type: 'coins', amount: 50 })).status, 200);
-  assert.equal((await bal(a)).balance, 4950); assert.equal((await bal(b)).balance, 50);
+  assert.equal((await bal(a)).balance, 4940); assert.equal((await bal(b)).balance, 50);   // 50 + 10-coin gift fee
   assert.equal((await give({ type: 'coins', amount: 451 })).status, 429);          // daily cap 500
   assert.equal((await give({ type: 'coins', amount: 0 })).status, 400);
 
-  assert.equal((await give({ type: 'premium-themes' })).status, 200);               // costs 1000
-  assert.equal((await give({ type: 'premium-themes' })).status, 409);               // already owned
-  assert.equal((await give({ type: 'premium-frames' })).status, 200);               // costs 2000
-  assert.deepEqual((await bal(b)).unlocked.sort(), ['premium-frames', 'premium-themes']);
-  assert.equal((await bal(a)).balance, 4950 - 1000 - 2000);
+  assert.equal((await give({ type: 'theme' })).status, 400);                        // must choose ONE theme
+  assert.equal((await give({ type: 'theme', id: 'aurora' })).status, 200);          // 1000 + 10 fee
+  assert.equal((await give({ type: 'theme', id: 'aurora' })).status, 409);          // already owned
+  assert.equal((await give({ type: 'frame', id: 'galaxy' })).status, 200);          // 2000 + 10 fee
+  assert.deepEqual((await bal(b)).unlocked.sort(), ['frame:galaxy', 'theme:aurora']);   // exactly the two gifted items
+  assert.equal((await bal(a)).balance, 4940 - 1010 - 2010);
 
   assert.equal((await give({ type: 'language', lang: 'es' })).status, 409);         // no first language yet
   db.prepare("INSERT INTO learn_langs (user_id, lang, kind) VALUES (?, 'fr', 'first')").run(b.user.id);
-  assert.equal((await give({ type: 'language', lang: 'es' })).status, 200);         // costs 100
+  assert.equal((await give({ type: 'language', lang: 'es' })).status, 200);         // costs 1000 + 10 fee
   assert.equal((await give({ type: 'language', lang: 'es' })).status, 409);
   assert.deepEqual(db.prepare('SELECT lang FROM learn_langs WHERE user_id=? ORDER BY lang').all(b.user.id).map(r => r.lang), ['es', 'fr']);
-  assert.equal((await bal(a)).balance, 1850);
+  assert.equal((await bal(a)).balance, 4940 - 1010 - 2010 - 1010);
+  assert.ok(db.prepare("SELECT COUNT(*) c FROM coin_ledger WHERE user_id = ? AND ref LIKE 'gift-fee:%'").get(a.user.id).c === 4);   // a fee row per gift
 
   const poor = await signup('brokie');
   assert.equal((await give({ type: 'coins', amount: 10 }, poor.accessToken)).status, 402);

@@ -11,6 +11,7 @@ import VideoEditor from '../components/VideoEditor.jsx';
 import { useHeartBurst, useTapHandlers } from '../components/HeartBurst.jsx';
 import { fileKind, MAX_REEL_BYTES as MAX_VIDEO_BYTES } from '../editSettings.js';
 import ShareSheet from '../components/ShareSheet.jsx';
+import { useShareGesture } from '../gestures/useShareGesture.js';
 import { useLongPress } from '../components/useLongPress.js';
 
 
@@ -78,6 +79,14 @@ function analyseVideo(file, atSeconds = 0) {
   });
 }
 
+// A video post is shown in Reels with the same card as a reel. Its buttons talk to the post endpoints
+// (kind === 'post'); the post API's answer is turned back into the reel shape this card uses.
+const postToReel = (d) => ({
+  kind: 'post', id: d.id, videoUrl: d.mediaUrl, caption: d.caption, edits: d.edits, createdAt: d.createdAt,
+  editedAt: d.editedAt, likeCount: d.likeCount, commentCount: d.commentCount, likedByMe: d.likedByMe,
+  savedByMe: d.savedByMe, author: d.author,
+});
+
 // One full-screen, full-height slide in the vertical reels feed — video fills the
 // screen, everything else (author, caption, actions, comments) floats over it, TikTok/
 // Reels-style. Scrolling the parent `.reels-viewport` snaps one slide at a time
@@ -88,6 +97,7 @@ function ReelCard({ reel, onDeleted, muted, onToggleMute, onSoundBlocked }) {
   useEffect(() => { setR(reel); }, [reel]);   // fresh counts/caption pushed live
   const [showComments, setShowComments] = useState(false);
   const [sharing, setSharing] = useState(false);
+  const shareHold = useShareGesture({ kind: r.kind === 'post' ? 'post' : 'reel', id: r.id, thumb: r.videoUrl, thumbType: 'video' });
   const [comments, setComments] = useState(null);
   const [commentText, setCommentText] = useState('');
   const [videoFailed, setVideoFailed] = useState(false);
@@ -100,6 +110,7 @@ function ReelCard({ reel, onDeleted, muted, onToggleMute, onSoundBlocked }) {
   const [mediaBusy, setMediaBusy] = useState(false);
   const replaceRef = useRef(null);
   const isMine = r.author.id === user.id;
+  const isPost = r.kind === 'post';
   const containerRef = useRef(null);
   const videoRef = useRef(null);
   const viewRecordedRef = useRef(false);
@@ -136,7 +147,7 @@ function ReelCard({ reel, onDeleted, muted, onToggleMute, onSoundBlocked }) {
           // first time it's actually majority-visible, not on every intersection tick.
           if (!viewRecordedRef.current) {
             viewRecordedRef.current = true;
-            api.recordReelView(r.id).catch(() => {});
+            if (!isPost) api.recordReelView(r.id).catch(() => {});
           }
         } else {
           videoRef.current?.pause();
@@ -162,8 +173,13 @@ function ReelCard({ reel, onDeleted, muted, onToggleMute, onSoundBlocked }) {
     const wasLiked = r.likedByMe;
     setR({ ...r, likedByMe: !wasLiked, likeCount: r.likeCount + (wasLiked ? -1 : 1) });
     try {
-      const res = wasLiked ? await api.unlikeReel(r.id) : await api.likeReel(r.id);
-      setR(res.reel);
+      if (isPost) {
+        const res = wasLiked ? await api.unlike(r.id) : await api.like(r.id);
+        setR(postToReel(res.post));
+      } else {
+        const res = wasLiked ? await api.unlikeReel(r.id) : await api.likeReel(r.id);
+        setR({ ...res.reel, kind: 'reel' });
+      }
     } catch { setR(r); }
   };
 
@@ -181,19 +197,22 @@ function ReelCard({ reel, onDeleted, muted, onToggleMute, onSoundBlocked }) {
   const toggleSave = async () => {
     const wasSaved = r.savedByMe;
     setR({ ...r, savedByMe: !wasSaved });
-    try { wasSaved ? await api.unsaveReel(r.id) : await api.saveReel(r.id); } catch { setR(r); }
+    try {
+      if (isPost) { wasSaved ? await api.unsavePost(r.id) : await api.savePost(r.id); }
+      else { wasSaved ? await api.unsaveReel(r.id) : await api.saveReel(r.id); }
+    } catch { setR(r); }
   };
 
   const saveEdit = async () => {
-    const res = await api.editReel(r.id, captionDraft.trim());
-    setR(res.reel);
+    if (isPost) setR(postToReel((await api.editPost(r.id, captionDraft.trim())).post));
+    else setR({ ...(await api.editReel(r.id, captionDraft.trim())).reel, kind: 'reel' });
     setEditing(false);
   };
 
   // Video edits (trim/speed/filter/mute/text) are saved as settings; "Replace" uploads a new file.
   const saveVideoEdits = async (edits) => {
     setMediaBusy(true); setMediaError('');
-    try { setR((await api.editReel(r.id, undefined, edits)).reel); setVideoEditor(false); setVideoFailed(false); }
+    try { setR(isPost ? postToReel((await api.editPost(r.id, undefined, edits)).post) : { ...(await api.editReel(r.id, undefined, edits)).reel, kind: 'reel' }); setVideoEditor(false); setVideoFailed(false); }
     catch (err) { setMediaError(err.message); } finally { setMediaBusy(false); }
   };
   const replaceVideo = async (file) => {
@@ -201,31 +220,32 @@ function ReelCard({ reel, onDeleted, muted, onToggleMute, onSoundBlocked }) {
     if (fileKind(file) !== 'video') return setMediaError('Choose an .mp4, .webm, or .mov video.');
     if (file.size > MAX_VIDEO_BYTES) return setMediaError(`That file is too large — videos must be under ${MAX_VIDEO_BYTES / 1048576}MB.`);
     setMediaBusy(true); setMediaError('');
-    try { setR((await api.replaceReelMedia(r.id, file)).reel); setVideoFailed(false); }
+    try { setR(isPost ? postToReel((await api.replacePostMedia(r.id, file)).post) : { ...(await api.replaceReelMedia(r.id, file)).reel, kind: 'reel' }); setVideoFailed(false); }
     catch (err) { setMediaError(err.message); } finally { setMediaBusy(false); }
   };
 
   const deleteReel = async () => {
-    if (user.isAdmin && !isMine) await api.adminDeleteContent('reel', r.id); else await api.deleteReel(r.id);
+    const type = isPost ? 'post' : 'reel';
+    if (user.isAdmin && !isMine) await api.adminDeleteContent(type, r.id); else if (isPost) await api.deletePost(r.id); else await api.deleteReel(r.id);
     onDeleted?.(r.id);
   };
 
-  useLive(['reels'], async (ev) => {
-    if (ev?.reelId && ev.reelId !== r.id) return;
+  useLive(isPost ? ['posts'] : ['reels'], async (ev) => {
+    if ((ev?.reelId || ev?.postId) && (ev.reelId || ev.postId) !== r.id) return;
     if (!showComments || !comments) return;
-    try { setComments((await api.reelComments(r.id)).comments); } catch { /* ignore */ }
+    try { setComments((await (isPost ? api.getComments(r.id) : api.reelComments(r.id))).comments); } catch { /* ignore */ }
   }, { enabled: showComments });
 
   const openComments = async () => {
     setShowComments(s => !s);
-    if (!comments) setComments((await api.reelComments(r.id)).comments);
+    if (!comments) setComments((await (isPost ? api.getComments(r.id) : api.reelComments(r.id))).comments);
   };
 
   // Press and hold on the reel (about half a second) opens the comments. Buttons, the caption editor
   // and the comments panel itself are left alone, and a finger that moves is a swipe, not a hold.
   const holdProps = useLongPress(async () => {
     setShowComments(true);
-    if (!comments) { try { setComments((await api.reelComments(r.id)).comments); } catch { setComments([]); } }
+    if (!comments) { try { setComments((await (isPost ? api.getComments(r.id) : api.reelComments(r.id))).comments); } catch { setComments([]); } }
   }, { disabled: editing || videoEditor });
   const ignoreHold = (e) => !!e.target.closest?.('button, input, textarea, a, .reel-comments-sheet, .reel-overlay-top');
   const hold = {
@@ -237,7 +257,7 @@ function ReelCard({ reel, onDeleted, muted, onToggleMute, onSoundBlocked }) {
   const submitComment = async (e) => {
     e.preventDefault();
     if (!commentText.trim()) return;
-    const res = await api.addReelComment(r.id, commentText.trim());
+    const res = await (isPost ? api.addComment(r.id, commentText.trim()) : api.addReelComment(r.id, commentText.trim()));
     setComments(c => [...(c || []), res.comment]);
     setCommentText('');
     setR({ ...r, commentCount: r.commentCount + 1 });
@@ -281,7 +301,7 @@ function ReelCard({ reel, onDeleted, muted, onToggleMute, onSoundBlocked }) {
         )}
         {(isMine || user.isAdmin) && confirmingDelete && (
           <>
-            <span style={{ fontSize: 12, color: '#fff' }}>Delete this reel?</span>
+            <span style={{ fontSize: 12, color: '#fff' }}>Delete this {isPost ? 'video' : 'reel'}?</span>
             <button className="btn-ghost danger" style={{ color: '#ff8a8a' }} onClick={deleteReel}>Yes, delete</button>
             <button className="btn-ghost" onClick={() => setConfirmingDelete(false)}>Cancel</button>
           </>
@@ -317,13 +337,13 @@ function ReelCard({ reel, onDeleted, muted, onToggleMute, onSoundBlocked }) {
         <button onClick={openComments}>
           <span>💬</span><span className="count">{r.commentCount}</span>
         </button>
-        <button onClick={() => setSharing(true)} aria-label="Share this reel" aria-haspopup="dialog">
+        <button {...shareHold} onClick={() => setSharing(true)} aria-label="Share this reel" aria-haspopup="dialog">
           <span>↗</span><span className="count">Share</span>
         </button>
         <button onClick={toggleSave}>
           <span>{r.savedByMe ? '🔖' : '🏷️'}</span>
         </button>
-        <button onClick={() => saveToPrivate({ url: r.videoUrl, kind: 'video', name: `reel-${r.id}`, source: 'reel' })} aria-label="Save to private gallery" title="Save to private gallery">
+        <button onClick={() => saveToPrivate({ url: r.videoUrl, kind: 'video', name: `reel-${r.id}`, source: isPost ? 'post' : 'reel' })} aria-label="Save to private gallery" title="Save to private gallery">
           <span>🔒</span>
         </button>
       </div>
@@ -347,7 +367,7 @@ function ReelCard({ reel, onDeleted, muted, onToggleMute, onSoundBlocked }) {
         </div>
       )}
      </div>
-     {sharing && <ShareSheet kind="reel" id={r.id} onClose={() => setSharing(false)} />}
+     {sharing && <ShareSheet kind={isPost ? 'post' : 'reel'} id={r.id} onClose={() => setSharing(false)} />}
     </div>
   );
 }
@@ -466,10 +486,10 @@ export default function Reels({ startReelId, onConsumeStart }) {
         if (!media) { setError('Choose a video from your device first.'); return; }
         setUploading(true);
         const res = await api.uploadReel(media.file, caption.trim(), media.edits);
-        setReels(r => [res.reel, ...(r || [])]);
+        setReels(r => [{ ...res.reel, kind: 'reel' }, ...(r || [])]);
       } else {
         const res = await api.createReel({ videoUrl: videoUrl.trim(), caption: caption.trim() });
-        setReels(r => [res.reel, ...(r || [])]);
+        setReels(r => [{ ...res.reel, kind: 'reel' }, ...(r || [])]);
       }
       resetComposer();
     } catch (err) {

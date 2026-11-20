@@ -406,7 +406,12 @@ export function makeCutout(photo, { sensitivity = 0.5, keepAll = false } = {}) {
   const px = sctx.getImageData(0, 0, w, h).data;
 
   let seg;
-  if (keepAll) {
+  if (photo.drawnMask) {
+    // The person drew the outline: everything inside it is the object (alpha is 0 outside the drawing).
+    const mask = new Uint8Array(w * h); let n = 0;
+    for (let i = 0; i < mask.length; i++) if (px[i * 4 + 3] >= 128) { mask[i] = 1; n++; }
+    seg = { mask, coverage: n / (w * h), fallback: false };
+  } else if (keepAll) {
     const all = new Uint8Array(w * h); const mx = Math.max(1, Math.round(w * 0.02)), my = Math.max(1, Math.round(h * 0.02));
     for (let y = my; y < h - my; y++) for (let x = mx; x < w - mx; x++) all[y * w + x] = 1;
     seg = { mask: all, coverage: 1, fallback: false };
