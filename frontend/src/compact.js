@@ -114,26 +114,53 @@ export function scan(root) {
 export function startCompactLayer() {
   if (typeof document === 'undefined' || typeof MutationObserver === 'undefined') return () => {};
   const raf = window.requestAnimationFrame ? window.requestAnimationFrame.bind(window) : (f) => setTimeout(f, 16);
-  const pending = new Set();
+  const pendingTrees = new Set();
+  const pendingButtons = new Set();
+  const pendingHints = new Set();
   let scheduled = false;
-  const flush = () => {
-    scheduled = false;
-    const items = [...pending]; pending.clear();
-    items.forEach((n) => { if (n.isConnected) scan(n); });
-  };
-  const queue = (n) => {
-    if (!n || n.nodeType !== 1) return;
-    pending.add(n);
+
+  const schedule = () => {
     if (!scheduled) { scheduled = true; raf(flush); }
   };
+  const queueTree = (n) => {
+    if (!n || n.nodeType !== 1) return;
+    pendingTrees.add(n);
+    schedule();
+  };
+  const queueButton = (b) => {
+    if (!b || b.nodeType !== 1 || !b.matches('button')) return;
+    pendingButtons.add(b);
+    schedule();
+  };
+  const queueHint = (h) => {
+    if (!h || h.nodeType !== 1 || !h.matches(HINT_SEL)) return;
+    pendingHints.add(h);
+    schedule();
+  };
+  function flush() {
+    scheduled = false;
+    const trees = [...pendingTrees]; pendingTrees.clear();
+    const buttons = [...pendingButtons]; pendingButtons.clear();
+    const hints = [...pendingHints]; pendingHints.clear();
+
+    // Scan only the highest queued subtrees; avoid repeatedly walking nested DOM.
+    const roots = trees.filter((n) => n.isConnected && !trees.some((other) => other !== n && other.contains(n)));
+    roots.forEach((n) => scan(n));
+    buttons.forEach((b) => { if (b.isConnected && !roots.some((r) => r === b || r.contains(b))) processButton(b); });
+    hints.forEach((h) => { if (h.isConnected && !roots.some((r) => r === h || r.contains(h))) processHint(h); });
+    if (pendingTrees.size || pendingButtons.size || pendingHints.size) schedule();
+  }
+
   const observer = new MutationObserver((muts) => {
     for (const m of muts) {
       if (m.type === 'childList') {
-        m.addedNodes.forEach((n) => queue(n.nodeType === 1 ? n : n.parentElement));
-        queue(m.target.closest?.('button')); // a button's own text was swapped (Follow → Following)
+        m.addedNodes.forEach((n) => { if (n.nodeType === 1) queueTree(n); });
+        // Text changed inside a button? Revisit that button only, not the entire parent subtree.
+        queueButton(m.target.closest?.('button'));
       } else if (m.type === 'characterData') {
         const p = m.target.parentElement;
-        queue(p?.closest('button') || p);
+        queueButton(p?.closest('button'));
+        queueHint(p?.closest(HINT_SEL));
       }
     }
   });
@@ -149,5 +176,9 @@ export function startCompactLayer() {
   document.addEventListener('click', onClick);
 
   scan(document.body);
-  return () => { observer.disconnect(); document.removeEventListener('click', onClick); };
+  return () => {
+    observer.disconnect();
+    document.removeEventListener('click', onClick);
+    pendingTrees.clear(); pendingButtons.clear(); pendingHints.clear();
+  };
 }
