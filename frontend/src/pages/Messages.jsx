@@ -59,7 +59,62 @@ function SharedCard({ share, onOpenPost, onOpenReel }) {
 const INVITE_RE = /(?:invite code|room code)\s*[:：]\s*([A-Z0-9]{4,12})\b/i;
 const inviteCodeOf = (m) => (m.content && !m.share && !m.mediaUrl ? (INVITE_RE.exec(m.content)?.[1] || '').toUpperCase() : '');
 
-function MessageBubble({ message, mine, myId, quick, onQuickChange, onChanged, onOpenPost, onOpenReel, onJoinGame, sender = null }) {
+// Time / date shown when the chat is dragged right-to-left (see useSwipeReveal below).
+const tsTime = (iso) => { const d = new Date(iso); return Number.isNaN(+d) ? '' : d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); };
+const tsDate = (iso) => { const d = new Date(iso); return Number.isNaN(+d) ? '' : d.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' }); };
+
+// Drag the message area from right to left: every message slides left and its date, time and "seen" time appear on the right.
+// Lets go → springs back. Works with a finger or a mouse; vertical scrolling is untouched.
+const REVEAL_MAX = 124;
+function useSwipeReveal(ref, active) {
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || !active) return undefined;
+    let g = null;   // { id, x, y, on }
+    const set = (px) => { el.style.setProperty('--reveal', `${px}px`); el.style.setProperty('--reveal-n', String(Math.min(1, px / REVEAL_MAX))); };
+    const skip = (t) => !!t?.closest?.('input, textarea, select, video, audio, [role="slider"], [data-no-swipe]');
+    const down = (e) => {
+      if ((e.pointerType === 'mouse' && e.button !== 0) || skip(e.target)) return;
+      g = { id: e.pointerId, x: e.clientX, y: e.clientY, on: false };
+    };
+    const move = (e) => {
+      if (!g || e.pointerId !== g.id) return;
+      const dx = e.clientX - g.x, dy = e.clientY - g.y;
+      if (!g.on) {
+        if (Math.abs(dy) > 14 && Math.abs(dy) > Math.abs(dx)) { g = null; return; }          // it's a scroll
+        if (dx < -12 && Math.abs(dx) > Math.abs(dy) * 1.2) {                                  // it's our drag
+          g.on = true;
+          el.style.setProperty('--cw', `${el.clientWidth - parseFloat(getComputedStyle(el).paddingLeft) - parseFloat(getComputedStyle(el).paddingRight)}px`);
+          el.classList.add('swiping');
+          try { el.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+        } else return;
+      }
+      const pull = -dx - 12;
+      set(Math.max(0, pull > REVEAL_MAX ? REVEAL_MAX + (pull - REVEAL_MAX) * 0.15 : pull));   // a little rubber-band past the end
+    };
+    const up = (e) => {
+      if (!g || e.pointerId !== g.id) return;
+      const was = g.on; g = null;
+      if (!was) return;
+      el.classList.remove('swiping'); set(0);
+      try { el.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
+      const stop = (ev) => { ev.stopPropagation(); ev.preventDefault(); };                    // a drag is not a tap on a bubble
+      el.addEventListener('click', stop, { capture: true, once: true });
+      setTimeout(() => el.removeEventListener('click', stop, { capture: true }), 60);
+    };
+    el.addEventListener('pointerdown', down);
+    el.addEventListener('pointermove', move);
+    el.addEventListener('pointerup', up);
+    el.addEventListener('pointercancel', up);
+    return () => {
+      el.removeEventListener('pointerdown', down); el.removeEventListener('pointermove', move);
+      el.removeEventListener('pointerup', up); el.removeEventListener('pointercancel', up);
+      el.classList.remove('swiping'); el.style.removeProperty('--reveal'); el.style.removeProperty('--reveal-n');
+    };
+  }, [ref, active]);
+}
+
+function MessageBubble({ message, mine, myId, quick, onQuickChange, onChanged, onOpenPost, onOpenReel, onJoinGame, sender = null, seenAt = null }) {
   const [viewer, setViewer] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(message.content);
@@ -175,6 +230,13 @@ function MessageBubble({ message, mine, myId, quick, onQuickChange, onChanged, o
             {message.pinned && <span className="bubble-flag" aria-label="Pinned">📌</span>}
           </div>
           {!mine && <button type="button" className="bubble-more" aria-label="Message options" onClick={() => setMenu(true)}>⋯</button>}
+          {message.createdAt && (
+            <div className="msg-ts" aria-hidden="true">
+              <b>{tsTime(message.createdAt)}</b>
+              <span>{tsDate(message.createdAt)}</span>
+              {seenAt && <em>✓✓ Seen {tsTime(seenAt)}<br />{tsDate(seenAt)}</em>}
+            </div>
+          )}
         </div>
       )}
       {grouped.length > 0 && (
@@ -264,6 +326,9 @@ export default function Messages({ startWithUsername, onConsumeStart, onOpenReel
   const [newGroup, setNewGroup] = useState(false);          // "New group" sheet
   const [groupInfo, setGroupInfo] = useState(false);        // group details sheet
   const [toast, setToast] = useState('');
+  const [typingIds, setTypingIds] = useState({});   // userId -> true while that person is typing in the open chat
+  const [reads, setReads] = useState({});           // userId -> ISO time they last opened the open chat ("Seen")
+  const typingTimers = useRef({}), lastTypingSent = useRef(0);
 
   const loadConversations = async () => {
     const res = await api.conversations();
@@ -300,6 +365,7 @@ export default function Messages({ startWithUsername, onConsumeStart, onOpenReel
     const socket = connectSocket();
     const onNew = (msg) => {
       if (msg.conversationId === activeId) {
+        setTypingIds(t => ({ ...t, [msg.senderId]: false }));
         setMessages(m => [...m, msg]);
         setTimeout(() => markRead(['message']), 400); // you're looking at it, so it's read
         // Keep this chat's unread badge at zero while it's open, then refresh the list.
@@ -309,6 +375,15 @@ export default function Messages({ startWithUsername, onConsumeStart, onOpenReel
       loadConversations();
     };
     const onAccepted = () => { loadConversations(); };
+    // Someone is typing in the chat I have open (clears itself after 4 s if they just stop).
+    const onTyping = ({ conversationId, userId, typing }) => {
+      if (conversationId !== activeId) return;
+      clearTimeout(typingTimers.current[userId]);
+      setTypingIds(t => ({ ...t, [userId]: typing !== false }));
+      if (typing !== false) typingTimers.current[userId] = setTimeout(() => setTypingIds(t => ({ ...t, [userId]: false })), 4000);
+    };
+    // Someone opened the chat → their messages-seen time moves forward, live.
+    const onRead = ({ conversationId, userId, readAt }) => { if (conversationId === activeId) setReads(r => ({ ...r, [userId]: readAt })); };
     // Someone reacted (or removed their reaction) to a message in an open chat.
     const onReaction = ({ messageId, reactions }) => setMessages(list => list.map(x => (x.id === messageId ? { ...x, reactions } : x)));
     // The other person unsent or edited a message in the chat I have open.
@@ -322,6 +397,7 @@ export default function Messages({ startWithUsername, onConsumeStart, onOpenReel
     socket.on('message:edited', onEdited);
     socket.on('conversation:changed', onChanged);
     socket.on('message_request:accepted', onAccepted);
+    socket.on('typing', onTyping); socket.on('conversation:read', onRead);
     return () => {
       socket.off('message:reaction', onReaction);
       socket.off('message:new', onNew);
@@ -329,6 +405,7 @@ export default function Messages({ startWithUsername, onConsumeStart, onOpenReel
       socket.off('message:edited', onEdited);
       socket.off('conversation:changed', onChanged);
       socket.off('message_request:accepted', onAccepted);
+      socket.off('typing', onTyping); socket.off('conversation:read', onRead);
     };
     // eslint-disable-next-line
   }, [activeId]);
@@ -336,7 +413,8 @@ export default function Messages({ startWithUsername, onConsumeStart, onOpenReel
   useEffect(() => {
     if (!activeId) return;
     setConversations(list => (list ? list.map(c => (c.id === activeId && c.unreadCount ? { ...c, unreadCount: 0 } : c)) : list));
-    api.conversationMessages(activeId).then(res => setMessages(res.messages));
+    setTypingIds({}); setReads(activeConvoRef.current?.reads || {});
+    api.conversationMessages(activeId).then(res => { setMessages(res.messages); setReads(res.reads || {}); });
     markRead(['message']);
   }, [activeId]);
 
@@ -451,6 +529,7 @@ export default function Messages({ startWithUsername, onConsumeStart, onOpenReel
   };
 
   const send = async (e) => {
+    announceTyping(false);
     e.preventDefault();
     if (pendingFile) return sendMedia();
     if (!text.trim()) return;
@@ -539,6 +618,7 @@ export default function Messages({ startWithUsername, onConsumeStart, onOpenReel
   };
 
   const activeConvo = conversations?.find(c => c.id === activeId);
+  const activeConvoRef = useRef(null); activeConvoRef.current = activeConvo;
   const groupChat = !!(activeConvo && activeConvo.type === 'group');
   const chatPartner = groupChat
     ? { id: activeConvo.id, username: null, displayName: groupTitle(activeConvo, user.id) }
@@ -546,6 +626,29 @@ export default function Messages({ startWithUsername, onConsumeStart, onOpenReel
   const memberById = (id) => activeConvo?.participants.find(p => p.id === id) || null;
 
   const isSelfChat = !!(activeConvo && selfConvo && activeConvo.id === selfConvo.id);
+
+  // Tell the other person I'm typing (at most every 2 s), and that I stopped.
+  const announceTyping = (on) => {
+    if (!activeId || isSelfChat) return;
+    const now = Date.now();
+    if (on && now - lastTypingSent.current < 2000) return;
+    lastTypingSent.current = on ? now : 0;
+    try { connectSocket().emit('typing', { conversationId: activeId, typing: on }); } catch { /* offline */ }
+  };
+  const typingNames = Object.keys(typingIds).filter(id => typingIds[id] && id !== user.id).map(id => memberById(id)?.displayName || memberById(id)?.username || 'Someone');
+  // "Seen" line under my newest message: who has opened the chat since I sent it.
+  const lastMine = [...messages].reverse().find(m => m.senderId === user.id);
+  const seenBy = lastMine ? Object.entries(reads).filter(([id, at]) => id !== user.id && at && at >= lastMine.createdAt) : [];
+  // Only "Seen" is shown, and only once someone has opened the chat. Nothing at all while it is unseen.
+  const seenText = !lastMine || isSelfChat || !seenBy.length ? ''
+    : (groupChat ? `Seen by ${seenBy.length === activeConvo.participants.length - 1 ? 'everyone' : seenBy.length}` : 'Seen');
+  // When one of my messages was seen (the latest time anyone opened the chat after it) — shown in the swipe-left panel.
+  const seenAtFor = (m) => {
+    if (isSelfChat || m.senderId !== user.id) return null;
+    const at = Object.entries(reads).filter(([id, t]) => id !== user.id && t && t >= m.createdAt).map(x => x[1]).sort().pop();
+    return at || null;
+  };
+  useSwipeReveal(scrollRef, !!chatPartner);
 
   // On phones an open chat takes the whole screen (list + menu bar hidden); the ← button returns to the list.
   const chatOpen = !!(activeId || pendingToUsername);
@@ -650,14 +753,14 @@ export default function Messages({ startWithUsername, onConsumeStart, onOpenReel
                     <GroupAvatar convo={activeConvo} size={38} myId={user.id} />
                     <div className="chat-id-text">
                       <div className="chat-name">{chatPartner.displayName}{activeConvo.muted && <span className="convo-flag" aria-label="Muted"> 🔕</span>}</div>
-                      <div className="chat-sub">{activeConvo.participants.length} people · tap for info</div>
+                      <div className="chat-sub">{typingNames.length ? <span className="typing-sub">{typingNames.slice(0, 2).join(' & ')} typing<span className="typing-dots"><i /><i /><i /></span></span> : `${activeConvo.participants.length} people · tap for info`}</div>
                     </div>
                   </button>
                 : <div className="chat-id">
                     <Avatar user={chatPartner} size={38} />
                     <div className="chat-id-text">
                       <div className="chat-name">{isSelfChat ? 'You (notes to self)' : (chatPartner.displayName || chatPartner.username)}{activeConvo?.muted && <span className="convo-flag" aria-label="Muted"> 🔕</span>}</div>
-                      {!isSelfChat && <OnlineText userId={chatPartner.id} />}
+                      {!isSelfChat && (typingNames.length ? <div className="typing-sub">typing<span className="typing-dots"><i /><i /><i /></span></div> : <OnlineText userId={chatPartner.id} />)}
                     </div>
                   </div>}
               {activeId && (
@@ -677,10 +780,17 @@ export default function Messages({ startWithUsername, onConsumeStart, onOpenReel
             )}
             <div className="chat-messages" ref={scrollRef}>
               {messages.map(m => (
-                <MessageBubble key={m.id} message={m} mine={m.senderId === user.id} sender={groupChat ? memberById(m.senderId) : null} myId={user.id} quick={quick} onQuickChange={setQuick} onOpenPost={setOpenPostId} onOpenReel={onOpenReel} onJoinGame={onJoinGame} onChanged={(updated) => {
+                <MessageBubble key={m.id} message={m} mine={m.senderId === user.id} sender={groupChat ? memberById(m.senderId) : null} myId={user.id} quick={quick} onQuickChange={setQuick} onOpenPost={setOpenPostId} onOpenReel={onOpenReel} onJoinGame={onJoinGame} seenAt={seenAtFor(m)} onChanged={(updated) => {
                   setMessages(list => updated === null ? list.filter(x => x.id !== m.id) : list.map(x => x.id === m.id ? { ...x, ...updated } : x));
                 }} />
               ))}
+              {seenText && <div className={`seen-line${seenBy.length ? ' seen' : ''}`} aria-live="polite">✓✓ {seenText}</div>}
+              {typingNames.length > 0 && (
+                <div className="typing-bubble" role="status" aria-label={`${typingNames.join(', ')} typing`}>
+                  {groupChat && <span className="typing-who">{typingNames.slice(0, 2).join(' & ')}</span>}
+                  <span className="typing-dots"><i /><i /><i /></span>
+                </div>
+              )}
               {messages.length === 0 && !pendingToUsername && (
                 <div style={{ margin: 'auto', color: 'var(--text-low)', fontSize: 13 }}>{isSelfChat ? 'Only you can see this chat — save notes, links and reels here.' : 'No messages yet — say hello.'}</div>
               )}
@@ -726,7 +836,7 @@ export default function Messages({ startWithUsername, onConsumeStart, onOpenReel
                 )}
                 <button type="button" className={`attach-fab ${attachOpen ? 'open' : ''}`} aria-label="Attach photo or video" aria-expanded={attachOpen} onClick={() => setAttachOpen(o => !o)} disabled={uploadPct !== null}>＋</button>
               </div>}
-              {!recording && <input placeholder={pendingFile ? 'Add a caption…' : 'Message…'} value={text} onChange={e => setText(e.target.value)} />}
+              {!recording && <input placeholder={pendingFile ? 'Add a caption…' : 'Message…'} value={text} onChange={e => { setText(e.target.value); announceTyping(e.target.value.length > 0); }} onBlur={() => announceTyping(false)} />}
               {(text.trim() || pendingFile)
                 ? <button className="send-btn" type="submit" disabled={uploadPct !== null}>➤</button>
                 : <VoiceRecorder key={activeId || pendingToUsername || 'new'} disabled={uploadPct !== null} onSend={sendVoice} onError={setStatus} onRecordingChange={setRecording} />}

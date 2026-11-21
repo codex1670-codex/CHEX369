@@ -16,6 +16,7 @@ import CoinStore from './pages/CoinStore.jsx';
 import Admin from './pages/Admin.jsx';
 import Stickies from './pages/Stickies.jsx';
 import PrivateSpace from './pages/PrivateSpace.jsx';   // password-protected second profile (replaces the old My life page)
+const Snap = lazy(() => import('./pages/Snap.jsx'));   // CHEX Snap: advanced camera + filters, loaded only when opened
 const Sim3D = lazy(() => import('./pages/Sim3D.jsx'));   // CHEX Simulation (3D objects): three.js loads only when opened
 const LearnPage = lazy(() => import('./pages/LearnPage.jsx'));   // CHEX learn: loaded only when opened
 import StickyAlerts from './components/StickyAlerts.jsx';
@@ -24,6 +25,7 @@ import Avatar from './components/Avatar.jsx';
 import NavIcon, { PowerIcon } from './components/NavIcon.jsx';
 import OrbitIcon from './orbit/OrbitIcon.jsx';
 import Codex from './components/Codex.jsx';
+import ChexAI from './components/ChexAI.jsx';
 import CircleAsk from './circleAsk/CircleAsk.jsx';
 import GestureHub from './gestures/GestureHub.jsx';
 import { holdProps, registerTap } from './gestures/gestureStore.js';
@@ -53,8 +55,8 @@ function setNavDir(dir) {
   navDirTimer = setTimeout(() => { delete el.dataset.navDir; }, 700);
 }
 
-// Which bottom-bar icons carry a customizable long-press (Settings → Smart gestures).
-const HOLD_GESTURE = { feed: 'homeHold', search: 'searchHold', reels: 'reelsHold', messages: 'chatsHold', notifications: 'alertsHold', profile: 'profileHold' };
+// Which bottom-bar icon carries a customizable long-press (Settings → Smart gestures).
+const HOLD_GESTURE = { search: 'searchHold' };
 
 // `label` is the full name (tooltip + screen readers). `short` is the one word shown on screen.
 const NAV = [
@@ -68,8 +70,10 @@ const NAV = [
 ];
 // Everything else, one tap away in the launcher grid (＋ on desktop, ⋯ on phones).
 // Line icon for each launcher tile (same family as the Orbit quick-action orbs).
-const MENU_ICON = { feed: 'home', search: 'search', reels: 'reels', messages: 'chat', notifications: 'bell', games: 'games', profile: 'profile', mylife: 'lock', learn: 'learn', sim3d: 'cube', stickies: 'note', admin: 'shield', coins: 'coinline', settings: 'gear' };
+const MENU_ICON = { ai: 'codex', feed: 'home', search: 'search', reels: 'reels', messages: 'chat', notifications: 'bell', games: 'games', profile: 'profile', mylife: 'lock', learn: 'learn', sim3d: 'cube', snap: 'camera', stickies: 'note', admin: 'shield', coins: 'coinline', settings: 'gear' };
 const MORE = [
+  { key: 'ai', label: 'CHEX AI', short: 'CHEX AI', icon: '✨', action: 'ai' },
+  { key: 'snap', label: 'CHEX Snap', short: 'Snap', icon: '📸' },
   { key: 'mylife', label: 'Private space', short: 'Private', icon: '🔒' },
   { key: 'learn', label: 'CHEX learn', short: 'Learn', icon: '🌍' },
   { key: 'sim3d', label: 'CHEX Simulation', short: '3D', icon: '🧊' },
@@ -175,7 +179,7 @@ export default function App() {
       return;
     }
     const target = params.get('open');
-    if (target && (target === 'stickies' || target === 'mylife' || target === 'learn' || target === 'sim3d' || NAV.some(n => n.key === target))) {
+    if (target && (target === 'stickies' || target === 'mylife' || target === 'learn' || target === 'sim3d' || target === 'snap' || NAV.some(n => n.key === target))) {
       setRoute(target);
       setCodexContext({ screen: target });
       window.history.replaceState(null, '', window.location.pathname);
@@ -393,7 +397,6 @@ export default function App() {
     <PresenceProvider>
     <div className="app-shell">
       <nav className="nav-rail" aria-label="Main navigation">
-        <img className="rail-logo" src="/logo.png" alt="CHEX" width="34" height="34" />
         {createPortal(
         <>
           <div className="rail-fab-wrap">
@@ -405,7 +408,7 @@ export default function App() {
               <div className="rail-fab-menu nav-menu" role="menu">
                 {[...NAV.map(n => ({ ...n, core: true })), ...MORE.filter(m => !m.adminOnly || user.isAdmin)].map((n, i) => (
                   <button key={n.key} role="menuitem" data-core={n.core ? '' : undefined} className={`nav-tile${route === n.key ? ' active' : ''}`} style={{ '--i': i }} title={n.label} aria-label={n.label}
-                    onPointerMove={tiltMove} onPointerLeave={tiltLeave} onClick={() => go(n.key)}>
+                    onPointerMove={tiltMove} onPointerLeave={tiltLeave} onClick={() => (n.action === 'ai' ? (setFabOpen(false), window.dispatchEvent(new Event('chex:ai-open'))) : go(n.key))}>
                     <span className="ico"><OrbitIcon name={MENU_ICON[n.key]} size={22} /></span><span className="lbl">{n.short}</span>
                     {badgeFor(n.key) > 0 && <span className="count-badge">{fmtCount(badgeFor(n.key))}</span>}
                   </button>
@@ -437,7 +440,7 @@ export default function App() {
             <span className="nb-lbl">{n.short}</span>
           </button>
         ))}
-        <button type="button" className="nb-more" aria-label="More" title="More" aria-expanded={fabOpen} aria-haspopup="menu" {...holdProps('moreHold')} onClick={() => setFabOpen(o => !o)}>
+        <button type="button" className="nb-more" aria-label="More" title="More" aria-expanded={fabOpen} aria-haspopup="menu" onClick={() => setFabOpen(o => !o)}>
           <span className="nb-ico" aria-hidden><NavIcon name="more" /></span>
           <span className="nb-lbl">More</span>
         </button>
@@ -454,6 +457,7 @@ export default function App() {
         {route === 'stickies' && <Stickies onBack={() => navigate('feed')} />}
         {route === 'mylife' && <PrivateSpace onLayout={setPrivateFill} />}
         {route === 'learn' && <Suspense fallback={<Skeleton label="Loading Learn" />}><LearnPage onBack={() => navigate('feed')} onOpenProfile={(u) => navigate('profile', u)} /></Suspense>}
+        {route === 'snap' && <Suspense fallback={<Skeleton label="Loading CHEX Snap" />}><Snap onBack={() => navigate('feed')} /></Suspense>}
         {route === 'sim3d' && <Suspense fallback={<Skeleton label="Loading CHEX Simulation" />}><Sim3D onBack={() => navigate('feed')} onPosted={() => navigate('feed')} /></Suspense>}
         {route === 'admin' && user.isAdmin && <Admin onBack={() => navigate('feed')} onOpenProfile={(u) => navigate('profile', u)} />}
         {route === 'coins' && <CoinStore onBack={() => navigate('settings')} onOpenSettings={() => navigate('settings')} onOpenStudio={() => navigate('sim3d')} />}
@@ -474,6 +478,7 @@ export default function App() {
       </PageTransition>
 
       <Codex navigate={navigate} goBack={goBack} currentUser={user} />
+      <ChexAI currentUser={user} />
       <CircleAsk navigate={navigate} route={route} />
       <GestureHub navigate={navigate} user={user} route={route} />
       <StickyAlerts onOpen={() => navigate('stickies')} />

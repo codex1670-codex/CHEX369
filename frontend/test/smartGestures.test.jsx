@@ -25,12 +25,21 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers());
 
 describe('gesture settings', () => {
-  it('has exactly 10 gestures with the requested defaults', () => {
-    expect(store.GESTURES).toHaveLength(10);
+  it('has the expected gestures with the requested defaults', () => {
+    expect(store.GESTURES).toHaveLength(11);
+    expect(store.GESTURES.map(g => g.id)).not.toEqual(expect.arrayContaining(['threeTap', 'reelsHold', 'chatsHold', 'alertsHold', 'profileHold', 'moreHold']));
+    for (const id of ['twoTap', 'threeTap', 'twoSwipeUp', 'twoSwipeDown', 'edgeRight', 'edgeLeft']) expect(store.loadGestures().map[id]).toBe('none');
+    expect(store.loadGestures().map.flipDown).toBe('exitApp');
     const { map } = store.loadGestures();
     expect(map.shareHold).toBe('quickShare');
     expect(map.searchHold).toBe('voiceSearch');
     expect(map.shake).toBe('codexMini');
+  });
+  it('Flip face-down is permanently "Exit the app" and cannot be changed', () => {
+    expect(store.loadGestures().map.flipDown).toBe('exitApp');
+    store.setGestureAction('flipDown', 'none');
+    expect(store.loadGestures().map.flipDown).toBe('exitApp');
+    expect(store.actionsFor({}).some(a => a.id === 'exitApp')).toBe(false);
   });
   it('saves a change, ignores junk, and refuses share-only actions on non-share gestures', () => {
     store.setGestureAction('shake', 'go:reels');
@@ -44,12 +53,12 @@ describe('gesture settings', () => {
   });
   it('fireGesture emits the event with the action, and does nothing for "none"', () => {
     const got = vi.fn(); window.addEventListener(store.GESTURE_EVENT, e => got(e.detail));
-    store.setGestureAction('homeHold', 'none');
-    expect(store.fireGesture('homeHold')).toBe(false);
+    store.setGestureAction('threeTap', 'none');
+    expect(store.fireGesture('threeTap')).toBe(false);
     expect(got).not.toHaveBeenCalled();
-    store.setGestureAction('homeHold', 'voiceSearch');
-    expect(store.fireGesture('homeHold', { a: 1 })).toBe(true);
-    expect(got).toHaveBeenCalledWith({ gestureId: 'homeHold', action: 'voiceSearch', ctx: { a: 1 } });
+    store.setGestureAction('threeTap', 'voiceSearch');
+    expect(store.fireGesture('threeTap', { a: 1 })).toBe(true);
+    expect(got).toHaveBeenCalledWith({ gestureId: 'threeTap', action: 'voiceSearch', ctx: { a: 1 } });
   });
   it('double tap fires only on the second quick tap', () => {
     const got = vi.fn(); window.addEventListener(store.GESTURE_EVENT, e => got(e.detail.action));
@@ -177,10 +186,10 @@ describe('Voice search', () => {
 });
 
 describe('Settings card', () => {
-  it('lists the 10 gestures, changes the shake action, and picks custom people', async () => {
+  it('lists the gestures, changes the shake action, and picks custom people', async () => {
     api.searchUsers.mockResolvedValue({ users: [person('q', 'quin')] });
     render(<SmartGestures />);
-    expect(document.querySelectorAll('[data-testid^="gesture-"]')).toHaveLength(10);
+    expect(document.querySelectorAll('[data-testid^="gesture-"]')).toHaveLength(11);
     fireEvent.change(screen.getByLabelText('Action for: Shake phone'), { target: { value: 'codexFull' } });
     expect(store.loadGestures().map.shake).toBe('codexFull');
     fireEvent.click(screen.getByRole('button', { name: /My five/ }));
@@ -190,5 +199,42 @@ describe('Settings card', () => {
     // share-only actions are not offered on other gestures
     const opts = [...screen.getByLabelText('Action for: Hold Search icon').querySelectorAll('option')].map(o => o.value);
     expect(opts).not.toContain('quickShare'); expect(opts).toContain('voiceSearch');
+  });
+});
+
+describe('screen-wide gestures', () => {
+  const touch = (type, pts) => {
+    const list = pts.map(([x, y], i) => ({ identifier: i, clientX: x, clientY: y, target: document.body }));
+    const e = new Event(type, { bubbles: true }); e.touches = type === 'touchend' ? [] : list; e.changedTouches = list;
+    document.body.dispatchEvent(e);
+  };
+  let stop, got;
+  beforeEach(() => { got = vi.fn(); stop = store.startScreenGestures(got); });
+  afterEach(() => stop());
+
+  it('two- and three-finger taps fire', () => {
+    touch('touchstart', [[100, 100], [160, 100]]); touch('touchend', []);
+    expect(got).toHaveBeenLastCalledWith('twoTap');
+    touch('touchstart', [[100, 100], [160, 100], [220, 100]]); touch('touchend', []);
+    expect(got).toHaveBeenLastCalledWith('threeTap');
+  });
+  it('two-finger swipe up / down fires, a pinch does not', () => {
+    touch('touchstart', [[100, 400], [160, 400]]); touch('touchmove', [[100, 250], [160, 250]]); touch('touchend', []);
+    expect(got).toHaveBeenLastCalledWith('twoSwipeUp');
+    touch('touchstart', [[100, 200], [160, 200]]); touch('touchmove', [[100, 350], [160, 350]]); touch('touchend', []);
+    expect(got).toHaveBeenLastCalledWith('twoSwipeDown');
+    got.mockClear();
+    touch('touchstart', [[100, 300], [160, 300]]); touch('touchmove', [[60, 200], [220, 400]]); touch('touchend', []);
+    expect(got).not.toHaveBeenCalled();
+  });
+  it('edge swipes fire only when they start at the edge', () => {
+    const w = window.innerWidth;
+    touch('touchstart', [[w - 4, 300]]); touch('touchmove', [[w - 120, 305]]); touch('touchend', []);
+    expect(got).toHaveBeenLastCalledWith('edgeRight');
+    touch('touchstart', [[3, 300]]); touch('touchmove', [[130, 300]]); touch('touchend', []);
+    expect(got).toHaveBeenLastCalledWith('edgeLeft');
+    got.mockClear();
+    touch('touchstart', [[200, 300]]); touch('touchmove', [[330, 300]]); touch('touchend', []);
+    expect(got).not.toHaveBeenCalled();
   });
 });

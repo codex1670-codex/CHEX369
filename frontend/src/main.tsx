@@ -19,14 +19,19 @@ import './compact.css';
 import './gestures/gestures.css';   // smart gestures: quick-send circle, voice search, settings card
 import './orbit/orbit.css';   // CHEX Orbit: 3D glass launcher (double-tap any screen)
 import './glassnav.css';   // floating glass bottom bar + launcher menu
+import './chexai.css';
+import './snap.css';   // CHEX Snap camera page
+import './perf/perf.css';   // adaptive 60/120 FPS: lighter visuals only on slow devices
 import './moremenu.css';   // launcher menu: round glass orbs + line icons (matches Orbit)
 import './premiumglass.css';   // all glass: cards, posts, reels, games, buttons (must stay last)
+import './solidnav.css';   // no blur anywhere: solid surfaces + advanced navigation buttons (must stay last)
 import { getStoredTheme, applyTheme } from './theme.js';
 import { initPremium } from './premiumThemes.js';
 import { apply3D } from './ui3d.js';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
 import { initKeyboardAware } from './keyboard.js';
 import { applyCompact, startCompactLayer } from './compact.js';
+import { initPerf } from './perf/perfProfile.js';
 
 // Applied before first paint so there's no flash of the wrong theme.
 applyTheme(getStoredTheme());
@@ -35,6 +40,7 @@ apply3D();
 initKeyboardAware();
 applyCompact();       // compact mode (icons + short text), on unless switched off in Settings
 startCompactLayer();
+initPerf();           // detect screen Hz + device power, pick 60/120 FPS, adapt live (remembered on this device)
 
 const rootEl = document.getElementById('root');
 if (!rootEl) throw new Error('Missing #root element');

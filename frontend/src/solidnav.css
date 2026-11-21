@@ -1,0 +1,222 @@
+/* ==========================================================================
+   SOLID NAV + NO-BLUR SURFACES (loaded last).
+   Every live backdrop blur has been removed from the app (it was the main cause of lag).
+   Surfaces that used to rely on blur to stay readable are now solid, and the navigation
+   buttons are rebuilt as raised, solid controls with an accent "pill" that glides to the
+   active tab. Animations are untouched — only colours, fills and shadows changed here.
+   ========================================================================== */
+:root {
+  --sn-solid: var(--bg-deep);
+  --sn-top: color-mix(in srgb, var(--bg-deep) 88%, #fff 12%);
+  --sn-edge: var(--pg-edge, rgba(255, 255, 255, .17));
+  --sn-accent-a: var(--violet, #3f6fe0);
+  --sn-accent-b: var(--violet-bright, #6f95ff);
+  --sn-lift: 0 14px 30px -12px rgba(0, 0, 0, .55), 0 2px 6px rgba(0, 0, 0, .25);
+  --sn-glow: color-mix(in srgb, var(--violet-bright, #6f95ff) 55%, transparent);
+}
+:root[data-theme="light"] {
+  --sn-top: #ffffff;
+  --sn-lift: 0 14px 28px -12px rgba(90, 60, 0, .30), 0 2px 6px rgba(90, 60, 0, .10);
+}
+
+/* ---- solid replacements for old frosted overlays --------------------------------------------- */
+:root:root:root:root :is(.as-sheet, .react-sheet, .reel-comments-sheet, .circle-sheet, .perm-sheet, .me-modal, .codex-panel, .circle-panel,
+  .attach-menu, .perm-panel, .toast, .coin-toast-fixed, .call-banner, .ps-card, .ps-pill, .learn-foot, .vs-card, .gx-toast) {
+  background: linear-gradient(150deg, var(--pg-card-a, rgba(255,255,255,.1)), var(--pg-card-b, rgba(255,255,255,.04))), var(--sn-solid);
+}
+:root:root:root:root :is(.nav-scrim, .qs-back, .vs-back, .media-viewer-overlay) { background: rgba(6, 8, 24, .55); }
+:root:root:root:root :is(.qs-ring, .qs-hub, .qs-name, .qs-hint, .qs-close) { background-color: var(--sn-solid); }
+:root:root:root:root :is(.ss-top, .ss-left, .ss-right, .ss-timeline, .ss-vbar button, .sim-views button, .ss-loading) { background-color: var(--sn-solid); }
+:root:root:root:root :is(.reel-side-actions button, .reel-mute-btn, .reel-mute-hint, .reel-overlay-bottom, .cam-btn, .call-btn, .call-net) { background-color: rgba(8, 10, 28, .62); }
+
+/* ---- Navigation: desktop rail ------------------------------------------------------------------ */
+:root:root:root:root .nav-rail {
+  background: linear-gradient(180deg, var(--sn-top), var(--sn-solid) 38%);
+  border-right: 1px solid var(--sn-edge); box-shadow: 8px 0 24px -16px rgba(0, 0, 0, .5);
+}
+:root:root:root:root .rail-item .pill, :root:root:root:root .nav-link {
+  position: relative; border-radius: 18px; transition: background .25s ease, box-shadow .25s ease, transform .35s var(--gn-spring, cubic-bezier(.22,1.25,.36,1)), color .2s ease;
+}
+:root:root:root:root .rail-item:hover .pill, :root:root:root:root .nav-link:hover {
+  background: linear-gradient(180deg, var(--sn-top), var(--sn-solid)); box-shadow: var(--sn-lift), inset 0 1px 0 rgba(255, 255, 255, .25); transform: translateY(-1px);
+}
+:root:root:root:root .rail-item:active .pill, :root:root:root:root .nav-link:active { transform: scale(.94); }
+:root:root:root:root .rail-item.active .pill, :root:root:root:root .nav-link.active {
+  color: #fff; background: linear-gradient(135deg, var(--sn-accent-a), var(--sn-accent-b));
+  box-shadow: 0 10px 22px -8px var(--sn-glow), inset 0 1px 0 rgba(255, 255, 255, .45), inset 0 -2px 0 rgba(0, 0, 0, .12);
+}
+:root:root:root:root .rail-item.active .pill::before, :root:root:root:root .nav-link.active::before {
+  content: ""; position: absolute; left: -10px; top: 22%; bottom: 22%; width: 4px; border-radius: 0 4px 4px 0;
+  background: linear-gradient(180deg, var(--sn-accent-b), var(--sn-accent-a)); box-shadow: 0 0 10px var(--sn-glow);
+}
+
+/* ---- Navigation: phone bottom bar ------------------------------------------------------------- */
+@media (max-width: 800px) {
+  :root:root:root:root .nav-bar-mobile {
+    background: linear-gradient(180deg, var(--sn-top), var(--sn-solid) 70%);
+    border: 1px solid var(--sn-edge);
+    box-shadow: var(--sn-lift), inset 0 1px 0 rgba(255, 255, 255, .28), inset 0 -2px 0 rgba(0, 0, 0, .14);
+  }
+  :root:root:root:root .nav-bar-mobile::before { opacity: .0; }
+  /* the gliding pill is now a solid accent button instead of frosted glass */
+  :root:root:root:root .nb-bubble {
+    background: linear-gradient(135deg, var(--sn-accent-a), var(--sn-accent-b)); border: 0;
+    box-shadow: 0 10px 20px -8px var(--sn-glow), inset 0 1px 0 rgba(255, 255, 255, .5), inset 0 -2px 0 rgba(0, 0, 0, .14);
+  }
+  :root:root:root:root .nav-bar-mobile > button { color: var(--text-low); }
+  :root:root:root:root .nav-bar-mobile > button.active,
+  :root:root:root:root .nav-bar-mobile > button.nb-more[aria-expanded="true"] { color: #fff; }
+  :root:root:root:root .nav-bar-mobile > button.active .nb-ico { filter: drop-shadow(0 3px 6px rgba(0, 0, 0, .3)); }
+}
+
+/* ---- Launcher menu (＋ / ⋯): transparent glass card, same icons and animations ------------------------ */
+:root:root:root:root:root .nav-menu.rail-fab-menu {
+  /* transparent glass card: the page shows through, a light blur keeps the icons readable */
+  background: linear-gradient(160deg, rgba(22, 28, 77, .28), rgba(32, 22, 79, .18));
+  -webkit-backdrop-filter: blur(14px) saturate(1.25); backdrop-filter: blur(14px) saturate(1.25);
+  border: 1px solid rgba(255, 255, 255, .28);
+  box-shadow: 0 18px 44px -14px rgba(0, 0, 0, .35), inset 0 1px 0 rgba(255, 255, 255, .35);
+}
+:root[data-theme="light"]:root:root:root:root .nav-menu.rail-fab-menu {
+  background: linear-gradient(160deg, rgba(255, 255, 255, .34), rgba(255, 255, 255, .18));
+  border-color: rgba(255, 255, 255, .6);
+}
+:root:root:root:root:root .nav-menu .nav-tile.active .ico { border-color: var(--sn-accent-b); box-shadow: 0 0 0 2px var(--sn-accent-b), 0 0 18px var(--sn-glow); }
+:root:root:root:root:root .rail-fab { background: linear-gradient(135deg, #ffd23f, #ffa41b); }
+
+/* ---- Orbit: solid too -------------------------------------------------------------------------- */
+.ob-bg { background: var(--bg-void); opacity: .97; }
+:root:root:root .ob-ws, :root:root:root .ob-cu { background: linear-gradient(150deg, var(--pg-card-a), var(--pg-card-b)), var(--bg-deep); }
+:root:root:root .ob-ws-back, :root:root:root .ob-cu-back { background: rgba(3, 5, 20, .6); }
+
+/* ==== CHEX Orbit AI strip at the top of the ⋯ / ＋ menu ==== */
+:root:root:root:root:root .nav-menu.rail-fab-menu { grid-template-columns: repeat(4, minmax(60px, 1fr)); max-height: min(82vh, 640px); overflow-y: auto; }
+.oai { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 9px; padding: 12px; margin-bottom: 6px; border-radius: 22px; text-align: left; color: #eef3ff;
+  background: linear-gradient(150deg, rgba(111, 149, 255, .22), rgba(124, 92, 255, .14)); border: 1px solid rgba(255, 255, 255, .18); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .22); }
+.oai-head { display: flex; align-items: center; gap: 10px; }
+.oai-head b { display: block; font-size: 14px; }
+.oai-head span:not(.oai-ico) { display: block; font-size: 11.5px; color: rgba(238, 243, 255, .7); line-height: 1.25; }
+.oai-ico { flex: none; width: 36px; height: 36px; border-radius: 13px; display: grid; place-items: center; color: #fff; background: linear-gradient(135deg, var(--violet, #3f6fe0), var(--violet-bright, #6f95ff)); box-shadow: 0 8px 18px -8px var(--violet, #3f6fe0); }
+.oai-row { display: flex; align-items: center; gap: 8px; }
+.oai-mic, .oai-go { flex: none; width: 44px; height: 44px; border-radius: 50%; border: 0; display: grid; place-items: center; color: #fff; cursor: pointer; transition: transform .15s ease, opacity .15s ease; }
+.oai-mic { background: linear-gradient(135deg, var(--violet, #3f6fe0), var(--violet-bright, #6f95ff)); box-shadow: 0 10px 22px -8px var(--violet, #3f6fe0), inset 0 1px 0 rgba(255, 255, 255, .5); }
+.oai-go { width: 40px; height: 40px; background: rgba(255, 255, 255, .16); }
+.oai-go:disabled { opacity: .4; cursor: default; }
+.oai-mic:active, .oai-go:not(:disabled):active { transform: scale(.92); }
+.oai-in { flex: 1; min-width: 0; height: 44px; padding: 0 14px; border-radius: 99px; border: 1px solid rgba(255, 255, 255, .22); background: rgba(8, 10, 34, .55); color: #fff; font: 500 14px/1 inherit; outline: none; }
+.oai-in::placeholder { color: rgba(238, 243, 255, .55); }
+.oai-in:focus { border-color: var(--violet-bright, #6f95ff); box-shadow: 0 0 0 3px rgba(111, 149, 255, .25); }
+.oai-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.oai-chip { display: inline-flex; align-items: center; gap: 5px; height: 30px; padding: 0 11px; border-radius: 99px; border: 1px solid rgba(255, 255, 255, .22); background: rgba(255, 255, 255, .12); color: #fff; font: 600 11.5px/1 inherit; cursor: pointer; }
+.oai-chip.soft { background: rgba(255, 255, 255, .06); font-weight: 500; }
+.oai-chip:active { transform: scale(.95); }
+
+/* ==== Messages: typing indicator + seen time/date ==== */
+.typing-sub { font-size: 12px; font-weight: 600; color: var(--teal, #26e0c9); display: inline-flex; align-items: center; gap: 4px; }
+.typing-dots { display: inline-flex; align-items: center; gap: 3px; margin-left: 3px; }
+.typing-dots i { width: 5px; height: 5px; border-radius: 50%; background: currentColor; opacity: .35; animation: typDot 1.1s ease-in-out infinite; }
+.typing-dots i:nth-child(2) { animation-delay: .16s; } .typing-dots i:nth-child(3) { animation-delay: .32s; }
+@keyframes typDot { 0%, 70%, 100% { opacity: .3; transform: translateY(0); } 35% { opacity: 1; transform: translateY(-3px); } }
+.typing-bubble { align-self: flex-start; display: inline-flex; align-items: center; gap: 8px; margin: 2px 0 4px; padding: 11px 15px; border-radius: 20px 20px 20px 6px; color: var(--text-mid);
+  background: linear-gradient(145deg, var(--pg-card-a, rgba(255,255,255,.1)), var(--pg-card-b, rgba(255,255,255,.04))); border: 1px solid var(--pg-edge, rgba(255,255,255,.17)); }
+.typing-bubble .typing-dots { margin: 0; } .typing-who { font-size: 11.5px; font-weight: 600; }
+.seen-line { align-self: flex-end; margin: -2px 4px 4px; font-size: 11px; color: var(--text-low); }
+.seen-line.seen { color: var(--teal, #26e0c9); }
+@media (prefers-reduced-motion: reduce) { .typing-dots i { animation: none; opacity: .7; } }
+
+/* ==== AI / commands panel = the same floating pill as the bottom navigation bar ====================
+   (CHEX Commands + CHEX AI chat share .codex-panel.) Same solid gradient, frame, shadow and the same
+   springy slide-in as the nav bar; round header buttons, pill input, accent send button. */
+:root:root:root:root:root .codex-panel {
+  border-radius: 30px; border: 1px solid var(--sn-edge); overflow: hidden;
+  background: linear-gradient(180deg, var(--sn-top), var(--sn-solid) 70%);
+  box-shadow: var(--sn-lift), inset 0 1px 0 rgba(255, 255, 255, .28), inset 0 -2px 0 rgba(0, 0, 0, .14);
+  animation: snPanelIn .55s var(--gn-spring, cubic-bezier(.22, 1.25, .36, 1)) both;
+}
+@keyframes snPanelIn { from { opacity: 0; transform: translateY(28px) scale(.94); } to { opacity: 1; transform: none; } }
+:root:root:root:root:root .codex-panel .codex-panel-header { border-bottom: 0; padding: 12px 14px 6px; }
+:root:root:root:root:root .codex-panel .codex-panel-header button {
+  width: 34px; height: 34px; border-radius: 50%; display: inline-grid; place-items: center; padding: 0;
+  background: linear-gradient(180deg, var(--sn-top), var(--sn-solid)); border: 1px solid var(--sn-edge); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .25);
+  transition: transform .35s var(--gn-spring, cubic-bezier(.22, 1.25, .36, 1));
+}
+:root:root:root:root:root .codex-panel .codex-panel-header button:active { transform: scale(.9); }
+:root:root:root:root:root .codex-panel .codex-log { padding: 6px 16px 10px; }
+:root:root:root:root:root .codex-panel .codex-input-row { border-top: 0; padding: 6px 10px 10px; align-items: center; }
+:root:root:root:root:root .codex-panel .codex-input-row input {
+  height: 44px; border-radius: 99px; border: 1px solid var(--sn-edge); background: var(--pg-field, rgba(255,255,255,.07));
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, .12);
+}
+:root:root:root:root:root .codex-panel .codex-send {
+  flex: none; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 50%; display: grid; place-items: center; color: #fff; cursor: pointer;
+  background: linear-gradient(135deg, var(--sn-accent-a), var(--sn-accent-b));
+  box-shadow: 0 10px 20px -8px var(--sn-glow), inset 0 1px 0 rgba(255, 255, 255, .5), inset 0 -2px 0 rgba(0, 0, 0, .14);
+  transition: transform .35s var(--gn-spring, cubic-bezier(.22, 1.25, .36, 1));
+}
+:root:root:root:root:root .codex-panel .codex-send:disabled { opacity: .5; box-shadow: none; }
+:root:root:root:root:root .codex-panel .codex-send:not(:disabled):active { transform: scale(.9); }
+:root:root:root:root:root .codex-panel .cai-mic { width: 44px; height: 44px; border: 1px solid var(--sn-edge); background: linear-gradient(180deg, var(--sn-top), var(--sn-solid)); }
+
+/* phones: float it just above the bottom bar, side margins like the bar */
+@media (max-width: 800px) {
+  :root:root:root:root:root.codex-split .codex-panel {
+    left: 12px; right: 12px; width: auto; height: auto; max-height: min(max(var(--codex-h), 240px), 50dvh);
+    bottom: calc(84px + env(safe-area-inset-bottom, 0px)); border-radius: 30px;
+  }
+  html.codex-split .app-shell { padding-bottom: calc(92px + min(max(var(--codex-h), 240px), 50dvh) + env(safe-area-inset-bottom, 0px)); }
+}
+@media (prefers-reduced-motion: reduce) { .codex-panel { animation: none !important; } }
+
+/* Transparent launcher card on the light theme: dark labels/icons so they stay readable over the page */
+:root[data-theme="light"]:root:root:root:root:root .nav-menu.rail-fab-menu button.nav-tile { color: #1d2140; }
+:root[data-theme="light"]:root:root:root:root:root .nav-menu .nav-tile .ico {
+  color: #1d2140;
+  background: radial-gradient(circle at 32% 26%, rgba(255, 255, 255, .75), rgba(255, 255, 255, .25) 70%);
+  border-color: rgba(29, 33, 64, .18);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .9), 0 6px 14px rgba(29, 33, 64, .14);
+}
+
+/* ---- Chat: "Seen" line + drag right-to-left to reveal each message's date, time and seen time ------------------ */
+.chat-messages { overflow-x: hidden; touch-action: pan-y; --reveal: 0px; --reveal-n: 0; --cw: 320px; }
+.chat-messages.swiping { user-select: none; -webkit-user-select: none; cursor: grabbing; }
+.chat-messages .bubble-wrap, .chat-messages .seen-line, .chat-messages .typing-bubble { transform: translateX(calc(var(--reveal) * -1)); transition: transform .32s cubic-bezier(.2, 1.25, .3, 1); }
+.chat-messages.swiping .bubble-wrap, .chat-messages.swiping .seen-line, .chat-messages.swiping .typing-bubble { transition: none; }
+.bubble-row { position: relative; }
+.msg-ts { position: absolute; top: 0; bottom: 0; display: flex; flex-direction: column; justify-content: center; gap: 1px; width: 112px; text-align: left; line-height: 1.2; pointer-events: none; opacity: var(--reveal-n); }
+.bubble-wrap.mine .msg-ts { left: calc(100% + 14px); }
+.bubble-wrap.theirs .msg-ts { left: calc(var(--cw) + 14px); }
+.msg-ts b { font-size: 12px; font-weight: 700; color: var(--text-hi); }
+.msg-ts span { font-size: 10.5px; color: var(--text-low); }
+.msg-ts em { margin-top: 2px; font-style: normal; font-size: 10.5px; color: var(--teal, #26e0c9); font-weight: 600; }
+
+/* ==== Launcher menu: round icons only, no boxes and no background frame ============================== */
+:root:root:root:root:root:root .nav-menu.rail-fab-menu {
+  background: none; border: 0; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; border-radius: 0; gap: 12px 8px; padding: 8px;
+}
+:root:root:root:root:root:root .nav-menu.rail-fab-menu::before { display: none; }
+:root:root:root:root:root:root .nav-menu.rail-fab-menu button.nav-tile,
+:root:root:root:root:root:root .nav-menu.rail-fab-menu button.nav-tile:hover,
+:root:root:root:root:root:root .nav-menu.rail-fab-menu button.nav-tile:focus-visible,
+:root:root:root:root:root:root .nav-menu.rail-fab-menu button.nav-tile.active {
+  background: none; border: 0; box-shadow: none; border-radius: 50%; min-height: 76px; padding: 2px 0; gap: 6px; transform: none; outline: none;
+}
+:root:root:root:root:root:root .nav-menu.rail-fab-menu button.nav-tile:active { transform: scale(.94); }
+/* each icon is a perfect circle */
+:root:root:root:root:root:root .nav-menu .nav-tile .ico {
+  width: 52px; height: 52px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, .45);
+  background: radial-gradient(circle at 32% 26%, rgba(255, 255, 255, .5), rgba(255, 255, 255, .14) 72%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .6), 0 8px 16px -6px rgba(0, 0, 0, .4);
+}
+:root:root:root:root:root:root .nav-menu .nav-tile:hover .ico,
+:root:root:root:root:root:root .nav-menu .nav-tile:focus-visible .ico {
+  border-color: rgba(38, 224, 201, .9); background: radial-gradient(circle at 32% 26%, rgba(38, 224, 201, .55), rgba(111, 149, 255, .2) 75%);
+  box-shadow: 0 0 0 2px rgba(38, 224, 201, .5), 0 0 18px rgba(38, 224, 201, .5);
+}
+:root:root:root:root:root:root .nav-menu .nav-tile.active .ico {
+  border-color: #26e0c9; background: radial-gradient(circle at 32% 26%, rgba(38, 224, 201, .6), rgba(111, 149, 255, .25) 75%);
+  box-shadow: 0 0 0 2px #26e0c9, 0 0 16px rgba(38, 224, 201, .55);
+}
+:root:root:root:root:root:root .nav-menu .nav-tile .count-badge { top: 0; right: calc(50% - 34px); }
+:root[data-theme="light"]:root:root:root:root:root .nav-menu .nav-tile .ico {
+  background: radial-gradient(circle at 32% 26%, rgba(255, 255, 255, .9), rgba(255, 255, 255, .45) 72%); border-color: rgba(29, 33, 64, .16);
+}

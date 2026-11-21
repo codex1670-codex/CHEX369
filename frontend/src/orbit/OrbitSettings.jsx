@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react';
-import { ORBIT_CHANGED, ORBIT_OPEN, loadOrbit, saveOrbit, reducedMotion, supports3D } from './orbitStore.js';
+import { ORBIT_CHANGED, ORBIT_OPEN, loadOrbit, saveOrbit, reducedMotion, supports3D, loadMenu, resetMenu, isDefaultMenu, MENU_CHANGED } from './orbitStore.js';
 
 // Settings → CHEX ORBIT: switch the double-tap on/off and choose 3D or the flat fallback.
 export default function OrbitSettings() {
   const [cfg, setCfg] = useState(loadOrbit);
+  const [custom, setCustom] = useState(() => !isDefaultMenu(loadMenu()));
   useEffect(() => {
     const sync = () => setCfg(loadOrbit());
-    window.addEventListener(ORBIT_CHANGED, sync);
-    return () => window.removeEventListener(ORBIT_CHANGED, sync);
+    const syncMenu = () => setCustom(!isDefaultMenu(loadMenu()));
+    window.addEventListener(ORBIT_CHANGED, sync); window.addEventListener(MENU_CHANGED, syncMenu);
+    return () => { window.removeEventListener(ORBIT_CHANGED, sync); window.removeEventListener(MENU_CHANGED, syncMenu); };
   }, []);
   const set = (patch) => setCfg(saveOrbit({ ...cfg, ...patch }));
   const still = reducedMotion();
@@ -30,6 +32,8 @@ export default function OrbitSettings() {
         ))}
         <button type="button" className="btn-ghost" style={{ width: 'auto', padding: '7px 14px' }} onClick={() => window.dispatchEvent(new Event(ORBIT_OPEN))}>Try it</button>
       </div>
+      <div className="sg-hint" style={{ marginTop: 10 }}>Menu: open Orbit and tap <b>Customize</b> to choose, hide, add and reorder the cards and quick actions.</div>
+      {custom && <button type="button" className="btn-ghost" style={{ width: 'auto', padding: '7px 14px', marginTop: 8 }} onClick={() => resetMenu()}>↺ Reset menu to default</button>}
       {still && <div className="sg-hint" style={{ marginTop: 8 }}>Your device asks for reduced motion, so Orbit is shown flat with no animation.</div>}
       {!still && !supports3D() && <div className="sg-hint" style={{ marginTop: 8 }}>This browser can’t draw 3D layers, so Orbit is shown flat.</div>}
     </div>

@@ -1,12 +1,15 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { api } from '../api.js';
 import Avatar from '../components/Avatar.jsx';
 import { GESTURE_EVENT } from '../gestures/gestureStore.js';
 import { alertsEnabled } from '../announce.js';
 import OrbitIcon from './OrbitIcon.jsx';
+import OrbitCustomize from './OrbitCustomize.jsx';
+import OrbitAI from './OrbitAI.jsx';
 import {
-  RING, loadOrbit, saveOrbit, resolveMode, reducedMotion, liteDevice,
+  SATELLITES, ALL_CARDS, loadOrbit, saveOrbit, resolveMode, reducedMotion, liteDevice,
+  loadMenu, saveMenu, resolveRing, resolveRadial, MENU_CHANGED,
   ringRadius, frontIndex, angleFromFront, snapTheta, ringIndexForRoute,
 } from './orbitStore.js';
 
@@ -16,14 +19,7 @@ import {
 //   • 3D is driven by one requestAnimationFrame loop that only runs while something moves, and only touches transform/opacity.
 //   • Reduced motion, no-3D browsers and the "Flat" switch all get a plain 2D grid with the same actions.
 
-const RADIAL = [
-  { id: 'codex',  label: 'Codex',        icon: 'codex' },
-  { id: 'voice',  label: 'Voice search', icon: 'mic' },
-  { id: 'circle', label: 'Circle to Ask', icon: 'lasso' },
-  { id: 'sound',  label: 'AI sound',     icon: 'volume' },
-  { id: 'settings', label: 'Settings',   icon: 'gear' },
-  { id: 'flat',   label: 'Flat / 3D',    icon: 'flat' },
-];
+const SAT_IDS = new Set(SATELLITES.map(x => x.id));   // modules that can be added to the ring from Customize
 const ARC_FROM = -165, ARC_TO = -15, RADIAL_R = 118;   // degrees on screen (0 = right, −90 = up)
 const radialPos = (i, n) => { const a = ((ARC_FROM + ((ARC_TO - ARC_FROM) * i) / Math.max(1, n - 1)) * Math.PI) / 180; return { x: Math.cos(a) * RADIAL_R, y: Math.sin(a) * RADIAL_R }; };
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
@@ -34,7 +30,13 @@ export default function Orbit({ onClose, navigate, user, route }) {
   const [cfg, setCfg] = useState(loadOrbit);
   const [mode, setMode] = useState(() => resolveMode(loadOrbit()));
   const [lite, setLite] = useState(() => liteDevice());
-  const [active, setActive] = useState(() => ringIndexForRoute(route));
+  const [menu, setMenu] = useState(loadMenu);   // which cards / quick actions the person chose (Customize tab)
+  const items = useMemo(() => resolveRing(menu, user), [menu, user]);
+  const quick = useMemo(() => resolveRadial(menu), [menu]);
+  const [cust, setCust] = useState(false);       // Customize tab open?
+  const [ai, setAi] = useState(null);           // CHEX Orbit AI open? null | 'type' | 'talk'
+  const [pages, setPages] = useState(false);     // "All pages" list open?
+  const [active, setActive] = useState(() => ringIndexForRoute(route, items));
   const [ws, setWs] = useState(null);          // index of the expanded workspace card, or null
   const [radial, setRadial] = useState(false);
   const [hot, setHot] = useState(-1);          // radial item under the finger
@@ -42,7 +44,6 @@ export default function Orbit({ onClose, navigate, user, route }) {
   const [counts, setCounts] = useState({ messages: 0, other: 0 });
   const [data, setData] = useState({});        // workspace data by module id
   const [sound, setSound] = useState(alertsEnabled());
-  const items = RING;
   const n = items.length;
   const is3d = mode === '3d';
   const still = reducedMotion();
@@ -50,7 +51,7 @@ export default function Orbit({ onClose, navigate, user, route }) {
   const rootRef = useRef(null), ringRef = useRef(null), stageRef = useRef(null), hubRef = useRef(null);
   const cardEls = useRef([]);
   const geo = useRef({ W: 240, H: 320, R: 300 });
-  const st = useRef({ theta: -ringIndexForRoute(route) * (360 / n), vel: 0, target: null, raf: 0, last: 0, drag: null, moved: false, frames: [], slow: 0, shown: ringIndexForRoute(route), wheelAt: 0, wheelAcc: 0 });
+  const st = useRef({ theta: -ringIndexForRoute(route, items) * (360 / n), vel: 0, target: null, raf: 0, last: 0, drag: null, moved: false, frames: [], slow: 0, shown: ringIndexForRoute(route, items), wheelAt: 0, wheelAcc: 0 });
   const activeRef = useRef(active); activeRef.current = active;
   const wsRef = useRef(ws); wsRef.current = ws;
   const prevFocus = useRef(null);
@@ -63,7 +64,7 @@ export default function Orbit({ onClose, navigate, user, route }) {
   }, [leaving, onClose, still]);
   const openItem = useCallback((it) => {
     const go = () => {
-      if (it.codex) window.dispatchEvent(new CustomEvent('chex:codex-open', { detail: { mode: 'mini' } }));
+      if (it.codex) window.dispatchEvent(new Event('chex:ai-open'));
       else navigate(it.nav, it.nav === 'profile' ? user.username : undefined);
     };
     close(go);
@@ -133,6 +134,26 @@ export default function Orbit({ onClose, navigate, user, route }) {
     ro?.observe(stage); window.addEventListener('resize', measure);
     return () => { ro?.disconnect(); window.removeEventListener('resize', measure); };
   }, [n, is3d, paint]);
+  // the ring changed (cards added / hidden / reordered): keep facing the same card if it is still there
+  const faceId = useRef(items[active]?.id);
+  const sig = items.map(x => x.id).join('|');
+  useLayoutEffect(() => {
+    let i = items.findIndex(x => x.id === faceId.current); if (i < 0) i = 0;
+    const s = st.current;
+    s.theta = -i * (360 / n); s.target = null; s.vel = 0; s.shown = i;
+    cardEls.current.length = n;
+    setActive(i); setWs(null);
+    if (is3d) paint();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sig]);
+  useEffect(() => { faceId.current = items[active]?.id; }, [items, active]);
+  useEffect(() => {
+    const sync = () => setMenu(loadMenu());
+    window.addEventListener(MENU_CHANGED, sync);
+    return () => window.removeEventListener(MENU_CHANGED, sync);
+  }, []);
+  const changeMenu = useCallback((next) => setMenu(saveMenu(next)), []);
+
   useLayoutEffect(() => { if (is3d) paint(); }, [is3d, paint]);
   useEffect(() => () => cancelAnimationFrame(st.current.raf), []);
 
@@ -217,7 +238,7 @@ export default function Orbit({ onClose, navigate, user, route }) {
     return () => { try { prevFocus.current?.focus?.({ preventScroll: true }); } catch { /* element gone */ } };
   }, []);
   const onKey = (e) => {
-    if (e.key === 'Escape') { e.preventDefault(); if (radial) setRadial(false); else if (ws != null) setWs(null); else close(); return; }
+    if (e.key === 'Escape') { e.preventDefault(); if (ai) setAi(null); else if (pages) setPages(false); else if (cust) setCust(false); else if (radial) setRadial(false); else if (ws != null) setWs(null); else close(); return; }
     if (e.key === 'Tab') {
       const f = [...rootRef.current.querySelectorAll('button:not([disabled]), [tabindex="0"]')].filter(el => el.offsetParent !== null);
       if (!f.length) return;
@@ -226,7 +247,7 @@ export default function Orbit({ onClose, navigate, user, route }) {
       else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
       return;
     }
-    if (ws != null || e.target?.tagName === 'INPUT') return;
+    if (ws != null || cust || e.target?.tagName === 'INPUT') return;
     if (e.key === 'ArrowRight') { e.preventDefault(); is3d ? rotateBy(1) : setActive(a => (a + 1) % n); }
     else if (e.key === 'ArrowLeft') { e.preventDefault(); is3d ? rotateBy(-1) : setActive(a => (a + n - 1) % n); }
   };
@@ -257,7 +278,7 @@ export default function Orbit({ onClose, navigate, user, route }) {
     const dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
     if (Math.hypot(dx, dy) < 48) return -1;
     let best = -1, bd = 1e9;
-    RADIAL.forEach((_, i) => { const p = radialPos(i, RADIAL.length); const dd = Math.hypot(dx - p.x, dy - p.y); if (dd < bd) { bd = dd; best = i; } });
+    quick.forEach((_, i) => { const p = radialPos(i, quick.length); const dd = Math.hypot(dx - p.x, dy - p.y); if (dd < bd) { bd = dd; best = i; } });
     return bd < 44 ? best : -1;
   };
   const hubRef2 = useRef({ t: 0, was: false });
@@ -270,14 +291,15 @@ export default function Orbit({ onClose, navigate, user, route }) {
   const onHubMove = (e) => { if (e.buttons || e.pointerType === 'touch') setHot(radialHit(e)); };
   const onHubUp = (e) => {
     const i = radialHit(e); setHot(-1);
-    if (i >= 0) { runRadial(RADIAL[i].id); return; }
+    if (i >= 0) { runRadial(quick[i].id); return; }
     const quick = performance.now() - hubRef2.current.t < 280;
     if (quick && hubRef2.current.was) setRadial(false);          // a quick tap on an already-open orb closes it
     else if (!quick) setRadial(false);                           // a long press that ended on the orb: cancel
   };
   const runRadial = (id) => {
     setRadial(false);
-    if (id === 'codex') close(() => fire('codexMini'));
+    if (id === 'pages') setPages(true);
+    else if (id === 'codex') close(() => window.dispatchEvent(new Event('chex:ai-open')));
     else if (id === 'voice') close(() => fire('voiceSearch'));
     else if (id === 'circle') close(() => fire('circleAsk'));
     else if (id === 'settings') close(() => navigate('settings'));
@@ -296,12 +318,15 @@ export default function Orbit({ onClose, navigate, user, route }) {
 
   return createPortal(
     <div ref={rootRef} className={rootCls} role="dialog" aria-modal="true" aria-label="CHEX Orbit" tabIndex={-1} onKeyDown={onKey} data-noswipe data-noorbit>
-      <div className="ob-bg" aria-hidden="true"><i className="ob-nebula" /><i className="ob-grid" /><i className="ob-stars s1" /><i className="ob-stars s2" /></div>
+      <div className="ob-bg" aria-hidden="true" />
       <button type="button" className="ob-scrim" aria-label="Close Orbit" tabIndex={-1} onClick={() => close()} />
 
       <header className="ob-head">
         <div className="ob-brand"><span className="ob-dot" aria-hidden="true" />CHEX <b>ORBIT</b></div>
         <div className="ob-head-btns">
+          <button type="button" className="ob-chip" onClick={() => { setRadial(false); setCust(true); }} aria-haspopup="dialog" aria-expanded={cust} title="Choose and reorder the cards and quick actions">
+            <OrbitIcon name="sliders" size={16} /><span>Customize</span>
+          </button>
           <button type="button" className="ob-chip" onClick={toggleFlat} disabled={still} aria-pressed={!is3d} title={still ? 'Reduced motion is on, so Orbit stays flat' : 'Switch between 3D and flat'}>
             <OrbitIcon name={is3d ? 'flat' : 'cube3'} size={16} /><span>{is3d ? 'Flat' : '3D'}</span>
           </button>
@@ -310,7 +335,6 @@ export default function Orbit({ onClose, navigate, user, route }) {
       </header>
 
       <main className="ob-stage" ref={stageRef} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp} onWheel={onWheel}>
-        {is3d && <div className="ob-floor" aria-hidden="true" />}
         <div className="ob-persp">
           <ul className="ob-ring" ref={ringRef} aria-label="Modules">
             {items.map((it, i) => (
@@ -320,7 +344,7 @@ export default function Orbit({ onClose, navigate, user, route }) {
                   style={{ '--hue': it.hue, '--i': i }} aria-label={`${it.label}. ${it.hint}${badge(it.id) ? `. ${badge(it.id)} new` : ''}`} aria-current={i === active ? 'true' : undefined}
                   onClick={() => activate(i)}>
                   <span className="ob-tilt">
-                    <span className="ob-face" /><span className="ob-edge" aria-hidden="true"><i /></span><span className="ob-glare" aria-hidden="true" />
+                    <span className="ob-face" /><span className="ob-glare" aria-hidden="true" />
                     <span className="ob-content">
                       <span className="ob-medal"><OrbitIcon name={it.icon} size={34} />{badge(it.id) > 0 && <span className="ob-badge">{badge(it.id) > 99 ? '99+' : badge(it.id)}</span>}</span>
                       <span className="ob-title">{it.label}</span>
@@ -339,10 +363,17 @@ export default function Orbit({ onClose, navigate, user, route }) {
 
 
       <footer className="ob-foot">
+        <div className="ob-aibar" data-testid="orbit-ai-pill">
+          <button type="button" className="ob-aibar-main" onClick={() => setAi('type')} aria-label="Open CHEX Orbit AI">
+            <span className="ob-aibar-orb" aria-hidden="true"><i /></span>
+            <span className="ob-aibar-t"><b>CHEX Orbit AI</b><span>Ask or tell me what to do</span></span>
+          </button>
+          <button type="button" className="ob-aibar-mic" onClick={() => setAi('talk')} aria-label="Speak to CHEX Orbit AI"><OrbitIcon name="mic" size={20} /></button>
+        </div>
         <p className="ob-tip">{is3d ? 'Swipe to orbit · tap a card to expand · hold the orb for quick actions' : 'Tap a card to expand it · open the orb for quick actions'}</p>
         <div className={`ob-hubwrap${radial ? ' open' : ''}`}>
-          {RADIAL.map((r, i) => {
-            const p = radialPos(i, RADIAL.length);
+          {quick.map((r, i) => {
+            const p = radialPos(i, quick.length);
             const label = r.id === 'sound' ? (sound ? 'Mute AI alerts' : 'Unmute AI alerts') : r.id === 'flat' ? (is3d ? 'Switch to flat' : 'Switch to 3D') : r.label;
             return (
               <button key={r.id} type="button" tabIndex={radial ? 0 : -1} className={`ob-rad${hot === i ? ' hot' : ''}`} style={{ '--x': `${p.x}px`, '--y': `${p.y}px`, '--n': i }}
@@ -362,7 +393,7 @@ export default function Orbit({ onClose, navigate, user, route }) {
       {wsItem && (
         <div className="ob-ws-back" onClick={(e) => { if (e.target === e.currentTarget) setWs(null); }}>
           <section className="ob-ws" style={{ '--hue': wsItem.hue }} role="region" aria-label={`${wsItem.label} workspace`}>
-            <span className="ob-edge" aria-hidden="true"><i /></span>
+            
             <header className="ob-ws-head">
               <span className="ob-medal sm"><OrbitIcon name={wsItem.icon} size={24} /></span>
               <div><h2>{wsItem.label}</h2><p>{wsItem.hint}</p></div>
@@ -375,6 +406,32 @@ export default function Orbit({ onClose, navigate, user, route }) {
           </section>
         </div>
       )}
+
+      {ai && <OrbitAI autoListen={ai === 'talk'} onClose={() => setAi(null)}
+        onRun={(how, t) => close(() => window.dispatchEvent(how === 'ask' ? new CustomEvent('chex:ai-open', { detail: { text: t } }) : new CustomEvent('chex:codex-open', { detail: { mode: 'full', run: t } })))} />}
+
+      {pages && (
+        <div className="ob-cu-back" onClick={(e) => { if (e.target === e.currentTarget) setPages(false); }}>
+          <section className="ob-cu" role="region" aria-label="All pages" data-testid="orbit-pages">
+            <header className="ob-cu-head">
+              <span className="ob-medal sm"><OrbitIcon name="grid" size={22} /></span>
+              <div><h2>All pages</h2><p>Every part of CHEX, one tap away.</p></div>
+              <button type="button" className="ob-chip ob-x" onClick={() => setPages(false)} aria-label="Close all pages" autoFocus><OrbitIcon name="close" size={18} /></button>
+            </header>
+            <div className="ob-cu-body">
+              <div className="ob-pg-grid">
+                {ALL_CARDS.filter(c => !c.adminOnly || user?.isAdmin).map(c => (
+                  <button key={c.id} type="button" className="ob-pg" onClick={() => { setPages(false); openItem(c); }}>
+                    <span className="ob-cu-ico"><OrbitIcon name={c.icon} size={22} /></span><span>{c.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {cust && <OrbitCustomize menu={menu} user={user} onChange={changeMenu} onClose={() => setCust(false)} />}
     </div>,
     document.body,
   );
@@ -446,12 +503,13 @@ function Workspace({ item, data, user, counts, close, navigate }) {
     </>);
   }
   if (item.id === 'codex') {
-    const talk = (m, t) => () => close(() => window.dispatchEvent(new CustomEvent('chex:codex-open', { detail: { mode: m, talk: t } })));
+    const chat = () => close(() => window.dispatchEvent(new Event('chex:ai-open')));
+    const cmd = (talk) => () => close(() => window.dispatchEvent(new CustomEvent('chex:codex-open', { detail: { mode: 'full', talk } })));
     return (<>
-      <p className="ob-muted">Ask anything, search, or tell Codex what to do in CHEX.</p>
+      <p className="ob-muted">Chat, ask for an image or a video, or tell the command bar what to do in CHEX.</p>
       <div className="ob-acts">
-        {act('Codex bar', 'codex', talk('mini', false))}{act('Full panel', 'chat', talk('full', false))}
-        {act('Talk', 'mic', talk('mini', true))}{act('Circle to Ask', 'lasso', () => close(() => fire('circleAsk')))}
+        {act('Chat with CHEX AI', 'chat', chat)}{act('Command bar', 'codex', cmd(false))}
+        {act('Talk', 'mic', cmd(true))}{act('Circle to Ask', 'lasso', () => close(() => fire('circleAsk')))}
       </div>
     </>);
   }
@@ -466,6 +524,9 @@ function Workspace({ item, data, user, counts, close, navigate }) {
       <p className="ob-muted">Find people, posts, hashtags and reels, or just say it.</p>
       <div className="ob-acts">{act('Search', 'search', () => goto('search'))}{act('Voice search', 'mic', () => close(() => fire('voiceSearch')))}{act('Search reels', 'reels', () => goto('search', { scope: 'reels' }))}</div>
     </>);
+  }
+  if (SAT_IDS.has(item.id)) {
+    return <p className="ob-muted">{item.hint}. Tap Open below to go there.</p>;   // the footer's Open button does the navigating
   }
   return (   // Home
     <>

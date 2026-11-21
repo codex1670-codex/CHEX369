@@ -1,3 +1,20 @@
+## CHEX ORBIT — Customize menu tab
+- New **Customize** button in Orbit's header opens a glass panel with two tabs: **Cards** (what sits on the ring) and **Quick actions** (what the orb shows).
+- Reorder with ↑ / ↓, hide with −, add with ＋. Any CHEX module can become a ring card: Games, Learn, 3D, Notes, Private, Coins and Settings (Admin only for admins). 3 to 12 cards, at least 2 quick actions. Changes apply live behind the panel; Escape closes only the panel.
+- Saved on this device (`chex.orbit.menu`), separate from the existing on/off + 3D setting. Bad or old data falls back to the default menu. "Reset to default" in the panel, and "Reset menu to default" in Settings → CHEX Orbit.
+- The ring keeps facing the same card when the list changes; Orbit opens facing the page you are on, using your order.
+- New `orbit/OrbitCustomize.jsx`, `test/orbitCustomize.test.jsx` (16 tests). Touched: orbitStore.js (menu model), Orbit.jsx, OrbitIcon.jsx (6 icons), orbit.css, OrbitSettings.jsx.
+
+## CHEX SMOOTH — adaptive 60 / 120 FPS (device-capability based)
+- New `frontend/src/perf/` (perfProfile.js, usePerf.js, PerfSettings.jsx, perf.css) + `test/perf.test.jsx` (18 tests).
+- **Measures the real screen refresh rate** (rAF sampling, snapped to 60/90/120) and reads memory, CPU cores, data-saver, reduced-motion and battery, then picks a frame target (30/60/120) and an effects level (`lite` / `balanced` / `ultra`). Published on `<html data-perf data-fps>` and as `--fps` / `--frame-ms`.
+- **Live watchdog:** while the person scrolls or drags it samples real frame times; 2 bad windows step down (120→60, then ultra→balanced→lite, then 30), 5 good windows step back up. Sampling is short and never runs in the background.
+- **Remembered on this device** (`chex.perf.cache`, 14 days, or until the screen changes): the next launch is smooth from the first frame with no re-test.
+- `balanced` and `ultra` keep today's look unchanged. Only `lite` (slow devices, reduced motion, low battery, Saver) drops live blur, drifting orbs, sheen/grain and spinning frame loops.
+- Games: `useLoop` now goes through a frame gate, so a 120 Hz phone that cannot hold 120 draws every 2nd frame, and game speed is identical at any rate. Page transitions fade only on `lite`.
+- Settings → Smooth performance: Auto / 120 FPS / 60 FPS / Saver, live status line, "Test my device again".
+- Touched: main.tsx (css + initPerf), Settings.jsx, games/ui.jsx, motion/PageTransition.tsx, motion/variants.ts.
+
 ## CHEX ORBIT — 3D spatial launcher (double-tap any screen)
 - New `frontend/src/orbit/` (Orbit.jsx, orbitStore.js, OrbitIcon.jsx, OrbitSettings.jsx, orbit.css) + `test/orbit.test.jsx`.
 - Double-tap / double-click a quiet part of any screen to open ORBIT (photos, videos, reels, buttons, fields and game boards keep their own taps, so double-tap-to-like is untouched).
@@ -478,3 +495,26 @@
 - **Settings → Smart gestures:** the 10 customizable gestures — Hold Share, Hold Search, Shake, Double-tap Home, Hold Home / Reels / Chats / Alerts / Profile / More — each bound to any action: quick-send circle, full share sheet, voice search, Codex bar / full panel / talk to Codex, Circle to Ask, scroll to top, mute AI alerts, or open any page. "Try it" button on each non-share gesture; reset button.
 - New code: `frontend/src/gestures/` (`gestureStore.js`, `GestureHub.jsx`, `QuickShare.jsx`, `VoiceSearch.jsx`, `SmartGestures.jsx`, `useShareGesture.js`, `gestures.css`). Small edits in `App.jsx` (bottom-bar hold/double-tap, hub), `Codex.jsx` (`chex:codex-open` event), `Settings.jsx`, `main.tsx`, `PostCard.jsx`, `ReelFeedCard.jsx`, `pages/Reels.jsx`. Preferences are kept on this device (`chex.gestures`).
 - Tests: `frontend/test/smartGestures.test.jsx` (16).
+
+## CHEX AI moved into the Orbit menu (no more floating bar)
+- The floating Codex bar is gone, along with Settings → Floating AI bar. CHEX AI is now a tile in the Orbit / ＋ / ⋯ menu and opens as the docked panel (hold-gestures and Orbit's Codex card open it the same way).
+- Menu icons are plain thin line icons like the bottom bar (no glass ball). They are "blown up" like bubbles when the menu opens, then softly breathe with a glow; hover puffs them; reduced-motion turns it off.
+- Files: Codex.jsx, App.jsx, Settings.jsx, moremenu.css, test/codexSend.test.jsx.
+
+## CHEX AI chat: talks like an AI, draws images, makes videos
+- New `frontend/src/components/ChexAI.jsx` (+ `chexai.css`): the **CHEX AI** tile in the Orbit / ＋ / ⋯ menu (and Orbit's CHEX AI card, radial orb and the Codex hold-gestures) opens a docked chat panel. No floating bar.
+- Talks through the existing server platform (`/api/ai/chat`, streamed): **Groq** answers chat, code and "what's in this picture"; **Cloudflare Workers AI** draws images and powers the mic (speech-to-text); replies can be read aloud with the device voice.
+- Auto / Chat / Image / Video buttons nudge the server's router. Buttons for engines that are off or not configured are disabled with the reason. Server limits and friendly "free limit reached" messages are shown in the chat.
+- App commands ("open reels") are handed to the old command bar, now titled **CHEX Commands** (also opened from the panel's lasso button).
+- Video: Groq and Cloudflare have no video model, so video uses the server's experimental free Video AI (Pollinations). It is OFF by default: switch it on in Admin → AI. 
+- Setup: `GROQ_API_KEY`, `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN` in `backend/.env` (see `.env.example`).
+- Tests: new `test/chexAi.test.jsx`; orbit/codex tests updated.
+
+## Smart gestures v2 — icon-hold gestures removed, screen-wide gestures added
+- **Removed:** Hold Home / Reels / Chats / Alerts / Profile / More icon gestures (Settings → Smart gestures, `holdProps` on those bottom-bar buttons).
+- **Added (work anywhere, no button needed):** Two-finger tap, Three-finger tap, Two-finger swipe up / down, Swipe in from the right edge, Swipe in from the left edge (mouse-drag works on desktop for edge swipes), and **Flip phone face-down**. All default to "Do nothing", except Flip face-down, which defaults to **Exit the app** (closes CHEX, or shows a dark "CHEX is closed" screen if the browser won't close the window).
+- Settings now groups gestures under *On a button*, *Anywhere on the screen* and *Move the phone*. Listeners only run while a gesture of that kind is switched on; pinch-zoom and text fields are ignored.
+- Code: `gestures/gestureStore.js` (`startScreenGestures`, `startFlipDetector`), `GestureHub.jsx`, `SmartGestures.jsx`, `gestures.css`, small edit in `App.jsx`. Tests updated in `test/smartGestures.test.jsx`, `test/orbit.test.jsx`.
+- **Flip face-down is now permanent:** laying the phone screen-down always exits CHEX (no dropdown, shown as "🚪 Exit the app · always on"). It pauses video/audio, tries `window.close()`, and otherwise shows a black "CHEX is closed — tap anywhere to come back" screen (a web page can't force-quit itself).
+- **Launcher menu (＋ / ⋯) is now a transparent glass card** (`solidnav.css`): translucent background with a light blur, dark labels/icons on the light theme.
+- **Chat "Seen" + swipe-to-reveal times** (`pages/Messages.jsx`, `solidnav.css`): the line under your newest message now says only "✓✓ Seen" (or "Seen by N / everyone" in groups) and appears only after someone has opened the chat — nothing is shown while unseen (no more "Sent · time"). Drag the message area right-to-left (finger or mouse) to slide the chat and reveal every message's time and date, plus the seen time on your seen messages; release and it springs back.

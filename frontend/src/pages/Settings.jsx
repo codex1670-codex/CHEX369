@@ -5,21 +5,21 @@ import { getStoredTheme, applyTheme } from '../theme.js';
 import { get3D, set3D } from '../ui3d.js';
 import { compactEnabled, setCompact } from '../compact.js';
 import Emoji3D from '../components/Emoji3D.jsx';
-import { floatingAiEnabled, setFloatingAi } from '../floatingAi.js';
 import { circleAskEnabled, setCircleAsk, loadPrefs, clearPrefs } from '../circleAsk/settings.js';
 import SmartGestures from '../gestures/SmartGestures.jsx';
 import OrbitSettings from '../orbit/OrbitSettings.jsx';
+import PerfSettings from '../perf/PerfSettings.jsx';
 import { getEmojiFx, setEmojiFx, splitEmojis, burstEmoji, DEFAULT_EMOJIS, EMOJI_PALETTE, MAX_EMOJIS } from '../emojiFx.js';
 import PermissionsPanel from '../components/PermissionsPanel.jsx';
 import SafetyLists from '../components/SafetyLists.jsx';
-import HistoryPanel from '../components/HistoryPanel.jsx';
+import { StoriesTab, ReelsTab, CallsTab } from '../components/HistoryPanel.jsx';
 import HighlightsRow from '../components/HighlightsRow.jsx';
 
 import { PROFILE_FRAMES } from '../profileFrames.js';
 import Avatar from '../components/Avatar.jsx';
 import { PREMIUM_THEMES, getPremiumId, applyPremium, clearPremium, getMotion, setMotion } from '../premiumThemes.js';
 
-function Appearance({ onOpenCoins }) {
+function Appearance({ onOpenCoins, section = 'themes' }) {
   const { user, setUser } = useAuth();
   const [frameBusy, setFrameBusy] = useState(false);
   const [premium, setPremium] = useState(getPremiumId());
@@ -56,14 +56,15 @@ function Appearance({ onOpenCoins }) {
 
   return (
     <div className="glass-card" style={{ padding: 20, marginBottom: 20 }}>
-      <div style={{ fontFamily: 'var(--font-display)', fontSize: 16, marginBottom: 4 }}>Appearance</div>
-      <p style={{ fontSize: 13, color: 'var(--text-mid)', marginBottom: 14 }}>Choose Light or Dark, or unlock the premium animated themes with CHEX coins. Changes apply instantly and are saved on this device.</p>
+      {section === 'themes' && <p style={{ fontSize: 13, color: 'var(--text-mid)', marginBottom: 14 }}>Choose Light or Dark, or unlock the premium animated themes with CHEX coins. Changes apply instantly and are saved on this device.</p>}
+      {section === 'frames' && <p style={{ fontSize: 13, color: 'var(--text-mid)', marginBottom: 14 }}>Animated frames around your profile picture. Unlock each one with CHEX coins.</p>}
 
-      <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
+      {section === 'themes' && <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
         <button className="btn-ghost" style={{ width: 'auto', padding: '9px 18px', background: theme === 'dark' ? 'var(--violet)' : undefined, borderColor: theme === 'dark' ? 'var(--violet)' : undefined, color: theme === 'dark' ? '#fff' : undefined }} onClick={() => pickMode('dark')}>🌙 Dark</button>
         <button className="btn-ghost" style={{ width: 'auto', padding: '9px 18px', background: theme === 'light' ? 'var(--violet)' : undefined, borderColor: theme === 'light' ? 'var(--violet)' : undefined, color: theme === 'light' ? '#fff' : undefined }} onClick={() => pickMode('light')}>☀️ Light</button>
-      </div>
+      </div>}
 
+{section === 'themes' && (<>
       <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>
         ✨ Premium themes <span style={{ color: 'var(--text-mid)', fontWeight: 600 }}>· animated · {themeCount} of {PREMIUM_THEMES.length} unlocked</span>
       </div>
@@ -88,6 +89,8 @@ function Appearance({ onOpenCoins }) {
         {premium && <button className="btn-ghost" style={{ width: 'auto', padding: '9px 18px' }} onClick={leavePremium}>Leave premium theme</button>}
       </div>
 
+      </>)}
+      {section === 'frames' && (<>
       <div style={{ fontSize: 13, fontWeight: 700, margin: '4px 0 8px' }}>
         🖼️ Premium profile frames <span style={{ color: 'var(--text-mid)', fontWeight: 600 }}>· animated · {frameCount} of {PROFILE_FRAMES.length} unlocked</span>
       </div>
@@ -109,6 +112,8 @@ function Appearance({ onOpenCoins }) {
       </div>
       {currentFrame && <div style={{ marginBottom: 18 }}><button className="btn-ghost" style={{ width: 'auto', padding: '9px 18px' }} disabled={frameBusy} onClick={() => pickFrame(null)}>Remove my frame</button></div>}
 
+      </>)}
+      {section === 'layout' && (<>
       <div style={{ fontSize: 13.5, fontWeight: 700, margin: '18px 0 8px' }}>Navigation &amp; buttons</div>
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 6 }}>
         <button className={`btn-ghost${look3d ? ' sel' : ''}`} style={{ width: 'auto', padding: '9px 18px' }} aria-pressed={look3d} onClick={() => setLook3d(set3D(true))}>🧊 3D</button>
@@ -122,18 +127,7 @@ function Appearance({ onOpenCoins }) {
         <button className={`btn-ghost${!compact ? ' sel' : ''}`} style={{ width: 'auto', padding: '9px 18px' }} aria-pressed={!compact} onClick={() => setCompactState(setCompact(false))}>☰ Full</button>
       </div>
       <p style={{ fontSize: 12.5, color: 'var(--text-mid)', margin: 0 }}>Compact shows icons instead of button words (hold one to see its name), one-line notes you can tap to open, and a menu bar that hides while you scroll.</p>
-    </div>
-  );
-}
-
-function FloatingAI() {
-  const [on, setOn] = useState(floatingAiEnabled());
-  const toggle = () => setOn(setFloatingAi(!on));
-  return (
-    <div className="glass-card" style={{ padding: 20, marginBottom: 20 }} data-testid="floating-ai-card">
-      <h3 style={{ margin: '0 0 4px', fontFamily: 'var(--font-display)', fontSize: 16 }}>🤖 Floating AI bar</h3>
-      <p style={{ fontSize: 12.5, color: 'var(--text-mid)', margin: '0 0 12px' }}>The Codex AI bar that floats on every page so you can talk or type to it anywhere. It is <b>off by default</b> — switch it on to show it, and off to hide it again.</p>
-      <button type="button" role="switch" aria-checked={on} className={`btn-ghost${on ? ' sel' : ''}`} style={{ width: 'auto', padding: '9px 18px' }} onClick={toggle}>{on ? '✓ Floating AI bar is ON' : 'Floating AI bar is OFF'}</button>
+      </>)}
     </div>
   );
 }
@@ -392,192 +386,226 @@ function BioAI() {
   );
 }
 
-export default function Settings({ onBack, onOpenProfile, onOpenCoins, onOpenStickies, onOpenMyLife }) {
-  const { user, clearSession, logout } = useAuth();
+function Card({ children, testid }) {
+  return <div className="glass-card" style={{ padding: 20, marginBottom: 20 }} data-testid={testid}>{children}</div>;
+}
+const H = ({ children }) => <div style={{ fontFamily: 'var(--font-display)', fontSize: 16, marginBottom: 4 }}>{children}</div>;
+const P = ({ children }) => <p style={{ fontSize: 13, color: 'var(--text-mid)', marginBottom: 14 }}>{children}</p>;
+
+function TwoFactor({ setStatus, setError }) {
   const [setup, setSetup] = useState(null);
   const [totpCode, setTotpCode] = useState('');
+  const [password, setPassword] = useState('');
+  const start = async () => { setError(''); try { setSetup(await api.setup2FA()); } catch (err) { setError(err.message); } };
+  const enable = async (e) => {
+    e.preventDefault(); setError('');
+    try { await api.enable2FA(totpCode.trim()); setStatus('Two-factor authentication is now enabled.'); setSetup(null); setTotpCode(''); }
+    catch (err) { setError(err.message); }
+  };
+  const disable = async () => {
+    setError('');
+    try { await api.disable2FA(password); setStatus('Two-factor authentication disabled.'); setPassword(''); }
+    catch (err) { setError(err.message); }
+  };
+  return (
+    <Card>
+      <H>Two-Factor Authentication</H>
+      <P>Adds a 6-digit authenticator code (TOTP) to login, on top of your password.</P>
+      {!setup && (
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button className="btn-primary" style={{ width: 'auto', padding: '9px 18px' }} onClick={start}>Set up 2FA</button>
+          <button className="btn-ghost" onClick={disable}>Disable 2FA</button>
+        </div>
+      )}
+      {setup && (
+        <form onSubmit={enable}>
+          <p style={{ fontSize: 12.5, color: 'var(--text-mid)', wordBreak: 'break-all', marginBottom: 10 }}>
+            Add this secret to any authenticator app (Google Authenticator, Authy, etc.): <b>{setup.secret}</b>
+          </p>
+          <div className="field"><label>Enter the 6-digit code it shows</label>
+            <input value={totpCode} onChange={e => setTotpCode(e.target.value)} maxLength={6} inputMode="numeric" required /></div>
+          <button className="btn-primary" style={{ width: 'auto', padding: '9px 18px' }} type="submit">Confirm &amp; enable</button>
+        </form>
+      )}
+      {!setup && (
+        <div className="field" style={{ marginTop: 14 }}><label>Password (to disable 2FA)</label>
+          <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Only needed to disable" /></div>
+      )}
+    </Card>
+  );
+}
+
+function Deactivate({ setError }) {
+  const { clearSession } = useAuth();
+  const [open, setOpen] = useState(false);
+  const [pw, setPw] = useState('');
+  // TEMPORARY: logging in again with the same username + password brings the account back.
+  const submit = async (e) => {
+    e.preventDefault(); setError('');
+    try { await api.deactivateAccount(pw); clearSession(); } catch (err) { setError(err.message); }
+  };
+  return (
+    <Card>
+      <H>Deactivate account (temporary)</H>
+      <P>Hides your profile and content. Nothing is deleted. Log in again with the same username and password to open the same account.</P>
+      {!open ? <button className="btn-ghost" type="button" onClick={() => setOpen(true)}>Deactivate my account…</button> : (
+        <form onSubmit={submit} autoComplete="off">
+          <div className="field"><label>Confirm your password</label>
+            <input type="password" name="deactivate-password" autoComplete="new-password" value={pw} onChange={e => setPw(e.target.value)} required /></div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn-ghost" type="submit">Deactivate</button>
+            <button className="btn-ghost" type="button" onClick={() => { setOpen(false); setPw(''); }}>Cancel</button>
+          </div>
+        </form>
+      )}
+    </Card>
+  );
+}
+
+function DeleteAccount({ setError }) {
+  const { clearSession } = useAuth();
+  const [open, setOpen] = useState(false);
+  const [pw, setPw] = useState('');
+  const [confirm, setConfirm] = useState('');
+  // PERMANENT: runs only after the password AND the word DELETE are typed and the button is pressed.
+  const submit = async (e) => {
+    e.preventDefault(); setError('');
+    if (confirm.trim().toUpperCase() !== 'DELETE') { setError('Type DELETE to confirm.'); return; }
+    if (!window.confirm('Permanently delete your account and all its data? This cannot be undone.')) return;
+    try { await api.deleteAccount(pw, confirm.trim()); clearSession(); } catch (err) { setError(err.message); }
+  };
+  const danger = { color: 'var(--pink-ink)', borderColor: 'rgba(255,92,147,0.35)' };
+  return (
+    <Card>
+      <div style={{ fontFamily: 'var(--font-display)', fontSize: 16, marginBottom: 4, color: 'var(--pink-ink)' }}>Delete account (permanent)</div>
+      <P>Permanently deletes your account, posts, reels, stories and messages right away. This cannot be undone. Your account is never deleted unless you complete this form.</P>
+      {!open ? <button className="btn-ghost" type="button" style={danger} onClick={() => setOpen(true)}>Delete my account…</button> : (
+        <form onSubmit={submit} autoComplete="off">
+          <div className="field"><label>Confirm your password</label>
+            <input type="password" name="delete-password" autoComplete="new-password" value={pw} onChange={e => setPw(e.target.value)} required /></div>
+          <div className="field"><label>Type DELETE to confirm</label>
+            <input name="delete-confirm" autoComplete="off" value={confirm} onChange={e => setConfirm(e.target.value)} required /></div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn-ghost" style={danger} type="submit">Delete permanently</button>
+            <button className="btn-ghost" type="button" onClick={() => { setOpen(false); setPw(''); setConfirm(''); }}>Cancel</button>
+          </div>
+        </form>
+      )}
+    </Card>
+  );
+}
+
+// One entry per page. The hub shows only the icon + name; each opens its own full page.
+const GROUPS = [
+  { title: 'Content', items: [
+    { id: 'stories', icon: '📖', name: 'Stories' },
+    { id: 'highlights', icon: '★', name: 'Story highlights' },
+    { id: 'reels', icon: '🎬', name: 'Reels' },
+    { id: 'calls', icon: '📞', name: 'Calls' },
+    { id: 'streak', icon: '🔥', name: 'Posting streak' },
+    { id: 'stickies', icon: '📌', name: 'Sticky notes' },
+  ] },
+  { title: 'Look & feel', items: [
+    { id: 'themes', icon: '🎨', name: 'Themes' },
+    { id: 'frames', icon: '🖼️', name: 'Profile frames' },
+    { id: 'layout', icon: '🧊', name: 'Navigation & compact' },
+    { id: 'emoji', icon: '✨', name: 'Emoji effects' },
+    { id: 'perf', icon: '⚡', name: 'Smooth performance' },
+  ] },
+  { title: 'Smart features', items: [
+    { id: 'orbit', icon: '🪐', name: 'CHEX Orbit' },
+    { id: 'gestures', icon: '👆', name: 'Smart gestures' },
+    { id: 'circle', icon: '⭕', name: 'Circle to Ask' },
+  ] },
+  { title: 'Account & privacy', items: [
+    { id: 'bio', icon: '✍️', name: 'Bio' },
+    { id: 'privacy', icon: '🔒', name: 'Account privacy' },
+    { id: 'online', icon: '🟢', name: 'Online status' },
+    { id: 'safety', icon: '🚫', name: 'Blocked & safety lists' },
+    { id: 'permissions', icon: '📱', name: 'Phone permissions' },
+    { id: 'mylife', icon: '🗝️', name: 'Private space' },
+    { id: '2fa', icon: '🛡️', name: 'Two-factor authentication' },
+    { id: 'deactivate', icon: '⏸', name: 'Deactivate account' },
+    { id: 'delete', icon: '🗑️', name: 'Delete account', danger: true },
+  ] },
+];
+const PAGE_NAME = Object.fromEntries(GROUPS.flatMap(g => g.items).map(i => [i.id, i.name]));
+
+export default function Settings({ onBack, onOpenProfile, onOpenCoins, onOpenStickies, onOpenMyLife }) {
+  const { user, logout } = useAuth();
+  const [page, setPage] = useState(null);   // null = the list of pages
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
-  const [password, setPassword] = useState('');          // 2FA-disable only
-  const [deactPassword, setDeactPassword] = useState('');
-  const [deactOpen, setDeactOpen] = useState(false);
-  const [delPassword, setDelPassword] = useState('');
-  const [delConfirm, setDelConfirm] = useState('');
-  const [delOpen, setDelOpen] = useState(false);
 
-  const start2FASetup = async () => {
-    setError('');
-    try { setSetup(await api.setup2FA()); } catch (err) { setError(err.message); }
+  const open = (id) => {
+    // Sticky notes and Private space already are full pages elsewhere in the app.
+    if (id === 'stickies' && onOpenStickies) { onOpenStickies(); return; }
+    if (id === 'mylife' && onOpenMyLife) { onOpenMyLife(); return; }
+    setStatus(''); setError(''); setPage(id);
+    window.scrollTo?.(0, 0);
   };
+  const back = () => { setStatus(''); setError(''); setPage(null); window.scrollTo?.(0, 0); };
 
-  const enable2FA = async (e) => {
-    e.preventDefault();
-    setError('');
-    try {
-      await api.enable2FA(totpCode.trim());
-      setStatus('Two-factor authentication is now enabled.');
-      setSetup(null);
-      setTotpCode('');
-    } catch (err) { setError(err.message); }
-  };
-
-  const disable2FA = async () => {
-    setError('');
-    try {
-      await api.disable2FA(password);
-      setStatus('Two-factor authentication disabled.');
-      setPassword('');
-    } catch (err) { setError(err.message); }
-  };
-
-  // TEMPORARY: logging in again with the same username + password brings the account back.
-  const deactivate = async (e) => {
-    e.preventDefault();
-    setError('');
-    try {
-      await api.deactivateAccount(deactPassword);
-      clearSession();
-    } catch (err) { setError(err.message); }
-  };
-
-  // PERMANENT: runs only after the password AND the word DELETE are typed and the button is pressed.
-  const deleteAccount = async (e) => {
-    e.preventDefault();
-    setError('');
-    if (delConfirm.trim().toUpperCase() !== 'DELETE') { setError('Type DELETE to confirm.'); return; }
-    if (!window.confirm('Permanently delete your account and all its data? This cannot be undone.')) return;
-    try {
-      await api.deleteAccount(delPassword, delConfirm.trim());
-      clearSession();
-    } catch (err) { setError(err.message); }
+  const renderPage = () => {
+    switch (page) {
+      case 'stories': return <Card><P>Your story archive. Only you can see this.</P><StoriesTab /></Card>;
+      case 'highlights': return (
+        <Card testid="highlights-card">
+          <P>Keep your best stories on your profile after the 24 hours are up. Tap ＋ to make one, or ✎ to rename, add or remove stories, change the cover, or delete it.</P>
+          <HighlightsRow username={user.username} isSelf />
+        </Card>);
+      case 'reels': return <Card><P>Reels you watched, liked, saved and posted. Only you can see this.</P><ReelsTab /></Card>;
+      case 'calls': return <Card><P>Your call log. Only you can see this.</P><CallsTab me={user} /></Card>;
+      case 'streak': return <PostingStreak />;
+      case 'themes': return <Appearance section="themes" onOpenCoins={onOpenCoins} />;
+      case 'frames': return <Appearance section="frames" onOpenCoins={onOpenCoins} />;
+      case 'layout': return <Appearance section="layout" onOpenCoins={onOpenCoins} />;
+      case 'emoji': return <EmojiEffects />;
+      case 'perf': return <PerfSettings />;
+      case 'orbit': return <OrbitSettings />;
+      case 'gestures': return <SmartGestures />;
+      case 'circle': return <CircleAskCard />;
+      case 'bio': return <BioAI />;
+      case 'privacy': return <AccountPrivacy />;
+      case 'online': return <OnlineStatus />;
+      case 'safety': return <SafetyLists onOpenProfile={onOpenProfile} />;
+      case 'permissions': return <Card><P>Notifications, microphone, camera, location and more. Tap Allow to get the phone's own permission box.</P><PermissionsPanel /></Card>;
+      case '2fa': return <TwoFactor setStatus={setStatus} setError={setError} />;
+      case 'deactivate': return <Deactivate setError={setError} />;
+      case 'delete': return <DeleteAccount setError={setError} />;
+      default: return null;
+    }
   };
 
   return (
     <div className="page-narrow">
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
-        <button className="btn-ghost" onClick={onBack}>← Back to profile</button>
-        <button className="btn-ghost settings-logout" onClick={logout}>⏻ Log out</button>
+        {page
+          ? <button className="btn-ghost" onClick={back}>← Settings</button>
+          : <button className="btn-ghost" onClick={onBack}>← Back to profile</button>}
+        {!page && <button className="btn-ghost settings-logout" onClick={logout}>⏻ Log out</button>}
       </div>
-      <h2 className="page-title">Account Settings</h2>
+      <h2 className="page-title">{page ? PAGE_NAME[page] : 'Settings'}</h2>
       {status && <div className="request-banner" style={{ marginBottom: 16 }}>{status}</div>}
-      {error && <div className="error-banner">{error}</div>}
+      {error && <div className="error-banner" style={{ marginBottom: 16 }}>{error}</div>}
 
-      <div className="glass-card" style={{ padding: 20, marginBottom: 20 }}>
-        <div style={{ fontFamily: 'var(--font-display)', fontSize: 16, marginBottom: 4 }}>Phone permissions</div>
-        <p style={{ fontSize: 13, color: 'var(--text-mid)', marginBottom: 14 }}>Notifications, microphone, camera, location and more. Tap Allow to get the phone's own permission box.</p>
-        <PermissionsPanel />
-      </div>
-      <PostingStreak />
-      {onOpenMyLife && (
-        <div className="glass-card" style={{ padding: 20, marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-          <div>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: 16, marginBottom: 4 }}>🔒 Private space</div>
-            <div style={{ fontSize: 13, color: 'var(--text-mid)' }}>A password-protected second profile with its own chats, calls, search, followers and a private gallery.</div>
+      {!page && GROUPS.map(g => (
+        <section key={g.title} style={{ marginBottom: 22 }}>
+          <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--text-mid)', margin: '0 4px 8px' }}>{g.title}</div>
+          <div className="glass-card" style={{ padding: 6 }}>
+            {g.items.map(it => (
+              <button key={it.id} type="button" className="settings-row" data-testid={`settings-row-${it.id}`} onClick={() => open(it.id)}
+                style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', padding: '13px 12px', background: 'transparent', border: 0, borderRadius: 12, cursor: 'pointer', textAlign: 'left', color: it.danger ? 'var(--pink-ink)' : 'var(--text-hi)', fontSize: 15, fontWeight: 600 }}>
+                <span aria-hidden="true" style={{ width: 28, textAlign: 'center', fontSize: 18 }}>{it.icon}</span>
+                <span style={{ flex: 1 }}>{it.name}</span>
+                <span aria-hidden="true" style={{ color: 'var(--text-low)', fontSize: 18 }}>›</span>
+              </button>
+            ))}
           </div>
-          <button className="btn-primary" style={{ width: 'auto', padding: '8px 18px' }} onClick={onOpenMyLife}>Open private space</button>
-        </div>
-      )}
-      <div className="glass-card" style={{ padding: 20, marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-        <div>
-          <div style={{ fontFamily: 'var(--font-display)', fontSize: 16, marginBottom: 4 }}>📌 Sticky notes &amp; voice reminders</div>
-          <div style={{ fontSize: 13, color: 'var(--text-mid)' }}>Jot a note with a time — CHEX reads it out loud when it’s due. Try “remind me to call mom at 5pm” in Codex.</div>
-        </div>
-        <button className="btn-primary" style={{ width: 'auto', padding: '8px 18px' }} onClick={onOpenStickies}>Open sticky notes</button>
-      </div>
+        </section>
+      ))}
 
-      <Appearance onOpenCoins={onOpenCoins} />
-      <FloatingAI />
-      <CircleAskCard />
-      <SmartGestures />
-      <OrbitSettings />
-      <EmojiEffects />
-      <AccountPrivacy />
-      <SafetyLists onOpenProfile={onOpenProfile} />
-      <div className="glass-card" style={{ padding: 20, marginBottom: 20 }} data-testid="highlights-card">
-        <div style={{ fontFamily: 'var(--font-display)', fontSize: 16, marginBottom: 4 }}>Story highlights</div>
-        <p style={{ fontSize: 13, color: 'var(--text-mid)', marginBottom: 4 }}>Keep your best stories on your profile after the 24 hours are up. Tap ＋ to make one, or ✎ to rename, add or remove stories, change the cover, or delete it.</p>
-        <HighlightsRow username={user.username} isSelf />
-      </div>
-      <HistoryPanel />
-      <OnlineStatus />
-
-      <div className="glass-card" style={{ padding: 20, marginBottom: 20 }}>
-        <div style={{ fontFamily: 'var(--font-display)', fontSize: 16, marginBottom: 4 }}>Two-Factor Authentication</div>
-        <p style={{ fontSize: 13, color: 'var(--text-mid)', marginBottom: 14 }}>
-          Adds a 6-digit authenticator code (TOTP) to login, on top of your password.
-        </p>
-        {!setup && (
-          <div style={{ display: 'flex', gap: 10 }}>
-            <button className="btn-primary" style={{ width: 'auto', padding: '9px 18px' }} onClick={start2FASetup}>Set up 2FA</button>
-            <button className="btn-ghost" onClick={disable2FA}>Disable 2FA</button>
-          </div>
-        )}
-        {setup && (
-          <form onSubmit={enable2FA}>
-            <p style={{ fontSize: 12.5, color: 'var(--text-mid)', wordBreak: 'break-all', marginBottom: 10 }}>
-              Add this secret to any authenticator app (Google Authenticator, Authy, etc.): <b>{setup.secret}</b>
-            </p>
-            <div className="field">
-              <label>Enter the 6-digit code it shows</label>
-              <input value={totpCode} onChange={e => setTotpCode(e.target.value)} maxLength={6} inputMode="numeric" required />
-            </div>
-            <button className="btn-primary" style={{ width: 'auto', padding: '9px 18px' }} type="submit">Confirm & enable</button>
-          </form>
-        )}
-        {!setup && (
-          <div className="field" style={{ marginTop: 14 }}>
-            <label>Password (to disable 2FA)</label>
-            <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Only needed to disable" />
-          </div>
-        )}
-      </div>
-
-      <div className="glass-card" style={{ padding: 20, marginBottom: 20 }}>
-        <div style={{ fontFamily: 'var(--font-display)', fontSize: 16, marginBottom: 4 }}>Deactivate account (temporary)</div>
-        <p style={{ fontSize: 13, color: 'var(--text-mid)', marginBottom: 14 }}>
-          Hides your profile and content. Nothing is deleted. Log in again with the same username and password to open the same account.
-        </p>
-        {!deactOpen ? (
-          <button className="btn-ghost" type="button" onClick={() => setDeactOpen(true)}>Deactivate my account…</button>
-        ) : (
-          <form onSubmit={deactivate} autoComplete="off">
-            <div className="field">
-              <label>Confirm your password</label>
-              <input type="password" name="deactivate-password" autoComplete="new-password" value={deactPassword} onChange={e => setDeactPassword(e.target.value)} required />
-            </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button className="btn-ghost" type="submit">Deactivate</button>
-              <button className="btn-ghost" type="button" onClick={() => { setDeactOpen(false); setDeactPassword(''); }}>Cancel</button>
-            </div>
-          </form>
-        )}
-      </div>
-
-      <div className="glass-card" style={{ padding: 20 }}>
-        <div style={{ fontFamily: 'var(--font-display)', fontSize: 16, marginBottom: 4, color: 'var(--pink-ink)' }}>Delete account (permanent)</div>
-        <p style={{ fontSize: 13, color: 'var(--text-mid)', marginBottom: 14 }}>
-          Permanently deletes your account, posts, reels, stories and messages right away. This cannot be undone.
-          Your account is never deleted unless you complete this form.
-        </p>
-        {!delOpen ? (
-          <button className="btn-ghost" type="button" style={{ color: 'var(--pink-ink)', borderColor: 'rgba(255,92,147,0.35)' }} onClick={() => setDelOpen(true)}>Delete my account…</button>
-        ) : (
-          <form onSubmit={deleteAccount} autoComplete="off">
-            <div className="field">
-              <label>Confirm your password</label>
-              <input type="password" name="delete-password" autoComplete="new-password" value={delPassword} onChange={e => setDelPassword(e.target.value)} required />
-            </div>
-            <div className="field">
-              <label>Type DELETE to confirm</label>
-              <input name="delete-confirm" autoComplete="off" value={delConfirm} onChange={e => setDelConfirm(e.target.value)} required />
-            </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button className="btn-ghost" style={{ color: 'var(--pink-ink)', borderColor: 'rgba(255,92,147,0.35)' }} type="submit">Delete permanently</button>
-              <button className="btn-ghost" type="button" onClick={() => { setDelOpen(false); setDelPassword(''); setDelConfirm(''); }}>Cancel</button>
-            </div>
-          </form>
-        )}
-      </div>
+      {page && renderPage()}
     </div>
   );
 }

@@ -28,6 +28,24 @@ export default function CameraCapture({ onCapture, onClose, onFallback, modes = 
   const [error, setError] = useState('');
   const [note, setNote] = useState('');
   const [attempt, setAttempt] = useState(0); // bump to reopen the camera after an error
+  // advanced controls
+  const [torchOk, setTorchOk] = useState(false);
+  const [torch, setTorch] = useState(false);
+  const [zoomCaps, setZoomCaps] = useState(null); // { min, max, step, hw }
+  const [zoom, setZoom] = useState(1);
+  const [timerSec, setTimerSec] = useState(0);    // 0 | 3 | 10 seconds before the shot / recording starts
+  const [countdown, setCountdown] = useState(0);
+  const [grid, setGrid] = useState(false);
+  const [quality, setQuality] = useState('fhd');  // hd 720p | fhd 1080p | uhd 4K
+  const [paused, setPaused] = useState(false);
+  const trackRef = useRef(null);
+  const countRef = useRef(null);
+  const pausedRef = useRef(false);
+  const elapsedRef = useRef(0);
+  const lastTickRef = useRef(0);
+  const pinchRef = useRef(null);
+  const zoomRef = useRef(1);
+  const QUALITY = { hd: [1280, 720], fhd: [1920, 1080], uhd: [3840, 2160] };
 
   const stopStream = useCallback(() => {
     streamRef.current?.getTracks().forEach((t) => t.stop());
@@ -42,11 +60,17 @@ export default function CameraCapture({ onCapture, onClose, onFallback, modes = 
       try {
         stopStream();
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: facing }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+          video: { facingMode: { ideal: facing }, width: { ideal: QUALITY[quality][0] }, height: { ideal: QUALITY[quality][1] } },
           audio: false, // the microphone is only asked for when a video recording starts
         });
         if (cancelled) { stream.getTracks().forEach((t) => t.stop()); return; }
         streamRef.current = stream;
+        const track = stream.getVideoTracks()[0];
+        trackRef.current = track;
+        const caps = track?.getCapabilities?.() || {};
+        setTorchOk(!!caps.torch); setTorch(false);
+        setZoomCaps(caps.zoom ? { min: caps.zoom.min || 1, max: Math.min(caps.zoom.max || 4, 10), step: caps.zoom.step || 0.1, hw: true } : { min: 1, max: 4, step: 0.1, hw: false });
+        setZoom(1); zoomRef.current = 1;
         if (videoRef.current) { videoRef.current.srcObject = stream; videoRef.current.play?.().catch(() => {}); }
         setReady(true);
         navigator.mediaDevices.enumerateDevices?.().then((d) => { if (!cancelled) setMulti(d.filter((x) => x.kind === 'videoinput').length > 1); }).catch(() => {});
@@ -59,12 +83,12 @@ export default function CameraCapture({ onCapture, onClose, onFallback, modes = 
       }
     })();
     return () => { cancelled = true; };
-  }, [facing, attempt, stopStream]);
+  }, [facing, attempt, quality, stopStream]);
 
   // leaving closes the camera and cancels any recording
   useEffect(() => () => {
     keepRef.current = false;
-    clearInterval(timerRef.current);
+    clearInterval(timerRef.current); clearInterval(countRef.current);
     if (recRef.current && recRef.current.state !== 'inactive') { try { recRef.current.stop(); } catch { /* ignore */ } }
     streamRef.current?.getTracks().forEach((t) => t.stop());
   }, []);
@@ -80,7 +104,9 @@ export default function CameraCapture({ onCapture, onClose, onFallback, modes = 
     if (!v || !v.videoWidth) return;
     const c = document.createElement('canvas');
     c.width = v.videoWidth; c.height = v.videoHeight;
-    c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
+    const z = zoomCaps && !zoomCaps.hw ? zoom : 1; // digital zoom: crop the centre, same as what the preview shows
+    const sw = c.width / z, sh = c.height / z;
+    c.getContext('2d').drawImage(v, (c.width - sw) / 2, (c.height - sh) / 2, sw, sh, 0, 0, c.width, c.height);
     c.toBlob((blob) => {
       if (!blob) { setNote('Could not take the photo. Try again.'); return; }
       const file = new File([blob], `photo-${Date.now()}.jpg`, { type: 'image/jpeg' });
@@ -91,7 +117,7 @@ export default function CameraCapture({ onCapture, onClose, onFallback, modes = 
   const stopRecording = (keep) => {
     keepRef.current = keep;
     clearInterval(timerRef.current);
-    setRecording(false);
+    setRecording(false); setPaused(false); pausedRef.current = false;
     if (recRef.current && recRef.current.state !== 'inactive') recRef.current.stop(); // finishes in onstop
   };
 
@@ -123,29 +149,65 @@ export default function CameraCapture({ onCapture, onClose, onFallback, modes = 
     };
     recRef.current = rec;
     keepRef.current = false;
-    startRef.current = Date.now();
+    elapsedRef.current = 0; lastTickRef.current = Date.now(); pausedRef.current = false; setPaused(false);
     setSecs(0);
     rec.start(500);
     setRecording(true);
     timerRef.current = setInterval(() => {
-      const s = (Date.now() - startRef.current) / 1000;
+      const now = Date.now();
+      if (!pausedRef.current) elapsedRef.current += now - lastTickRef.current;
+      lastTickRef.current = now;
+      const s = elapsedRef.current / 1000;
       setSecs(s);
       if (s >= MAX_VIDEO_SECONDS) stopRecording(true);
     }, 250);
   };
 
+  const go = () => { if (mode === 'photo') takePhoto(); else startRecording(); };
   const shutter = () => {
     if (!ready) return;
-    if (mode === 'photo') takePhoto();
-    else if (recording) stopRecording(true);
-    else startRecording();
+    if (countdown > 0) { clearInterval(countRef.current); setCountdown(0); return; } // tap again cancels the timer
+    if (recording) { stopRecording(true); return; }
+    if (!timerSec) { go(); return; }
+    let n = timerSec; setCountdown(n);
+    countRef.current = setInterval(() => {
+      n -= 1;
+      if (n <= 0) { clearInterval(countRef.current); setCountdown(0); go(); } else setCountdown(n);
+    }, 1000);
   };
-  const retake = () => { setShot(null); setNote(''); };
+  const cycleTimer = () => setTimerSec((t) => (t === 0 ? 3 : t === 3 ? 10 : 0));
+  const cycleQuality = () => setQuality((q) => (q === 'hd' ? 'fhd' : q === 'fhd' ? 'uhd' : 'hd'));
+  const toggleTorch = async () => {
+    const track = trackRef.current; if (!track) return;
+    try { await track.applyConstraints({ advanced: [{ torch: !torch }] }); setTorch(!torch); }
+    catch { setNote('Flash is not available on this camera.'); }
+  };
+  const togglePause = () => {
+    const rec = recRef.current; if (!rec) return;
+    try {
+      if (rec.state === 'recording') { rec.pause(); pausedRef.current = true; setPaused(true); }
+      else if (rec.state === 'paused') { rec.resume(); pausedRef.current = false; lastTickRef.current = Date.now(); setPaused(false); }
+    } catch { setNote('This browser cannot pause recording.'); }
+  };
+  const applyZoom = (z) => {
+    const caps = zoomCaps; if (!caps) return;
+    const v = Math.min(caps.max, Math.max(caps.min, z));
+    zoomRef.current = v; setZoom(v);
+    if (caps.hw) trackRef.current?.applyConstraints({ advanced: [{ zoom: v }] }).catch(() => {});
+  };
+  const dist = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+  const onTouchStart = (e) => { if (e.touches.length === 2) pinchRef.current = { d: dist(e.touches), z: zoomRef.current }; };
+  const onTouchMove = (e) => { if (e.touches.length === 2 && pinchRef.current) applyZoom(pinchRef.current.z * (dist(e.touches) / pinchRef.current.d)); };
+  const onTouchEnd = () => { pinchRef.current = null; };
+  const retake = () => { setShot(null); setNote(''); setZoom(1); zoomRef.current = 1; if (zoomCaps?.hw) trackRef.current?.applyConstraints({ advanced: [{ zoom: 1 }] }).catch(() => {}); };
   const use = () => { if (shot) onCapture?.(shot.file); };
 
   return (
-    <div className="cam-overlay" data-noswipe role="dialog" aria-modal="true" aria-label="Camera">
-      {!shot && <video ref={videoRef} className={`cam-video ${facing === 'user' ? 'mirror' : ''}`} autoPlay playsInline muted />}
+    <div className="cam-overlay" data-noswipe role="dialog" aria-modal="true" aria-label="Camera" onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
+      {!shot && <video ref={videoRef} className={`cam-video ${facing === 'user' ? 'mirror' : ''}`} autoPlay playsInline muted
+        style={zoomCaps && !zoomCaps.hw && zoom > 1 ? { transform: `${facing === 'user' ? 'scaleX(-1) ' : ''}scale(${zoom})` } : undefined} />}
+      {!shot && grid && <div className="cam-grid" aria-hidden><i /><i /><i /><i /></div>}
+      {countdown > 0 && <div className="cam-count" aria-live="assertive">{countdown}</div>}
       {shot && (shot.kind === 'video'
         ? <video className="cam-video" src={shot.url} controls autoPlay playsInline loop />
         : <img className="cam-video" src={shot.url} alt="Photo preview" />)}
@@ -153,7 +215,15 @@ export default function CameraCapture({ onCapture, onClose, onFallback, modes = 
       <div className="cam-top">
         <button type="button" className="cam-btn" onClick={() => (recording ? stopRecording(false) : onClose?.())} aria-label={recording ? 'Discard recording' : 'Close camera'}>✕</button>
         {recording && <div className="cam-rec"><span className="rec-dot" aria-hidden /> {fmtClock(secs)}</div>}
-        {!shot && multi && !recording && <button type="button" className="cam-btn" onClick={() => setFacing((f) => (f === 'user' ? 'environment' : 'user'))} aria-label="Switch camera">🔄</button>}
+        {!shot && (
+          <div className="cam-tools">
+            {torchOk && <button type="button" className={`cam-btn${torch ? ' on' : ''}`} onClick={toggleTorch} aria-pressed={torch} aria-label={torch ? 'Flash off' : 'Flash on'}>{torch ? '⚡' : '🔦'}</button>}
+            {!recording && <button type="button" className={`cam-btn cam-pill${timerSec ? ' on' : ''}`} onClick={cycleTimer} aria-label={`Timer ${timerSec ? timerSec + ' seconds' : 'off'}`}>⏱{timerSec ? `${timerSec}s` : ''}</button>}
+            <button type="button" className={`cam-btn${grid ? ' on' : ''}`} onClick={() => setGrid((g) => !g)} aria-pressed={grid} aria-label="Grid lines">▦</button>
+            {!recording && <button type="button" className="cam-btn cam-pill" onClick={cycleQuality} aria-label={`Quality ${quality}`}>{quality === 'hd' ? 'HD' : quality === 'fhd' ? 'FHD' : '4K'}</button>}
+            {multi && !recording && <button type="button" className="cam-btn" onClick={() => setFacing((f) => (f === 'user' ? 'environment' : 'user'))} aria-label="Switch camera">🔄</button>}
+          </div>
+        )}
       </div>
 
       {error && (
@@ -176,8 +246,18 @@ export default function CameraCapture({ onCapture, onClose, onFallback, modes = 
                 {modes.includes('video') && <button type="button" role="tab" aria-selected={mode === 'video'} className={mode === 'video' ? 'on' : ''} disabled={recording} onClick={() => setMode('video')}>Video</button>}
               </div>
             )}
-            <button type="button" className={`cam-shutter ${mode === 'video' ? 'video' : ''} ${recording ? 'rec' : ''}`} onClick={shutter} disabled={!ready && !error}
-              aria-label={mode === 'photo' ? 'Take photo' : recording ? 'Stop recording' : 'Start recording'} />
+            {ready && zoomCaps && zoomCaps.max > zoomCaps.min && (
+              <div className="cam-zoom">
+                <span>{zoom.toFixed(1)}×</span>
+                <input type="range" min={zoomCaps.min} max={zoomCaps.max} step={zoomCaps.step} value={zoom} onChange={(e) => applyZoom(Number(e.target.value))} aria-label="Zoom" />
+              </div>
+            )}
+            <div className="cam-shutter-row">
+              {recording && <button type="button" className="cam-btn cam-side" onClick={togglePause} aria-label={paused ? 'Resume recording' : 'Pause recording'}>{paused ? '▶' : '⏸'}</button>}
+              <button type="button" className={`cam-shutter ${mode === 'video' ? 'video' : ''} ${recording ? 'rec' : ''}`} onClick={shutter} disabled={!ready && !error}
+                aria-label={mode === 'photo' ? 'Take photo' : recording ? 'Stop recording' : 'Start recording'} />
+              {recording && <span className="cam-side" aria-hidden />}
+            </div>
           </>
         ) : (
           <div className="cam-review">

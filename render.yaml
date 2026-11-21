@@ -56,6 +56,27 @@ services:
         value: "100"
       - key: ANTHROPIC_API_KEY    # optional (enables the AI features)
         sync: false
+      # ---- CODEX AI + Circle to Ask (docs/CODEX_AI.md). Add keys in the Render dashboard; never commit them. ----
+      - key: FREE_ONLY_MODE         # keep "true": CODEX never uses paid services
+        value: "true"
+      - key: GROQ_API_KEY           # text + vision (console.groq.com → API Keys) — set in the Render dashboard
+        sync: false
+      - key: GROQ_TEXT_MODEL
+        value: openai/gpt-oss-120b
+      - key: GROQ_VISION_MODEL
+        value: qwen/qwen3.8-27b
+      - key: CLOUDFLARE_ACCOUNT_ID  # image + speech (Cloudflare Workers AI, Workers FREE plan)
+        sync: false
+      - key: CLOUDFLARE_API_TOKEN
+        sync: false
+      - key: CF_DAILY_NEURON_CAP    # CHEX's own limit; Cloudflare's free allowance is 10,000/day
+        value: "8000"
+      - key: TRIPO_API_KEY          # 3D Studio single-photo AI (platform.tripo3d.com). Meshy is switched off.
+        sync: false
+      - key: VIDEO_API_KEY          # optional; experimental video (no verified free quota)
+        sync: false
+      - key: PUBLIC_BASE_URL        # your site's https address (needed only for image-to-video)
+        sync: false
       # Calls between different networks / mobile data need a TURN relay for a steady connection.
       # Free options: Metered.ca, Cloudflare Calls TURN, or your own coturn. Comma-separate several URLs, e.g.
       # turn:host:80,turn:host:443?transport=tcp,turns:host:443?transport=tcp

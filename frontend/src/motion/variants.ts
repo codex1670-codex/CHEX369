@@ -9,6 +9,12 @@ export const pageVariants: Variants = {
   animate: { opacity: 1, y: 0, scale: 1, transition: ease },
 };
 
+/** Same entrance without the slide/scale – used on entry-level devices. */
+export const pageVariantsLite: Variants = {
+  initial: { opacity: 0 },
+  animate: { opacity: 1, transition: { duration: 0.16 } },
+};
+
 export const sheetVariants: Variants = {
   hidden: { y: '100%', opacity: 0.6 },
   visible: { y: 0, opacity: 1, transition: spring },

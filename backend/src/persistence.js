@@ -1,7 +1,7 @@
 // Durable storage on hosts with a throw-away disk (Render free/starter without a disk).
 //
-// The app's data model is SQLite (about 490 relational queries). Instead of rewriting all of it,
-// this module keeps the SQLite file - and every uploaded photo/video - safe in MongoDB
+// The app's data model is SQLite (≈490 relational queries). Instead of rewriting all of it,
+// this module keeps the SQLite file — and every uploaded photo/video — safe in MongoDB
 // (GridFS) so accounts survive restarts, sleeps and redeploys:
 //
 //   boot      : if there is no local database, download the newest valid snapshot from MongoDB
@@ -135,116 +135,55 @@ export function createPersistence({ uri = process.env.MONGODB_URI, storeFactory 
   // --- boot: restore the database before SQLite opens it --------------------------------
   async function restoreDatabase(targetPath) {
     dbPath = targetPath;
-
     if (!enabled) return 'disabled';
+    await connect(); // throws if MongoDB is unreachable -> server refuses to boot (by design)
 
-    await connect();
-
-    const haveLocal =
-      fs.existsSync(dbPath) && fs.statSync(dbPath).size > 0;
-
+    const haveLocal = fs.existsSync(dbPath) && fs.statSync(dbPath).size > 0;
     let result = 'local';
-
     if (!haveLocal) {
       const count = await store.count(DB_FILE);
       result = 'empty';
-
       for (let i = 0; i < count && result !== 'restored'; i++) {
         const tmp = dbPath + '.restore';
-
         try {
           const rs = await store.get(DB_FILE, i);
+          await pipeline(rs, zlib.createGunzip(), fs.createWriteStream(tmp));
 
-          if (!rs) {
-            throw new Error('snapshot stream unavailable');
-          }
-
-          await pipeline(
-            rs,
-            zlib.createGunzip(),
-            fs.createWriteStream(tmp)
-          );
-
-          const { default: Database } =
-            await import('better-sqlite3');
-
+          const { default: Database } = await import('better-sqlite3');
           const t = new Database(tmp, { readonly: true });
 
           let ok;
-
           try {
             ok = t.pragma('quick_check', { simple: true }) === 'ok';
           } finally {
             t.close();
           }
 
-          if (!ok) {
-            throw new Error('quick_check failed');
-          }
+          if (!ok) throw new Error('quick_check failed');
 
           for (const ext of ['-wal', '-shm']) {
-            fs.rmSync(dbPath + ext, {
-              force: true,
-              maxRetries: 6,
-              retryDelay: 150
-            });
-          }
-
-          if (
-            fs.existsSync(dbPath) &&
-            fs.statSync(dbPath).size === 0
-          ) {
-            fs.rmSync(dbPath, {
-              force: true,
-              maxRetries: 6,
-              retryDelay: 150
-            });
+            fs.rmSync(dbPath + ext, { force: true });
           }
 
           fs.renameSync(tmp, dbPath);
-
           result = 'restored';
-
-          log(
-            `database restored from MongoDB (snapshot #${i === 0 ? 'latest' : i + 1})`
-          );
-
+          log(`database restored from MongoDB (snapshot #${i === 0 ? 'latest' : i + 1})`);
         } catch (err) {
           warn(`snapshot #${i + 1} unusable: ${err.message}`);
 
-          // Cleanup must not mask the original restore failure.
           try {
-            fs.rmSync(tmp, {
-              force: true,
-              maxRetries: 6,
-              retryDelay: 150
-            });
+            fs.rmSync(tmp, { force: true });
           } catch (cleanupErr) {
-            if (
-              !['EBUSY', 'EPERM', 'EACCES'].includes(cleanupErr?.code)
-            ) {
-              warn(
-                `temporary restore cleanup failed: ${cleanupErr.message}`
-              );
-            }
+            warn(`temporary restore cleanup failed: ${cleanupErr.message}`);
           }
         }
       }
-
       if (count > 0 && result !== 'restored') {
-        throw new Error(
-          'MongoDB has saved snapshots but none could be restored. ' +
-          'Refusing to start with an empty database.'
-        );
+        throw new Error('MongoDB has saved snapshots but none could be restored. Refusing to start with an empty database.');
       }
-
-      if (result === 'empty') {
-        log('no snapshot in MongoDB yet — starting a fresh database');
-      }
+      if (result === 'empty') log('no snapshot in MongoDB yet — starting a fresh database');
     }
-
     await store.takeLease(INSTANCE);
-
     return result;
   }
 
@@ -329,7 +268,7 @@ export function createPersistence({ uri = process.env.MONGODB_URI, storeFactory 
       try {
         if (!(await store.checkLease(INSTANCE))) {
           stopped = true;
-          warn('another instance took over - this one stops writing to MongoDB');
+          warn('another instance took over — this one stops writing to MongoDB');
           return;
         }
         await snapshotDatabase(force);
@@ -384,7 +323,7 @@ export function createPersistence({ uri = process.env.MONGODB_URI, storeFactory 
         await runCycle(true); // make sure the first snapshot exists right away
         timer = setInterval(() => runCycle(), SYNC_MS);
         timer.unref?.();
-        log(`sync on - saving to MongoDB every ${SYNC_MS / 1000}s when something changed`);
+        log(`sync on — saving to MongoDB every ${SYNC_MS / 1000}s when something changed`);
       })();
     },
 

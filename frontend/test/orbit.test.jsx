@@ -69,7 +69,7 @@ describe('settings + fallback', () => {
     fireEvent.click(screen.getByLabelText(/Double-tap opens Orbit/));
     expect(store.loadOrbit().enabled).toBe(false);
   });
-  it('does not add a gesture to the ten Smart gestures', () => { expect(gestures.GESTURES).toHaveLength(10); });
+  it('does not add Orbit as a Smart gesture', () => { expect(gestures.GESTURES.some(g => /orbit/i.test(g.id))).toBe(false); });
 });
 
 describe('double-tap detector', () => {
@@ -97,7 +97,7 @@ describe('<Orbit> (flat fallback)', () => {
   it('shows every module and is an accessible dialog', () => {
     setup();
     expect(screen.getByRole('dialog', { name: 'CHEX Orbit' })).toBeTruthy();
-    for (const l of ['Home', 'Messages', 'Codex', 'Reels', 'Gallery', 'Profile', 'Alerts', 'Search']) expect(screen.getByRole('button', { name: new RegExp(`^${l}\\.`) })).toBeTruthy();
+    for (const l of ['Home', 'Messages', 'CHEX AI', 'Reels', 'Gallery', 'Profile', 'Alerts', 'Search']) expect(screen.getByRole('button', { name: new RegExp(`^${l}\\.`) })).toBeTruthy();
     expect(screen.getAllByRole('button', { name: 'Settings' }).length).toBeGreaterThan(0);
     expect(screen.queryByRole('button', { name: 'Admin' })).toBeNull();
   });
@@ -126,12 +126,12 @@ describe('<Orbit> (flat fallback)', () => {
     fireEvent.click(screen.getByRole('button', { name: /Open Gallery/ }));
     await waitFor(() => expect(navigate).toHaveBeenCalledWith('profile', 'me'));
   });
-  it('Codex opens the Codex bar instead of a page', async () => {
-    const got = vi.fn(); window.addEventListener('chex:codex-open', e => got(e.detail));
+  it('CHEX AI opens the chat panel instead of a page', async () => {
+    const got = vi.fn(); window.addEventListener('chex:ai-open', () => got());
     const { navigate } = setup();
-    fireEvent.click(screen.getByRole('button', { name: /^Codex\./ }));
-    fireEvent.click(screen.getByRole('button', { name: /Open Codex/ }));
-    await waitFor(() => expect(got).toHaveBeenCalledWith({ mode: 'mini' }));
+    fireEvent.click(screen.getByRole('button', { name: /^CHEX AI\./ }));
+    fireEvent.click(screen.getByRole('button', { name: /Open CHEX AI/ }));
+    await waitFor(() => expect(got).toHaveBeenCalled());
     expect(navigate).not.toHaveBeenCalled();
   });
   it('satellite cards navigate', async () => {

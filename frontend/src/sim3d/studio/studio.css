@@ -2,7 +2,7 @@
 .ss-root { width: 100%; max-width: 100%; box-sizing: border-box; overflow-wrap: anywhere; --ss-glass: color-mix(in srgb, var(--surface, #1a1d33) 78%, transparent); --ss-line: var(--border-soft, rgba(255,255,255,.14)); --ss-acc: var(--violet-bright, #8b7bff); --ss-text: var(--text, inherit); --ss-mid: var(--text-mid, #8b90a8);
   display: flex; flex-direction: column; gap: 10px; min-height: 70vh; }
 .ss-root button { font: inherit; }
-.ss-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 10px; border: 1px solid var(--ss-line); border-radius: 14px; background: var(--ss-glass); backdrop-filter: blur(14px); box-shadow: 0 6px 24px rgba(0,0,0,.18); }
+.ss-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 10px; border: 1px solid var(--ss-line); border-radius: 14px; background: var(--ss-glass);box-shadow: 0 6px 24px rgba(0,0,0,.18); }
 .ss-title { flex: 1 1 160px; min-width: 120px; font: 700 15px var(--font-display, inherit); background: transparent; color: var(--ss-text); border: 1px solid transparent; border-radius: 8px; padding: 6px 8px; }
 .ss-title:hover, .ss-title:focus { border-color: var(--ss-line); outline: none; }
 .ss-top-acts { display: flex; gap: 6px; flex-wrap: wrap; }
@@ -20,7 +20,7 @@
 .ss-body { display: grid; grid-template-columns: minmax(250px, 300px) minmax(0, 1fr) minmax(240px, 290px); gap: 10px; align-items: start; }
 .ss-body > * { min-width: 0; }
 .ss-body.wide { grid-template-columns: minmax(0, 1fr); } .ss-body.wide .ss-left { display: none; }
-.ss-left, .ss-right { max-height: 76vh; overflow-y: auto; border: 1px solid var(--ss-line); border-radius: 14px; background: var(--ss-glass); backdrop-filter: blur(14px); padding: 10px; scrollbar-width: thin; }
+.ss-left, .ss-right { max-height: 76vh; overflow-y: auto; border: 1px solid var(--ss-line); border-radius: 14px; background: var(--ss-glass);padding: 10px; scrollbar-width: thin; }
 .ss-main { position: relative; min-width: 0; }
 .ss-wide { width: 100%; box-sizing: border-box; overflow-wrap: anywhere; border: 1px solid var(--ss-line); border-radius: 14px; background: var(--ss-glass); padding: 14px; }
 
@@ -30,10 +30,10 @@
 .ss-canvas { position: absolute; inset: 0; }
 .ss-vbar { position: absolute; left: 8px; right: 8px; display: flex; gap: 5px; flex-wrap: wrap; z-index: 2; }
 .ss-vbar-top { top: 8px; } .ss-vbar-bottom { bottom: 8px; justify-content: center; }
-.ss-vbar button { background: rgba(10,12,30,.7); color: #fff; border: 1px solid rgba(255,255,255,.22); border-radius: 999px; padding: 4px 10px; font-size: 12px; cursor: pointer; backdrop-filter: blur(8px); }
+.ss-vbar button { background: rgba(10,12,30,.7); color: #fff; border: 1px solid rgba(255,255,255,.22); border-radius: 999px; padding: 4px 10px; font-size: 12px; cursor: pointer;}
 .ss-vbar button:hover { border-color: #fff; } .ss-vbar button.on { background: var(--violet, #6a5cff); border-color: var(--ss-acc); }
 .ss-empty, .ss-loading { position: absolute; inset: 0; z-index: 3; display: grid; place-content: center; justify-items: center; gap: 10px; color: #fff; background: rgba(8,10,24,.55); text-align: center; }
-.ss-loading { position: fixed; inset: auto 16px 16px auto; z-index: 50; display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 12px; background: var(--ss-glass); color: var(--ss-text); border: 1px solid var(--ss-line); backdrop-filter: blur(14px); }
+.ss-loading { position: fixed; inset: auto 16px 16px auto; z-index: 50; display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 12px; background: var(--ss-glass); color: var(--ss-text); border: 1px solid var(--ss-line);}
 .ss-spin { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--ss-line); border-top-color: var(--ss-acc); animation: ssSpin .8s linear infinite; }
 @keyframes ssSpin { to { transform: rotate(360deg); } }
 .ss-badge, .ss-hud { position: absolute; z-index: 2; left: 10px; bottom: 46px; color: #fff; font-size: 12px; background: rgba(10,12,30,.72); border: 1px solid rgba(255,255,255,.2); border-radius: 999px; padding: 3px 10px; }
@@ -88,7 +88,7 @@
 /* assistant + timeline + home */
 .ss-ai { margin-top: 12px; } .ss-ai-log { max-height: 240px; overflow-y: auto; display: grid; gap: 6px; padding: 6px; border: 1px solid var(--ss-line); border-radius: 10px; font-size: 12.5px; } .ss-ai-log p { margin: 0; padding: 6px 9px; border-radius: 10px; max-width: 92%; } .ss-ai-log .ai { background: var(--surface-hover, rgba(255,255,255,.07)); } .ss-ai-log .me { background: var(--violet, #6a5cff); color: #fff; justify-self: end; }
 .ss-chips { display: flex; gap: 4px; flex-wrap: wrap; margin: 6px 0; } .ss-chips button { font-size: 11px; border: 1px solid var(--ss-line); background: transparent; color: var(--ss-text); border-radius: 999px; padding: 3px 9px; cursor: pointer; } .ss-ai form { display: flex; gap: 4px; } .ss-ai input { flex: 1; min-width: 0; background: var(--surface, rgba(255,255,255,.06)); color: var(--ss-text); border: 1px solid var(--ss-line); border-radius: 8px; padding: 6px 8px; } .ss-ai form .btn-primary { width: 38px !important; padding: 0 !important; }
-.ss-timeline { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 8px 10px; border: 1px solid var(--ss-line); border-radius: 14px; background: var(--ss-glass); backdrop-filter: blur(14px); min-height: 44px; }
+.ss-timeline { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 8px 10px; border: 1px solid var(--ss-line); border-radius: 14px; background: var(--ss-glass);min-height: 44px; }
 .ss-tl-frames { display: flex; gap: 4px; overflow-x: auto; max-width: 46%; } .ss-tl-frames img { height: 34px; width: 34px; object-fit: cover; border-radius: 6px; } .ss-tl-frames img.off { opacity: .3; } .ss-tl-job { display: grid; gap: 2px; font-size: 12px; min-width: 150px; } .ss-tl-hist { display: flex; gap: 4px; margin-left: auto; overflow: hidden; } .ss-tl-hist em { font-style: normal; font-size: 11px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--ss-line); color: var(--ss-mid); white-space: nowrap; }
 .ss-home { display: grid; gap: 12px; } .ss-home header { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 6px; } .ss-home h2 { margin: 0; font-family: var(--font-display, inherit); }
 .ss-projects { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; } .ss-projects li { border: 1px solid var(--ss-line); border-radius: 14px; padding: 10px; background: var(--ss-glass); display: grid; gap: 6px; }

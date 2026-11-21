@@ -5,7 +5,7 @@ export const DEFAULT_EMOJIS = ['😍', '💖', '⭐', '🥳'];
 // Every emoji here has hand-drawn glossy 3D art (components/Emoji3D.jsx); anything else the user types gets a glossy 3D bubble.
 export const EMOJI_PALETTE = ['😀', '😄', '😍', '🥰', '😂', '😋', '😎', '😉', '🤩', '🥳', '😭', '😢', '😠', '😮', '💖', '⭐', '🔥', '🔔', '✨', '💎', '🪙', '🎈', '🏆'];
 export const MAX_EMOJIS = 10;
-const DEFAULTS = { onNotify: true, ambient: false, style: 'both', emojis: DEFAULT_EMOJIS };
+const DEFAULTS = { onNotify: true, ambient: false, style: 'falling', emojis: DEFAULT_EMOJIS };
 
 export function getEmojiFx() {
   try {
@@ -15,7 +15,7 @@ export function getEmojiFx() {
     return {
       onNotify: raw.onNotify !== false,
       ambient: raw.ambient === true,
-      style: ['falling', 'floating', 'both'].includes(raw.style) ? raw.style : 'both',
+      style: ['falling', 'floating', 'both'].includes(raw.style) ? raw.style : 'falling',
       emojis: emojis.length ? emojis : DEFAULTS.emojis,
     };
   } catch { return { ...DEFAULTS }; }

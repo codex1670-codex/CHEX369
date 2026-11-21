@@ -32,12 +32,12 @@
 :root:root:root:root :is(.as-sheet, .react-sheet, .reel-comments-sheet, .circle-sheet, .perm-sheet, .me-modal, .codex-panel, .circle-panel, .attach-menu) {
   border-radius: 28px; border: 1px solid var(--pg-edge);
   background: linear-gradient(150deg, var(--pg-card-a), var(--pg-card-b));
-  -webkit-backdrop-filter: blur(26px) saturate(1.7); backdrop-filter: blur(26px) saturate(1.7);
+
   box-shadow: 0 24px 60px -16px rgba(0, 0, 0, .55), inset 0 1px 0 rgba(255, 255, 255, .25);
 }
 :root[data-theme="light"]:root:root :is(.as-sheet, .react-sheet, .reel-comments-sheet, .circle-sheet, .perm-sheet, .me-modal, .codex-panel, .circle-panel, .attach-menu) { background: linear-gradient(150deg, rgba(255,255,255,.86), rgba(255,255,255,.6)); }
 :root:root:root:root :is(.as-sheet, .react-sheet, .reel-comments-sheet, .circle-sheet, .perm-sheet) { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
-:root:root:root:root .nav-rail { background: linear-gradient(180deg, var(--pg-card-a), var(--pg-card-b)); -webkit-backdrop-filter: blur(22px); backdrop-filter: blur(22px); border-right: 1px solid var(--pg-edge); }
+:root:root:root:root .nav-rail { background: linear-gradient(180deg, var(--pg-card-a), var(--pg-card-b));border-right: 1px solid var(--pg-edge); }
 
 /* ---- curved media, chat, toasts ---- */
 :root:root:root:root :is(.post-media-wrap, .post-media-wrap img, .post-media-wrap video, .pg-tile, .pv-tile) { border-radius: 16px; }
@@ -106,7 +106,7 @@ html[data-nav-dir="push"] .main-col { animation: pgPush .45s var(--pg-press) bac
    Settings → Permissions: a flat list inside its card (not a second floating card),
    matching icon tiles, tidy rows.
    ========================================================================== */
-:root:root:root:root .perm-panel { background: none; border: 0; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; border-radius: 0; padding: 0; gap: 8px; }
+:root:root:root:root .perm-panel { background: none; border: 0; box-shadow: none;border-radius: 0; padding: 0; gap: 8px; }
 :root:root:root:root .perm-panel .perm-row {
   padding: 8px 10px; border-radius: 18px; border: 1px solid var(--pg-edge);
   background: linear-gradient(145deg, var(--pg-card-a), var(--pg-card-b));
@@ -159,7 +159,7 @@ html[data-nav-dir="push"] .main-col { animation: pgPush .45s var(--pg-press) bac
 :root:root:root:root .reel-mute-btn,
 :root:root:root:root .reel-overlay-top .btn-ghost {
   background: rgba(255, 255, 255, .16); border: 1px solid rgba(255, 255, 255, .38); color: #fff;
-  -webkit-backdrop-filter: blur(14px) saturate(1.6); backdrop-filter: blur(14px) saturate(1.6);
+
   box-shadow: 0 8px 20px -8px rgba(0, 0, 0, .55), inset 0 1px 0 rgba(255, 255, 255, .35);
   transition: transform .4s var(--pg-press), background .25s ease;
 }
@@ -167,11 +167,11 @@ html[data-nav-dir="push"] .main-col { animation: pgPush .45s var(--pg-press) bac
 :root:root:root:root .reel-side-actions button:active, :root:root:root:root .reel-mute-btn:active { transform: scale(.88); }
 :root:root:root:root .reel-side-actions button.liked { background: rgba(255, 92, 147, .3); }
 :root:root:root:root .reel-mute-btn { width: 40px; height: 40px; font-size: 17px; }
-:root:root:root:root .reel-mute-hint { background: rgba(255, 255, 255, .18); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); border: 1px solid rgba(255, 255, 255, .35); }
+:root:root:root:root .reel-mute-hint { background: rgba(255, 255, 255, .18);border: 1px solid rgba(255, 255, 255, .35); }
 :root:root:root:root .reel-comments-sheet {
   border-radius: 26px 26px 0 0; border: 1px solid rgba(255, 255, 255, .22); border-bottom: 0;
   background: linear-gradient(160deg, rgba(40, 34, 70, .82), rgba(18, 14, 38, .9));
-  -webkit-backdrop-filter: blur(26px) saturate(1.6); backdrop-filter: blur(26px) saturate(1.6);
+
   box-shadow: 0 -18px 50px -12px rgba(0, 0, 0, .6), inset 0 1px 0 rgba(255, 255, 255, .22);
 }
 :root:root:root:root .reel-overlay-top .name { font-size: 13px; }
@@ -253,8 +253,8 @@ html[data-nav-dir="push"] .main-col { animation: pgPush .45s var(--pg-press) bac
   color: var(--text-hi);
 }
 :root:root:root:root:root :is(.glass-card, .post-card, .profile-header, .gx-row, .gm-listing, .coin-hero):where(:not(.note-composer, .story-composer, .gx-fullscreen *)) {
-  -webkit-backdrop-filter: blur(var(--eg-card-blur)) saturate(1.5);
-  backdrop-filter: blur(var(--eg-card-blur)) saturate(1.5);
+
+
 }
 
 /* ---------- page titles: a glass banner instead of the solid blue/gold bar ---------- */
@@ -265,7 +265,7 @@ html[data-nav-dir="push"] .main-col { animation: pgPush .45s var(--pg-press) bac
   color: var(--text-hi); text-shadow: none; text-align: center;
   border: 1px solid var(--eg-rim); border-radius: 22px;
   box-shadow: var(--eg-shadow), inset 0 1px 0 var(--eg-rim-hi);
-  -webkit-backdrop-filter: blur(var(--eg-blur)) saturate(1.6); backdrop-filter: blur(var(--eg-blur)) saturate(1.6);
+
   padding: 11px 18px; letter-spacing: .2px;
 }
 
@@ -277,7 +277,7 @@ html[data-nav-dir="push"] .main-col { animation: pgPush .45s var(--pg-press) bac
   border: 1px solid var(--eg-gold-rim);
   color: var(--eg-gold-ink) !important; text-shadow: 0 1px 0 rgba(255, 255, 255, .4);
   box-shadow: var(--eg-gold-glow), inset 0 1px 0 rgba(255, 255, 255, .8), inset 0 -1px 0 rgba(180, 90, 0, .25);
-  -webkit-backdrop-filter: blur(10px) saturate(1.5); backdrop-filter: blur(10px) saturate(1.5);
+
 }
 :root:root:root:root:root :is(.btn-primary, .gm-btn.primary, .gx-btn-gold, .lx-btn.gold):hover:not(:disabled) { filter: brightness(1.06) saturate(1.05); }
 :root:root:root:root:root :is(.btn-primary, .gm-btn.primary, .gx-btn-gold, .lx-btn.gold):active:not(:disabled) { box-shadow: 0 4px 10px -6px rgba(255, 150, 20, .6), inset 0 1px 0 rgba(255, 255, 255, .6); }
@@ -291,7 +291,7 @@ html[data-nav-dir="push"] .main-col { animation: pgPush .45s var(--pg-press) bac
   color: var(--text-hi);
   border: 1px solid var(--eg-rim);
   box-shadow: var(--eg-pop), inset 0 1px 0 var(--eg-rim-hi);
-  -webkit-backdrop-filter: blur(12px) saturate(1.5); backdrop-filter: blur(12px) saturate(1.5);
+
   text-shadow: none;
 }
 :root:root:root:root:root :is(.btn-ghost, .gx-btn-light, .gm-chipbtn, .gx-chip, .lx-btn.ghost):hover:not(:disabled) {
@@ -372,11 +372,11 @@ html[data-nav-dir="push"] .main-col { animation: pgPush .45s var(--pg-press) bac
 :root:root:root:root:root .reel-overlay-top { padding: 14px 14px 36px; background: linear-gradient(rgba(0, 0, 0, .5), transparent); }
 :root:root:root:root:root .reel-overlay-top > div:has(> .name) {
   padding: 5px 14px; border-radius: 999px; background: rgba(255, 255, 255, .14); border: 1px solid rgba(255, 255, 255, .3);
-  -webkit-backdrop-filter: blur(14px) saturate(1.6); backdrop-filter: blur(14px) saturate(1.6);
+
 }
 /* caption sits in a glass panel with curved corners */
 :root:root:root:root:root .reel-overlay-bottom { left: 12px; right: 78px; bottom: 14px; padding: 12px 16px; border-radius: 24px; background: rgba(255, 255, 255, .13); border: 1px solid rgba(255, 255, 255, .28);
-  -webkit-backdrop-filter: blur(18px) saturate(1.6); backdrop-filter: blur(18px) saturate(1.6); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .3), 0 14px 28px -14px rgba(0, 0, 0, .6); }
+box-shadow: inset 0 1px 0 rgba(255, 255, 255, .3), 0 14px 28px -14px rgba(0, 0, 0, .6); }
 :root:root:root:root:root .reel-side-actions { right: 12px; bottom: 16px; }
 :root:root:root:root:root .reel-comments-sheet { border-radius: 30px 30px 0 0; }
 :root:root:root:root:root .reel-stage .reel-video { border-radius: inherit; }
@@ -434,7 +434,7 @@ html[data-nav-dir="push"] .main-col { animation: pgPush .45s var(--pg-press) bac
 :root:root:root:root:root .gx-fullscreen .gm-frame {
   color: var(--text-hi); border: 1px solid var(--eg-rim); border-radius: 34px;
   background: linear-gradient(180deg, var(--eg-sheen), transparent 30%), linear-gradient(150deg, var(--eg-a), var(--eg-b));
-  -webkit-backdrop-filter: blur(26px) saturate(1.6); backdrop-filter: blur(26px) saturate(1.6);
+
   box-shadow: 0 34px 70px -26px rgba(0, 0, 0, .7), inset 0 1px 0 var(--eg-rim-hi);
   transform-style: flat; animation: egIn .55s var(--eg-spring) both;
 }
@@ -470,7 +470,7 @@ html[data-nav-dir="push"] .main-col { animation: pgPush .45s var(--pg-press) bac
   background: linear-gradient(180deg, var(--eg-sheen), transparent 60%), linear-gradient(145deg, var(--eg-a), var(--eg-b));
   color: var(--text-hi); border: 1px solid var(--eg-rim); border-radius: 18px;
   box-shadow: var(--eg-pop), inset 0 1px 0 var(--eg-rim-hi);
-  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+
   transition: transform .35s var(--eg-spring), box-shadow .25s ease, background .2s ease;
 }
 :root:root:root:root:root .gx-fullscreen .gm-btn:hover:not(:disabled) { transform: translateY(-1px); }
@@ -508,7 +508,7 @@ html[data-nav-dir="push"] .main-col { animation: pgPush .45s var(--pg-press) bac
 :root:root:root:root:root .gx-fullscreen .gm-overlay {
   border-radius: 26px; border: 1px solid rgba(255, 255, 255, .22);
   background: radial-gradient(circle at 50% 25%, rgba(70, 90, 170, .7), rgba(8, 11, 32, .9));
-  -webkit-backdrop-filter: blur(14px) saturate(1.4); backdrop-filter: blur(14px) saturate(1.4);
+
 }
 :root:root:root:root:root .gx-fullscreen .gm-overlay-title { color: #ffe08a; text-shadow: 0 0 26px rgba(255, 200, 70, .45); animation: none; }
 :root:root:root:root:root .gx-fullscreen .gm-overlay-sub { color: #dbe2ff; }
@@ -555,7 +555,7 @@ html[data-nav-dir="push"] .main-col { animation: pgPush .45s var(--pg-press) bac
 :root:root:root:root:root :is(button, a, input, textarea, select):focus-visible { outline: 2px solid var(--violet-bright); outline-offset: 2px; }
 
 /* ---------- fallbacks ---------- */
-@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+@media all {
   :root { --eg-a: rgba(40, 52, 110, .82); --eg-b: rgba(20, 28, 70, .72); }
   :root[data-theme="light"] { --eg-a: rgba(255, 255, 255, .97); --eg-b: rgba(255, 248, 232, .95); }
 }

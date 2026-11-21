@@ -10,16 +10,7 @@
 @keyframes obOut { to { opacity: 0; scale: .97; } }
 
 /* ---- space ---- */
-.ob-bg { position: absolute; inset: 0; z-index: 0; pointer-events: none; background: #050816; overflow: hidden; }
-.ob-bg i { position: absolute; display: block; }
-.ob-nebula { inset: -20%; background: radial-gradient(40% 36% at 28% 30%, rgba(80, 120, 255, .38), transparent 70%), radial-gradient(38% 34% at 74% 62%, rgba(190, 80, 255, .30), transparent 70%), radial-gradient(30% 26% at 55% 15%, rgba(38, 224, 201, .20), transparent 70%);
-  translate: calc(var(--tx) * -22px - var(--th) * .08px) calc(var(--ty) * -16px); will-change: translate; }
-.ob-grid { inset: auto -30% -8% -30%; height: 46%; opacity: .5; transform: perspective(380px) rotateX(64deg); transform-origin: 50% 0;
-  background-image: linear-gradient(rgba(111, 149, 255, .35) 1px, transparent 1px), linear-gradient(90deg, rgba(111, 149, 255, .35) 1px, transparent 1px); background-size: 46px 46px;
-  -webkit-mask: linear-gradient(#000, transparent 85%); mask: linear-gradient(#000, transparent 85%); background-position: calc(var(--th) * 1px) 0; }
-.ob-stars { inset: -10%; background-repeat: repeat; will-change: translate; }
-.ob-stars.s1 { background-image: radial-gradient(1.4px 1.4px at 20px 30px, #fff, transparent), radial-gradient(1px 1px at 90px 120px, #cfe0ff, transparent), radial-gradient(1.2px 1.2px at 150px 60px, #fff, transparent); background-size: 190px 170px; opacity: .8; translate: calc(var(--tx) * -10px - var(--th) * .25px) calc(var(--ty) * -8px); }
-.ob-stars.s2 { background-image: radial-gradient(2px 2px at 60px 80px, #fff, transparent), radial-gradient(1.6px 1.6px at 170px 20px, #b9c9ff, transparent); background-size: 260px 240px; opacity: .6; translate: calc(var(--tx) * -26px - var(--th) * .55px) calc(var(--ty) * -20px); }
+.ob-bg { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
 .ob-scrim { position: absolute; inset: 0; z-index: 1; border: 0; background: transparent; cursor: default; }
 
 /* ---- header ---- */
@@ -31,7 +22,7 @@
 .ob-head-btns { display: flex; gap: 8px; }
 .ob-chip { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 13px; border-radius: 99px; color: #fff; font: 600 12.5px/1 inherit; cursor: pointer;
   border: 1px solid rgba(255, 255, 255, .24); background: linear-gradient(150deg, rgba(255, 255, 255, .20), rgba(255, 255, 255, .05)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .45);
-  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); transition: transform .15s ease, background .15s ease; }
+transition: transform .15s ease, background .15s ease; }
 .ob-chip:active { transform: scale(.94); }
 .ob-chip:disabled { opacity: .5; cursor: default; }
 .ob-chip.ob-x { width: 36px; padding: 0; justify-content: center; }
@@ -45,8 +36,6 @@
 .ob-ring { list-style: none; margin: 0; padding: 0; position: absolute; left: 50%; top: 50%; width: var(--W); height: var(--H); margin-left: calc(var(--W) / -2); margin-top: calc(var(--H) / -2);
   transform-style: preserve-3d; transform: translate3d(0, 0, calc(var(--R) * -1)); will-change: transform; }
 .ob-slot { position: absolute; inset: 0; transform-style: preserve-3d; transform: rotateY(var(--a)) translateZ(var(--R)); }
-.ob-floor { position: absolute; left: 50%; bottom: 3%; width: min(90%, 560px); height: 90px; translate: -50% 0; border-radius: 50%; pointer-events: none;
-  background: radial-gradient(closest-side, rgba(111, 149, 255, .42), rgba(190, 80, 255, .16) 55%, transparent 75%); filter: blur(6px); }
 
 /* ---- a glass card ---- */
 .ob-card { --d: 0; --f: 0; position: absolute; inset: 0; width: 100%; height: 100%; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer;
@@ -57,17 +46,11 @@
 .ob-face { position: absolute; inset: 0; border-radius: 28px; overflow: hidden;
   background: linear-gradient(155deg, hsla(var(--hue), 100%, 82%, .20), rgba(255, 255, 255, .05) 42%, hsla(calc(var(--hue) + 50), 100%, 60%, .14));
   box-shadow: inset 0 1.5px 0 rgba(255, 255, 255, .55), inset 0 -34px 60px hsla(var(--hue), 100%, 60%, .13), 0 30px 70px rgba(0, 0, 0, .45), 0 0 36px hsla(var(--hue), 100%, 62%, calc(.10 + var(--f) * .26)); }
-.ob-card.near .ob-face, .ob-ws { -webkit-backdrop-filter: blur(22px) saturate(180%); backdrop-filter: blur(22px) saturate(180%); }
+.ob-card.near .ob-face, .ob-ws {}
 .ob-face::after { content: ''; position: absolute; inset: 0; background: linear-gradient(115deg, rgba(255, 255, 255, .28), rgba(255, 255, 255, 0) 38%, rgba(255, 255, 255, 0) 62%, rgba(255, 255, 255, .10)); pointer-events: none; }
 .ob-glare { position: absolute; inset: 0; border-radius: 28px; pointer-events: none; opacity: 0; transition: opacity .3s; mix-blend-mode: screen; background: radial-gradient(circle at var(--mx) var(--my), rgba(255, 255, 255, .42), transparent 46%); }
 .ob-card.on .ob-glare { opacity: .8; }
 /* neon edge light: a spinning conic gradient seen only through a 1.5px frame */
-.ob-edge { position: absolute; inset: 0; border-radius: 28px; padding: 1.5px; pointer-events: none; overflow: hidden;
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0); }
-.ob-edge i { position: absolute; left: 50%; top: 50%; width: 220%; aspect-ratio: 1; translate: -50% -50%; opacity: calc(.45 + var(--f) * .55);
-  background: conic-gradient(from 0deg, hsl(var(--hue), 100%, 72%), transparent 22%, hsl(calc(var(--hue) + 70), 100%, 70%) 48%, transparent 72%, hsl(var(--hue), 100%, 72%)); }
-.ob-card.on .ob-edge i, .ob-ws .ob-edge i { animation: obSpin 6s linear infinite; }
-@keyframes obSpin { to { rotate: 360deg; } }
 /* content floats in front of the glass → real parallax when the card turns */
 .ob-content { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 18px; text-align: center; transform: translateZ(38px); pointer-events: none; }
 .ob-medal { position: relative; display: grid; place-items: center; width: 78px; height: 78px; border-radius: 26px; color: #fff;
@@ -91,7 +74,7 @@
 .ob-sats::-webkit-scrollbar { display: none; }
 .ob-sat { flex: 0 0 auto; scroll-snap-align: center; display: flex; flex-direction: column; align-items: center; gap: 6px; width: 72px; padding: 10px 4px 8px; border-radius: 20px; color: #fff; font: 600 11px/1.1 inherit; cursor: pointer;
   border: 1px solid rgba(255, 255, 255, .22); background: linear-gradient(150deg, rgba(255, 255, 255, .17), rgba(255, 255, 255, .04)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .45), 0 12px 24px rgba(0, 0, 0, .3);
-  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); transition: transform .25s cubic-bezier(.2, 1.3, .4, 1); animation: obFloat 5s ease-in-out infinite; animation-delay: calc(var(--k) * -.7s); }
+transition: transform .25s cubic-bezier(.2, 1.3, .4, 1); animation: obFloat 5s ease-in-out infinite; animation-delay: calc(var(--k) * -.7s); }
 .ob-sat:hover, .ob-sat:focus-visible { transform: translateZ(26px) rotateX(-8deg) translateY(-4px); animation-play-state: paused; }
 .ob-sat:active { transform: scale(.93); }
 .ob-sat-ico { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 14px; background: rgba(255, 255, 255, .12); }
@@ -110,7 +93,7 @@
 .ob-hub-ring { position: absolute; inset: 0; border-radius: 50%; border: 1.5px solid rgba(255, 255, 255, .4); animation: obPulse 2.6s ease-out infinite; }
 @keyframes obPulse { from { transform: scale(.9); opacity: .9; } to { transform: scale(1.5); opacity: 0; } }
 .ob-rad { position: absolute; left: 50%; top: 50%; width: 52px; height: 52px; margin: -26px 0 0 -26px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, .35); color: #fff; cursor: pointer; display: grid; place-items: center;
-  background: linear-gradient(150deg, rgba(255, 255, 255, .28), rgba(255, 255, 255, .07)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .6), 0 10px 22px rgba(0, 0, 0, .4); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+  background: linear-gradient(150deg, rgba(255, 255, 255, .28), rgba(255, 255, 255, .07)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .6), 0 10px 22px rgba(0, 0, 0, .4);
   transform: translate(0, 0) scale(.2); opacity: 0; pointer-events: none; transition: transform .38s cubic-bezier(.2, 1.35, .35, 1), opacity .2s ease; transition-delay: calc(var(--n) * 32ms); }
 .ob-hubwrap.open .ob-rad { transform: translate(var(--x), var(--y)) scale(1); opacity: 1; pointer-events: auto; }
 .ob-rad.hot { transform: translate(var(--x), var(--y)) scale(1.28) !important; background: linear-gradient(150deg, rgba(38, 224, 201, .6), rgba(111, 149, 255, .3)); box-shadow: 0 0 0 2px rgba(38, 224, 201, .9), 0 0 26px rgba(38, 224, 201, .7); }
@@ -154,21 +137,172 @@
 .ob-flat .ob-ring { position: static; width: auto; height: auto; margin: 0 auto; max-width: 620px; transform: none !important; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; will-change: auto; }
 .ob-flat .ob-slot { position: static; transform: none; aspect-ratio: 1 / 1.05; }
 .ob-flat .ob-card { opacity: 1; backface-visibility: visible; }
-.ob-flat .ob-card .ob-face { -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); }
+.ob-flat .ob-card .ob-face {}
 .ob-flat .ob-tilt, .ob-flat .ob-card.on .ob-tilt { transform: none; }
 .ob-flat .ob-content { transform: none; } .ob-flat .ob-medal { width: 58px; height: 58px; border-radius: 20px; } .ob-flat .ob-title { font-size: 18px; }
-.ob-flat .ob-more, .ob-flat .ob-dots, .ob-flat .ob-floor, .ob-flat .ob-card.on .ob-edge i { display: none; }
+.ob-flat .ob-more, .ob-flat .ob-dots { display: none; }
 .ob-flat .ob-card.on .ob-face { box-shadow: inset 0 1.5px 0 rgba(255, 255, 255, .55), 0 0 0 2px hsl(var(--hue), 100%, 72%); }
-.ob-flat .ob-grid { display: none; }
 
 /* ---- lite: slow GPU → no live blur, no edge spin ---- */
-.ob-lite .ob-card.near .ob-face, .ob-lite .ob-ws, .ob-lite .ob-sat, .ob-lite .ob-chip, .ob-lite .ob-rad { -webkit-backdrop-filter: none; backdrop-filter: none; }
+.ob-lite .ob-card.near .ob-face, .ob-lite .ob-ws, .ob-lite .ob-sat, .ob-lite .ob-chip, .ob-lite .ob-rad {}
 .ob-lite .ob-face { background: linear-gradient(155deg, hsla(var(--hue), 70%, 40%, .55), rgba(16, 22, 60, .8)); }
 .ob-lite .ob-ws { background: rgba(16, 22, 60, .94); }
-.ob-lite .ob-card.on .ob-edge i, .ob-lite .ob-ws .ob-edge i, .ob-lite .ob-sat, .ob-lite .ob-hub-ring { animation: none; }
+.ob-lite .ob-sat, .ob-lite .ob-hub-ring { animation: none; }
 
 /* ---- reduced motion: nothing moves ---- */
 .ob-still, .ob-still * { animation: none !important; transition: none !important; }
 @media (prefers-reduced-motion: reduce) { .ob-root, .ob-root * { animation: none !important; transition: none !important; } }
 @media (max-height: 640px) { .ob-tip { display: none; } .ob-sats { padding-block: 4px; } .ob-sat { width: 64px; padding: 7px 4px 6px; } }
 @media (min-width: 900px) { .ob-ws { padding: 22px; } }
+
+/* ---- Customize menu tab ---- */
+.ob-cu-back { position: absolute; inset: 0; z-index: 9; display: grid; place-items: center; padding: 14px; background: rgba(3, 5, 20, .62); animation: obFade .25s ease both; touch-action: pan-y; }
+.ob-cu { position: relative; width: min(100%, 520px); max-height: min(88vh, 660px); display: flex; flex-direction: column; gap: 10px; padding: 16px; border-radius: 30px; overflow: hidden; color: #fff;
+  background: linear-gradient(155deg, rgba(150, 190, 255, .22), rgba(14, 20, 58, .78) 45%, rgba(120, 70, 255, .2));
+  box-shadow: inset 0 1.5px 0 rgba(255, 255, 255, .5), 0 40px 90px rgba(0, 0, 0, .6), 0 0 50px rgba(111, 149, 255, .3); animation: obExpand .4s cubic-bezier(.2, 1.1, .3, 1) both; }
+.ob-cu-head { display: flex; align-items: center; gap: 12px; }
+.ob-cu-head > div { flex: 1; min-width: 0; }
+.ob-cu-head h2 { margin: 0; font-size: 19px; }
+.ob-cu-head p { margin: 2px 0 0; font-size: 12.5px; color: rgba(238, 243, 255, .65); }
+.ob-cu-tabs { display: flex; gap: 6px; padding: 4px; border-radius: 99px; background: rgba(255, 255, 255, .08); border: 1px solid rgba(255, 255, 255, .14); }
+.ob-cu-tab { flex: 1; height: 34px; border: 0; border-radius: 99px; background: none; color: rgba(238, 243, 255, .7); font: 600 13px/1 inherit; cursor: pointer; transition: background .2s, color .2s; }
+.ob-cu-tab.on { background: linear-gradient(150deg, rgba(255, 255, 255, .34), rgba(255, 255, 255, .12)); color: #fff; box-shadow: inset 0 1px 0 rgba(255, 255, 255, .5); }
+.ob-cu-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 8px; padding-right: 2px; }
+.ob-cu-count, .ob-cu-sub { margin: 0; font-size: 12px; color: rgba(238, 243, 255, .6); }
+.ob-cu-sub { margin-top: 6px; text-transform: uppercase; letter-spacing: .08em; font-size: 11px; }
+.ob-cu-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.ob-cu-row { display: flex; align-items: center; gap: 10px; padding: 7px 8px 7px 10px; border-radius: 18px; border: 1px solid rgba(255, 255, 255, .14); background: rgba(255, 255, 255, .07); }
+.ob-cu-row.off { opacity: .72; border-style: dashed; }
+.ob-cu-ico { flex: none; width: 36px; height: 36px; border-radius: 12px; display: grid; place-items: center; color: #fff;
+  background: linear-gradient(150deg, hsla(var(--hue, 220), 90%, 70%, .55), hsla(calc(var(--hue, 220) + 40), 90%, 45%, .5)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .5); }
+.ob-cu-name { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.ob-cu-name b { font-size: 14px; }
+.ob-cu-name span { font-size: 11.5px; color: rgba(238, 243, 255, .6); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ob-cu-btn { flex: none; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; color: #fff; cursor: pointer; border: 1px solid rgba(255, 255, 255, .24);
+  background: linear-gradient(150deg, rgba(255, 255, 255, .2), rgba(255, 255, 255, .05)); transition: transform .15s ease, opacity .15s ease; }
+.ob-cu-btn:active { transform: scale(.9); }
+.ob-cu-btn:disabled { opacity: .3; cursor: default; }
+.ob-cu-btn.add { background: linear-gradient(150deg, rgba(38, 224, 201, .55), rgba(111, 149, 255, .3)); border-color: rgba(38, 224, 201, .7); }
+.ob-cu-btn.rm:not(:disabled):hover { background: rgba(255, 90, 110, .35); }
+.ob-cu-foot { display: flex; justify-content: space-between; gap: 8px; }
+.ob-cu-done { background: linear-gradient(150deg, rgba(38, 224, 201, .55), rgba(111, 149, 255, .35)); }
+.ob-lite .ob-cu {background: rgba(16, 22, 60, .96); }
+@media (max-height: 640px) { .ob-cu { max-height: 94vh; } .ob-cu-head p { display: none; } }
+
+
+/* ==========================================================================
+   Merged with the home-page glass theme (premiumglass.css). Orbit no longer has a private
+   space / neon look: it reads the same tokens as every other screen (--pg-card-a/b, --pg-edge,
+   --pg-shadow, --text-*, --violet), so curved edges, framed glass cards and light/dark mode
+   match the home page exactly.
+   ========================================================================== */
+.ob-root { --ob-ink: var(--text-hi); --ob-mid: var(--text-mid); --ob-accent: var(--violet-bright, #6f95ff);
+  color: var(--ob-ink); }
+.ob-bg { background: var(--bg-void);}
+:root[data-theme="light"] .ob-bg { background: rgba(255, 253, 246, .82); }
+:root:not([data-theme="light"]) .ob-bg { background: rgba(7, 11, 36, .72); }
+
+/* every surface = the home glass card: 22px curve, 1px glass frame, soft gradient, same shadow */
+.ob-face, .ob-ws, .ob-cu, .ob-sat, .ob-row, .ob-cu-row, .ob-act, .ob-thumb, .ob-cu-tabs {
+  border: 1px solid var(--pg-edge); background: linear-gradient(145deg, var(--pg-card-a), var(--pg-card-b));
+  box-shadow: var(--pg-shadow), inset 0 1px 0 rgba(255, 255, 255, .22); }
+.ob-face, .ob-glare { border-radius: 24px; }
+.ob-ws, .ob-cu { border-radius: 28px; box-shadow: 0 24px 60px -16px rgba(0, 0, 0, .55), inset 0 1px 0 rgba(255, 255, 255, .25);
+}
+:root[data-theme="light"] .ob-ws, :root[data-theme="light"] .ob-cu { background: linear-gradient(150deg, rgba(255, 255, 255, .86), rgba(255, 255, 255, .6)); }
+.ob-card.near .ob-face { box-shadow: var(--pg-shadow), inset 0 1px 0 rgba(255, 255, 255, .22), 0 0 0 calc(var(--f) * 1.5px) var(--ob-accent); }
+.ob-face::after { background: linear-gradient(115deg, rgba(255, 255, 255, .14), rgba(255, 255, 255, 0) 40%); }
+.ob-glare { mix-blend-mode: soft-light; }
+.ob-sat, .ob-row, .ob-act, .ob-cu-row { border-radius: 18px; box-shadow: none; }
+.ob-sat { box-shadow: var(--pg-shadow); }
+.ob-thumb { border-radius: 16px; box-shadow: none; }
+.ob-cu-tabs { border-radius: 99px; box-shadow: none; }
+
+/* controls: same pill buttons and accent as the home page */
+.ob-chip, .ob-cu-btn, .ob-rad { color: var(--ob-ink); border: 1px solid var(--pg-edge); background: linear-gradient(145deg, var(--pg-card-a), var(--pg-card-b));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .22); }
+.ob-cu-tab { color: var(--ob-mid); } .ob-cu-tab.on { color: var(--ob-ink); background: linear-gradient(145deg, var(--pg-card-a), var(--pg-card-b)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .3), 0 0 0 1px var(--pg-edge); }
+.ob-cu-done, .ob-cu-btn.add, .ob-open, .ob-rad.hot { color: #fff; border-color: transparent; background: linear-gradient(120deg, var(--violet), var(--violet-bright)); }
+.ob-open { height: 44px; border-radius: 99px; box-shadow: 0 10px 24px -10px var(--violet); }
+.ob-rad.hot { box-shadow: 0 0 0 2px var(--violet-bright), 0 8px 22px -6px var(--violet); }
+.ob-hub-core { background: linear-gradient(120deg, var(--violet), var(--violet-bright)); border: 1px solid var(--pg-edge); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .5), 0 10px 26px -8px var(--violet); }
+.ob-hub-ring { border-color: var(--violet-bright); }
+.ob-root button:focus-visible { outline-color: var(--violet-bright); }
+.ob-dot, .ob-new { background: var(--violet-bright); box-shadow: 0 0 10px var(--violet-bright); }
+.ob-dots i { background: var(--pg-edge); } .ob-dots i.on { background: var(--violet-bright); box-shadow: none; }
+
+/* icons: one accent instead of a per-card rainbow */
+.ob-medal, .ob-cu-ico { color: #fff; border: 1px solid var(--pg-edge); background: linear-gradient(135deg, var(--violet), var(--violet-bright));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .4), 0 10px 24px -10px var(--violet); }
+.ob-sat-ico, .ob-grp { background: var(--pg-field); color: var(--ob-ink); }
+.ob-sat { color: var(--ob-ink); }
+
+/* text follows light/dark */
+.ob-brand, .ob-brand b, .ob-title, .ob-stat b, .ob-row, .ob-act, .ob-thumb { color: var(--ob-ink); text-shadow: none; }
+.ob-hint, .ob-more, .ob-tip, .ob-muted, .ob-stat, .ob-row-t span, .ob-ws-head p, .ob-cu-head p, .ob-cu-count, .ob-cu-sub, .ob-cu-name span { color: var(--ob-mid); }
+.ob-rad-l { background: var(--bg-deep); color: var(--ob-ink); border: 1px solid var(--pg-edge); }
+.ob-ws-back, .ob-cu-back { background: rgba(3, 5, 20, .45);}
+.ob-medal, .ob-cu-ico, .ob-open, .ob-cu-done, .ob-cu-btn.add { --on-accent: #fff; }
+.ob-lite .ob-face, .ob-lite .ob-ws, .ob-lite .ob-cu { background: var(--bg-deep); }
+
+/* ---- All pages list (orb → "All pages") ---- */
+.ob-pg-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.ob-pg { display: flex; flex-direction: column; align-items: center; gap: 7px; padding: 12px 4px 10px; border-radius: 18px; cursor: pointer; color: var(--ob-ink, inherit); font: 600 12px/1.15 inherit; text-align: center;
+  border: 1px solid var(--pg-edge); background: linear-gradient(145deg, var(--pg-card-a), var(--pg-card-b)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .22); transition: transform .15s ease; }
+.ob-pg:active { transform: scale(.94); }
+.ob-pg .ob-cu-ico { width: 42px; height: 42px; }
+@media (min-width: 560px) { .ob-pg-grid { grid-template-columns: repeat(4, 1fr); } }
+
+/* ==========================================================================
+   CHEX Orbit AI inside Orbit — premium animation (transform / opacity only, so it stays smooth).
+   ========================================================================== */
+/* footer pill: a small living orb + "Ask or tell me what to do" + mic */
+.ob-aibar { display: flex; align-items: center; gap: 8px; width: min(100%, 360px); margin: 0 0 10px; padding: 6px 6px 6px 8px; border-radius: 99px; border: 1px solid var(--pg-edge); box-shadow: var(--pg-shadow), inset 0 1px 0 rgba(255, 255, 255, .22);
+  background: linear-gradient(145deg, var(--pg-card-a), var(--pg-card-b)), var(--bg-deep); animation: obAiRise .6s cubic-bezier(.2, 1.2, .3, 1) .15s both; }
+.ob-aibar-main { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 0; border: 0; background: none; color: var(--ob-ink, inherit); text-align: left; cursor: pointer; font: inherit; }
+.ob-aibar-t { display: flex; flex-direction: column; min-width: 0; line-height: 1.2; } .ob-aibar-t b { font-size: 13.5px; } .ob-aibar-t span { font-size: 11.5px; color: var(--ob-mid, inherit); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ob-aibar-orb { position: relative; flex: none; width: 38px; height: 38px; border-radius: 50%; overflow: hidden; box-shadow: 0 0 0 2px rgba(255, 255, 255, .25), 0 6px 16px -4px var(--violet); }
+.ob-aibar-orb i { position: absolute; inset: -30%; background: conic-gradient(from 0deg, var(--violet), var(--violet-bright), #26e0c9, #ff5ca8, var(--violet)); animation: obAiSpin 5s linear infinite; }
+.ob-aibar-orb::after { content: ''; position: absolute; inset: 0; border-radius: 50%; background: radial-gradient(circle at 32% 26%, rgba(255, 255, 255, .75), rgba(255, 255, 255, 0) 55%); }
+.ob-aibar-mic { flex: none; width: 40px; height: 40px; border-radius: 50%; border: 0; display: grid; place-items: center; color: #fff; cursor: pointer; background: linear-gradient(135deg, var(--violet), var(--violet-bright)); box-shadow: 0 8px 18px -8px var(--violet), inset 0 1px 0 rgba(255, 255, 255, .5); transition: transform .15s ease; }
+.ob-aibar-mic:active, .ob-aibar-main:active .ob-aibar-orb { transform: scale(.92); }
+
+/* the AI screen */
+.ob-ai-back { z-index: 10; }
+.ob-ai { align-items: center; text-align: center; gap: 8px; padding: 22px 18px 18px; animation: obAiIn .5s cubic-bezier(.2, 1.1, .3, 1) both; }
+.ob-ai-x { position: absolute; top: 12px; right: 12px; z-index: 3; }
+.ob-ai-stage { position: relative; width: 190px; height: 190px; margin: 6px auto 0; display: grid; place-items: center; }
+.ob-ai-halo { position: absolute; inset: 8%; border-radius: 50%; background: radial-gradient(closest-side, var(--violet-bright), transparent 72%); opacity: .45; animation: obAiBreathe 3.6s ease-in-out infinite; }
+.ob-ai-ring { position: absolute; inset: 22%; border-radius: 50%; border: 1.5px solid var(--violet-bright); opacity: 0; animation: obAiRing 3.6s ease-out infinite; }
+.ob-ai-ring.r2 { animation-delay: 1.2s; } .ob-ai-ring.r3 { animation-delay: 2.4s; }
+.ob-ai-orb { position: relative; width: 112px; height: 112px; border: 0; padding: 0; border-radius: 50%; overflow: hidden; cursor: pointer; color: #fff; display: grid; place-items: center; animation: obAiFloat 4.2s ease-in-out infinite;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, .3), 0 22px 44px -12px var(--violet), 0 0 46px -6px var(--violet-bright); transition: transform .25s cubic-bezier(.2, 1.4, .4, 1); }
+.ob-ai-orb:active { transform: scale(.94); }
+.ob-ai-swirl { position: absolute; inset: -35%; background: conic-gradient(from 0deg, var(--violet), var(--violet-bright), #26e0c9, #ff5ca8, #ffc83d, var(--violet)); animation: obAiSpin 7s linear infinite; }
+.ob-ai-gloss { position: absolute; inset: 0; border-radius: 50%; background: radial-gradient(circle at 30% 24%, rgba(255, 255, 255, .8), rgba(255, 255, 255, 0) 52%), radial-gradient(circle at 70% 85%, rgba(0, 0, 0, .28), transparent 60%); }
+.ob-ai-glyph { position: relative; z-index: 2; display: grid; place-items: center; filter: drop-shadow(0 2px 8px rgba(0, 0, 0, .35)); }
+.ob-ai-bars { position: relative; z-index: 2; display: flex; align-items: center; gap: 5px; height: 48px; }
+.ob-ai-bars i { width: 6px; height: 100%; border-radius: 6px; background: #fff; box-shadow: 0 0 10px rgba(255, 255, 255, .8); transform-origin: 50% 50%; animation: obAiBar .9s ease-in-out infinite; }
+.ob-ai-bars i:nth-child(2) { animation-delay: .12s; } .ob-ai-bars i:nth-child(3) { animation-delay: .24s; } .ob-ai-bars i:nth-child(4) { animation-delay: .36s; } .ob-ai-bars i:nth-child(5) { animation-delay: .48s; }
+/* states */
+.ob-ai-stage.listening .ob-ai-ring { animation-duration: 1.6s; } .ob-ai-stage.listening .ob-ai-ring.r2 { animation-delay: .5s; } .ob-ai-stage.listening .ob-ai-ring.r3 { animation-delay: 1s; }
+.ob-ai-stage.listening .ob-ai-halo { animation-duration: 1.2s; opacity: .7; } .ob-ai-stage.listening .ob-ai-orb { animation: obAiListen 1.2s ease-in-out infinite; }
+.ob-ai-stage.thinking .ob-ai-swirl { animation-duration: .9s; } .ob-ai-stage.thinking .ob-ai-orb { animation: obAiListen .7s ease-in-out infinite; }
+.ob-ai-title { margin: 4px 0 0; font-size: 20px; letter-spacing: -.01em; }
+.ob-ai-status { margin: 0; font-size: 13px; color: var(--ob-mid, inherit); min-height: 18px; }
+.ob-ai-heard { margin: 0; min-height: 22px; max-width: 100%; font-size: 15px; font-weight: 600; opacity: 0; transform: translateY(6px); transition: opacity .25s ease, transform .25s ease; overflow-wrap: anywhere; }
+.ob-ai-heard.on { opacity: 1; transform: none; }
+.ob-ai-error { margin: 0; font-size: 12.5px; color: #ff6b8a; }
+.ob-ai .oai-row { width: 100%; } .ob-ai .oai-in { background: var(--pg-field); color: var(--ob-ink, inherit); border-color: var(--pg-edge); } .ob-ai .oai-in::placeholder { color: var(--ob-mid, inherit); }
+.ob-ai .oai-go { background: linear-gradient(135deg, var(--violet), var(--violet-bright)); } .ob-ai-chips { justify-content: center; }
+.ob-ai .oai-chip { color: var(--ob-ink, inherit); border-color: var(--pg-edge); background: var(--pg-field); }
+
+@keyframes obAiSpin { to { transform: rotate(360deg); } }
+@keyframes obAiFloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
+@keyframes obAiBreathe { 0%, 100% { transform: scale(.92); opacity: .35; } 50% { transform: scale(1.08); opacity: .6; } }
+@keyframes obAiRing { 0% { transform: scale(.7); opacity: .75; } 100% { transform: scale(1.55); opacity: 0; } }
+@keyframes obAiListen { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.09); } }
+@keyframes obAiBar { 0%, 100% { transform: scaleY(.25); } 50% { transform: scaleY(1); } }
+@keyframes obAiIn { from { opacity: 0; transform: translateY(30px) scale(.9); } to { opacity: 1; transform: none; } }
+@keyframes obAiRise { from { opacity: 0; transform: translateY(16px) scale(.94); } to { opacity: 1; transform: none; } }
+@media (max-height: 640px) { .ob-ai-stage { width: 150px; height: 150px; } .ob-ai-orb { width: 90px; height: 90px; } .ob-aibar { margin-bottom: 6px; } }

@@ -1,6 +1,7 @@
 // Shared building blocks for the built-in games.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import WinCelebration from '../components/WinCelebration.jsx';
+import { createFrameGate } from '../perf/perfProfile.js';
 
 // All game randomness goes through rand() so a Score Duel can seed it: both players then get
 // the identical shuffle / obstacles / puzzle. Without a seed it is just Math.random.
@@ -67,11 +68,11 @@ export function useLoop(step) {
   const ref = useRef(step);
   ref.current = step;
   useEffect(() => {
-    let raf = 0, last = performance.now();
+    let raf = 0;
+    const gate = createFrameGate();   // adaptive: draws at the device's 30 / 60 / 120 FPS target, same game speed at any rate
     const tick = (t) => {
-      const dt = Math.min(0.05, Math.max(0, (t - last) / 1000));
-      last = t;
-      if (!document.hidden) ref.current(dt);
+      const dt = gate(t);
+      if (dt && !document.hidden) ref.current(Math.min(0.05, dt));
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);

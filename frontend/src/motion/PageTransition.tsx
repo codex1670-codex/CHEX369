@@ -1,6 +1,7 @@
 import type { ComponentProps } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
-import { pageVariants } from './variants';
+import { pageVariants, pageVariantsLite } from './variants';
+import { usePerf } from '../perf/usePerf.js';
 
 type Props = ComponentProps<typeof motion.main> & { routeKey: string };
 
@@ -11,10 +12,11 @@ type Props = ComponentProps<typeof motion.main> & { routeKey: string };
  */
 export default function PageTransition({ routeKey, children, ...rest }: Props) {
   const reduce = useReducedMotion();
+  const { level } = usePerf();   // slow devices fade only (no slide/scale), so page changes stay instant
   return (
     <motion.main
       key={routeKey}
-      variants={reduce ? undefined : pageVariants}
+      variants={reduce ? undefined : level === 'lite' ? pageVariantsLite : pageVariants}
       initial={reduce ? false : 'initial'}
       animate="animate"
       {...rest}

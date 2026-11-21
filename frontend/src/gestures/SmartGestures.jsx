@@ -3,11 +3,11 @@ import { api } from '../api.js';
 import { useAuth } from '../AuthContext.jsx';
 import Avatar from '../components/Avatar.jsx';
 import {
-  GESTURES, ACTIONS, SENSITIVITY, actionsFor, loadGestures, saveGestures, setGestureAction, resetGestures, clearPeopleCache,
+  GESTURES, SECTIONS, ACTIONS, actionById, SENSITIVITY, actionsFor, loadGestures, saveGestures, setGestureAction, resetGestures, clearPeopleCache,
   fireGesture, motionSupported, motionNeedsPermission, requestMotionPermission,
 } from './gestureStore.js';
 
-// Settings → Smart gestures: the 10 gestures, what each one does, the top-5 people for the quick-send circle, shake tuning.
+// Settings → Smart gestures: the gestures, what each one does, the top-5 people for the quick-send circle, shake tuning.
 const GROUPS = ['Off', 'Share', 'Smart', 'Codex', 'Go to'];
 
 function PeoplePicker({ cfg, onChange }) {
@@ -85,27 +85,43 @@ export default function SmartGestures() {
     <div className="glass-card" style={{ padding: 20, marginBottom: 20 }} data-testid="smart-gestures-card">
       <h3 style={{ margin: '0 0 4px', fontFamily: 'var(--font-display)', fontSize: 16 }}>🤚 Smart gestures</h3>
       <p style={{ fontSize: 12.5, color: 'var(--text-mid)', margin: '0 0 8px' }}>
-        Ten shortcuts you can change. Hold <b>Share</b> on any post or reel for a glass circle of your top five people — drag the video onto one to send it.
-        Hold <b>Search</b> to talk instead of type. <b>Shake</b> the phone to open Codex. Pick “Do nothing” to switch a gesture off.
+        Shortcuts you can change — on a button, anywhere on the screen, or by moving the phone. Hold <b>Share</b> on any post or reel for a glass circle of your top five people.
+        Try a <b>three-finger tap</b>, a <b>two-finger swipe</b> or an <b>edge swipe</b> on any page. Pick “Do nothing” to switch a gesture off.
       </p>
 
-      {GESTURES.map((g) => (
+      {SECTIONS.map(([secId, secTitle, secHint]) => (
+        <div key={secId}>
+          <div className="sg-sec"><div className="sg-sec-t">{secTitle}</div><div className="sg-hint">{secHint}</div></div>
+      {GESTURES.filter(g => g.section === secId).map((g) => (
         <div className="sg-row" key={g.id} data-testid={`gesture-${g.id}`}>
           <span className="sg-ico" aria-hidden="true">{g.icon}</span>
           <div><div className="sg-name">{g.label}</div><div className="sg-hint">{g.hint}</div></div>
           <div className="sg-ctl">
+            {g.fixed ? (
+              <div className="sg-fixed">{actionById(g.fixed).icon} {actionById(g.fixed).label} <span className="sg-hint">· always on</span></div>
+            ) : (
             <select value={cfg.map[g.id]} onChange={e => pick(g.id, e.target.value)} aria-label={`Action for: ${g.label}`}>
               {GROUPS.map(grp => {
                 const items = actionsFor(g).filter(a => a.group === grp);
                 return items.length ? <optgroup key={grp} label={grp === 'Off' ? 'Off' : grp}>{items.map(a => <option key={a.id} value={a.id}>{a.icon} {a.label}</option>)}</optgroup> : null;
               })}
             </select>
-            {!g.share && cfg.map[g.id] !== 'none' && (
+            )}
+            {!g.share && !g.fixed && cfg.map[g.id] !== 'none' && (
               <button type="button" className="btn-ghost" style={{ width: 'auto', padding: '7px 12px' }} onClick={() => fireGesture(g.id, {})}>Try it</button>
             )}
           </div>
 
           {g.id === 'shareHold' && cfg.map.shareHold === 'quickShare' && <div style={{ gridColumn: '1 / -1', marginTop: 6 }}><PeoplePicker cfg={cfg} onChange={(n) => setCfg(saveGestures(n))} /></div>}
+
+          {g.id === 'flipDown' && cfg.map.flipDown !== 'none' && (
+            <div style={{ gridColumn: '1 / -1', marginTop: 6 }}>
+              {motion === 'ask' && <button type="button" className="btn-ghost sel" style={{ width: 'auto', padding: '8px 16px' }} onClick={grant}>Allow motion access</button>}
+              {motion === 'denied' && <div className="sg-hint" style={{ color: 'var(--pink)' }}>Motion access was refused. Allow it in Settings → Safari → Motion &amp; Orientation Access, then reload.</div>}
+              {motion === 'unsupported' && <div className="sg-hint">This device or browser can’t sense how it is lying.</div>}
+              {motion === 'granted' && <div className="sg-hint">Runs while CHEX is open on screen.</div>}
+            </div>
+          )}
 
           {g.id === 'shake' && cfg.map.shake !== 'none' && (
             <div style={{ gridColumn: '1 / -1', marginTop: 6 }}>
@@ -126,6 +142,8 @@ export default function SmartGestures() {
               {motion === 'unsupported' && <div className="sg-hint" style={{ marginTop: 8 }}>This device or browser can’t sense shaking.</div>}
             </div>
           )}
+        </div>
+      ))}
         </div>
       ))}
 

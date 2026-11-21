@@ -30,7 +30,7 @@ function StoryTile({ story, onOpen }) {
   );
 }
 
-function StoriesTab() {
+export function StoriesTab() {
   const { user } = useAuth();
   const [stories, setStories] = useState(null);
   const [error, setError] = useState('');
@@ -54,7 +54,7 @@ function StoriesTab() {
   );
 }
 
-function ReelsTab() {
+export function ReelsTab() {
   const [tab, setTab] = useState('watched');
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
@@ -88,7 +88,7 @@ function ReelsTab() {
   );
 }
 
-function CallsTab({ me }) {
+export function CallsTab({ me }) {
   const [calls, setCalls] = useState(null);
   const [error, setError] = useState('');
   useEffect(() => { api.callHistory().then(r => setCalls(r.calls)).catch(err => { setError(err.message || 'Could not load your calls.'); setCalls([]); }); }, []);

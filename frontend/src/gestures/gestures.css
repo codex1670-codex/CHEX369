@@ -3,7 +3,7 @@
 /* ---------- quick-send circle ---------- */
 .qs-back { position: fixed; inset: 0; z-index: 10020; touch-action: none; overscroll-behavior: contain; -webkit-user-select: none; user-select: none;
   background: radial-gradient(circle at 50% 45%, rgba(18, 28, 78, .5), rgba(4, 7, 24, .86) 72%);
-  -webkit-backdrop-filter: blur(16px) saturate(150%); backdrop-filter: blur(16px) saturate(150%); animation: qsFade .22s ease both; }
+animation: qsFade .22s ease both; }
 .qs-stage { position: absolute; inset: 0; }
 @keyframes qsFade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes qsPop { from { opacity: 0; scale: .2; } to { opacity: 1; scale: 1; } }
@@ -13,7 +13,7 @@
   background: linear-gradient(150deg, rgba(255, 255, 255, .20), rgba(255, 255, 255, .04) 55%, rgba(111, 149, 255, .10));
   border: 1px solid rgba(255, 255, 255, .30);
   box-shadow: inset 0 1.5px 0 rgba(255, 255, 255, .55), inset 0 -26px 50px rgba(111, 149, 255, .16), 0 34px 90px rgba(0, 0, 0, .5), 0 0 0 10px rgba(255, 255, 255, .025);
-  -webkit-backdrop-filter: blur(26px) saturate(190%); backdrop-filter: blur(26px) saturate(190%); }
+}
 .qs-ring::before { content: ''; position: absolute; inset: 14px; border-radius: 50%; border: 1px dashed rgba(255, 255, 255, .22); }
 .qs-ring i { position: absolute; inset: 0; border-radius: 50%; opacity: .55;
   background: conic-gradient(from 0deg, transparent 0 62%, rgba(255, 255, 255, .5) 78%, transparent 92%);
@@ -36,7 +36,7 @@
 .qs-slot.empty { background: rgba(255, 255, 255, .06); box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, .28); }
 .qs-plus { font-size: 26px; font-weight: 300; color: rgba(255, 255, 255, .7); line-height: 1; }
 .qs-name { position: absolute; left: 50%; top: calc(100% + 6px); translate: -50% 0; max-width: 84px; padding: 2px 9px; border-radius: 99px; font-size: 11px; font-weight: 600; letter-spacing: .01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  background: rgba(10, 16, 48, .55); border: 1px solid rgba(255, 255, 255, .16); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); pointer-events: none; }
+  background: rgba(10, 16, 48, .55); border: 1px solid rgba(255, 255, 255, .16);pointer-events: none; }
 .qs-slot.hot .qs-name { background: rgba(38, 224, 201, .25); border-color: rgba(38, 224, 201, .6); }
 .qs-badge { position: absolute; right: -4px; top: -4px; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-size: 13px; font-weight: 800; color: #06231f; background: #26e0c9; box-shadow: 0 4px 12px rgba(0, 0, 0, .4); }
 
@@ -44,7 +44,7 @@
 .qs-hub { position: absolute; translate: -50% -50%; width: 74px; height: 74px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, .32); color: #fff; cursor: pointer;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; animation: qsPop .4s cubic-bezier(.2, 1.3, .3, 1) both;
   background: linear-gradient(150deg, rgba(255, 255, 255, .26), rgba(255, 255, 255, .06)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .6), 0 12px 30px rgba(0, 0, 0, .4);
-  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); transition: transform .16s ease, background .16s ease; }
+transition: transform .16s ease, background .16s ease; }
 .qs-hub.over { transform: scale(1.14); background: linear-gradient(150deg, rgba(111, 149, 255, .5), rgba(111, 149, 255, .15)); }
 .qs-hub-ico { font-size: 22px; line-height: 1; }
 .qs-hub-lbl { font-size: 10.5px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; opacity: .8; }
@@ -58,22 +58,22 @@
 
 .qs-hint { position: fixed; left: 50%; bottom: calc(96px + env(safe-area-inset-bottom, 0px)); translate: -50% 0; max-width: calc(100vw - 40px); padding: 9px 18px; border-radius: 99px; z-index: 6;
   font-size: 13.5px; font-weight: 600; color: #fff; text-align: center; background: rgba(12, 18, 54, .55); border: 1px solid rgba(255, 255, 255, .22);
-  -webkit-backdrop-filter: blur(14px) saturate(160%); backdrop-filter: blur(14px) saturate(160%); box-shadow: 0 10px 30px rgba(0, 0, 0, .35); }
+box-shadow: 0 10px 30px rgba(0, 0, 0, .35); }
 .qs-hint:empty { display: none; }
 .qs-hint.err { border-color: rgba(255, 92, 147, .6); color: #ffd6e4; }
 .qs-empty-note { position: fixed; left: 50%; top: calc(50% + 110px); translate: -50% 0; width: min(300px, calc(100vw - 48px)); text-align: center; font-size: 12.5px; line-height: 1.5; color: rgba(255, 255, 255, .8); z-index: 6; }
 .qs-empty-note button { background: none; border: 0; padding: 0; color: #8fb4ff; text-decoration: underline; cursor: pointer; font: inherit; }
 .qs-close { position: fixed; top: calc(14px + env(safe-area-inset-top, 0px)); right: 14px; width: 38px; height: 38px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, .25); color: #fff; cursor: pointer; font-size: 15px; z-index: 6;
-  background: rgba(255, 255, 255, .1); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+  background: rgba(255, 255, 255, .1);}
 .qs-back:not(.sticky) .qs-close { opacity: 0; pointer-events: none; }
 
 /* ---------- voice search ---------- */
 .vs-back { position: fixed; inset: 0; z-index: 10020; display: flex; align-items: flex-end; justify-content: center; padding: 16px 16px calc(24px + env(safe-area-inset-bottom, 0px));
-  background: rgba(4, 7, 24, .55); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); animation: qsFade .2s ease both; }
+  background: rgba(4, 7, 24, .55);animation: qsFade .2s ease both; }
 @media (min-width: 700px) { .vs-back { align-items: center; } }
 .vs-card { position: relative; width: min(380px, 100%); padding: 22px 20px 18px; border-radius: 30px; text-align: center; color: #fff; animation: vsUp .38s cubic-bezier(.2, 1.2, .3, 1) both;
   background: linear-gradient(155deg, rgba(255, 255, 255, .22), rgba(255, 255, 255, .05) 60%, rgba(111, 149, 255, .12)); border: 1px solid rgba(255, 255, 255, .3);
-  box-shadow: inset 0 1.5px 0 rgba(255, 255, 255, .5), 0 30px 80px rgba(0, 0, 0, .55); -webkit-backdrop-filter: blur(28px) saturate(190%); backdrop-filter: blur(28px) saturate(190%); }
+  box-shadow: inset 0 1.5px 0 rgba(255, 255, 255, .5), 0 30px 80px rgba(0, 0, 0, .55);}
 @keyframes vsUp { from { opacity: 0; translate: 0 40px; scale: .96; } to { opacity: 1; translate: 0 0; scale: 1; } }
 .vs-title { font-family: var(--font-display, system-ui); font-size: 15px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; opacity: .85; }
 .vs-x { position: absolute; top: 12px; right: 12px; width: 32px; height: 32px; border-radius: 50%; border: 0; color: #fff; background: rgba(255, 255, 255, .12); cursor: pointer; }
@@ -99,7 +99,7 @@
 .vs-foot select option { color: #111; }
 
 .gx-toast { position: fixed; left: 50%; bottom: calc(100px + env(safe-area-inset-bottom, 0px)); translate: -50% 0; z-index: 10030; padding: 10px 18px; border-radius: 99px; font-size: 13px; font-weight: 600; color: #fff;
-  background: rgba(12, 18, 54, .7); border: 1px solid rgba(255, 255, 255, .25); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); box-shadow: 0 10px 30px rgba(0, 0, 0, .4); animation: qsFade .2s ease both; }
+  background: rgba(12, 18, 54, .7); border: 1px solid rgba(255, 255, 255, .25);box-shadow: 0 10px 30px rgba(0, 0, 0, .4); animation: qsFade .2s ease both; }
 
 /* ---------- Settings → Smart gestures ---------- */
 .sg-row { display: grid; grid-template-columns: 34px 1fr; gap: 4px 12px; align-items: center; padding: 11px 0; border-top: 1px solid var(--border-soft); }
@@ -119,3 +119,18 @@
 .sg-hit:hover { background: var(--surface-hover); }
 
 @media (prefers-reduced-motion: reduce) { .qs-ring i, .vs-orb.live, .vs-wave i { animation: none; } .qs-slot, .qs-hub, .qs-ring, .vs-card { animation-duration: .01s; } }
+
+/* Smart gestures — section headings */
+.sg-sec { margin: 16px 0 2px; padding-top: 4px; }
+.sg-sec-t { font-family: var(--font-display); font-weight: 700; font-size: 13px; letter-spacing: .02em; color: var(--text-hi); }
+.sg-sec + .sg-row { border-top: 0; }
+
+/* "Exit the app" cover */
+.gx-closed { position: fixed; inset: 0; z-index: 99999; background: #05050a; color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; cursor: pointer; text-align: center; padding: 24px; }
+.gx-closed-ico { font-size: 44px; }
+.gx-closed-t { font-weight: 700; font-size: 18px; }
+.gx-closed-s { font-size: 13px; opacity: .6; }
+
+/* Fixed (always-on) gesture */
+.sg-fixed { flex: 1; min-width: 150px; padding: 9px 12px; border-radius: 10px; border: 1px solid var(--border-soft); background: var(--surface-hover); color: var(--text-hi); font-size: 13px; font-weight: 600; }
+

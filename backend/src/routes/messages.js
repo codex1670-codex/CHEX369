@@ -100,6 +100,17 @@ const touchGroup = (io, convoId, exceptUserId) => {
     .forEach(p => { if (p.user_id !== exceptUserId) io?.to(`user:${p.user_id}`).emit('conversation:changed', { conversationId: convoId }); });
 };
 
+// When each OTHER member last opened this chat — drives "Seen <time>, <date>" under my last message.
+const readsFor = (convoId, viewerId) => Object.fromEntries(
+  db.prepare('SELECT user_id, last_read_at FROM conversation_participants WHERE conversation_id = ? AND user_id != ? AND last_read_at IS NOT NULL').all(convoId, viewerId || '').map(r => [r.user_id, r.last_read_at]));
+// Tell the other members I just read this chat, live.
+const announceRead = (io, convoId, userId) => {
+  const readAt = db.prepare('SELECT last_read_at FROM conversation_participants WHERE conversation_id = ? AND user_id = ?').get(convoId, userId)?.last_read_at;
+  if (!io || !readAt) return;
+  db.prepare('SELECT user_id FROM conversation_participants WHERE conversation_id = ? AND user_id != ?').all(convoId, userId)
+    .forEach(p => io.to(`user:${p.user_id}`).emit('conversation:read', { conversationId: convoId, userId, readAt }));
+};
+
 function conversationDTO(row, viewerId) {
   const mine = viewerId ? participantRow(row.id, viewerId) : null;
   const participants = db.prepare(`
@@ -122,6 +133,7 @@ function conversationDTO(row, viewerId) {
     participants,
     lastMessage: last ? { id: last.id, senderId: last.sender_id, content: previewText(last), createdAt: last.created_at, status: last.status } : null,
     unreadCount,
+    reads: viewerId ? readsFor(row.id, viewerId) : {},
     // My own settings for this chat — never about anyone else's.
     muted: !!mine?.muted,
     myRole: mine?.role || null,
@@ -244,7 +256,9 @@ router.get('/conversations/:id/messages', requireAuth, (req, res) => {
   res.json({
     messages: rows.reverse().map(m => messageDTO(m)),
     nextCursor: rows.length === 30 ? rows[0].created_at : null,
+    reads: readsFor(req.params.id, req.userId),
   });
+  announceRead(req.app.get('io'), req.params.id, req.userId);
 });
 
 // I'm looking at this chat: everything in it counts as read (clears its unread badge).
@@ -253,6 +267,7 @@ router.post('/conversations/:id/read', requireAuth, (req, res) => {
   db.prepare("UPDATE conversation_participants SET last_read_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE conversation_id = ? AND user_id = ?")
     .run(req.params.id, req.userId);
   res.json({ ok: true });
+  announceRead(req.app.get('io'), req.params.id, req.userId);
 });
 
 // Core send logic, reused by POST /send and by other features (e.g. Note replies) that

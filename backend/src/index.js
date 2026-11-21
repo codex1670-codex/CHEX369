@@ -202,11 +202,16 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => {
     if (markDisconnected(socket.userId) && showsOnline(socket.userId)) io.emit('presence:update', { userId: socket.userId, online: false });
   });
-  socket.on('typing', ({ conversationId }) => {
-    socket.to(`conversation:${conversationId}`).emit('typing', { userId: socket.userId, conversationId });
+  // Typing indicator: only people in the chat can send or receive it. Sent straight to each other member's own room,
+  // so nobody has to join anything and nobody outside the chat can listen in.
+  const isMember = (conversationId) => !!conversationId && !!db.prepare('SELECT 1 FROM conversation_participants WHERE conversation_id = ? AND user_id = ?').get(conversationId, socket.userId);
+  socket.on('typing', ({ conversationId, typing = true } = {}) => {
+    if (!isMember(conversationId)) return;
+    db.prepare('SELECT user_id FROM conversation_participants WHERE conversation_id = ? AND user_id != ?').all(conversationId, socket.userId)
+      .forEach(p => io.to(`user:${p.user_id}`).emit('typing', { userId: socket.userId, conversationId, typing: typing !== false }));
   });
-  socket.on('conversation:join', ({ conversationId }) => {
-    socket.join(`conversation:${conversationId}`);
+  socket.on('conversation:join', ({ conversationId } = {}) => {
+    if (isMember(conversationId)) socket.join(`conversation:${conversationId}`);
   });
   registerGameHandlers(io, socket);
   registerCallHandlers(io, socket);

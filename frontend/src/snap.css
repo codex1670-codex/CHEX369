@@ -1,0 +1,21 @@
+/* CHEX Snap: advanced camera page (reuses the .cam-* and .cf-* looks from the camera and video-call filters) */
+.snap-page { z-index: 10040; }
+.snap-stage { position: absolute; inset: 0; }
+.snap-stage .cam-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.snap-page .snap-tray { bottom: calc(168px + env(safe-area-inset-bottom, 0px)); }
+.snap-label { position: absolute; z-index: 5; top: 22%; left: 50%; transform: translateX(-50%); padding: 8px 18px; border-radius: 999px; background: rgba(12,12,24,.6); color: #fff; font-weight: 800; font-size: 17px; pointer-events: none; animation: snap-pop .25s ease-out; }
+@keyframes snap-pop { from { transform: translateX(-50%) scale(.8); opacity: 0; } to { transform: translateX(-50%) scale(1); opacity: 1; } }
+.snap-flash { position: absolute; inset: 0; z-index: 6; background: #fff; opacity: .85; pointer-events: none; animation: snap-blink .16s ease-out forwards; }
+@keyframes snap-blink { to { opacity: 0; } }
+.snap-review { display: flex; flex-direction: column; gap: 10px; width: 100%; padding: 0 10px; }
+.snap-caption { width: 100%; box-sizing: border-box; border: 0; outline: 0; padding: 11px 16px; border-radius: 999px; background: rgba(12,12,24,.6); color: #fff; font-size: 15px; }
+.snap-caption::placeholder { color: rgba(255,255,255,.65); }
+.snap-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.snap-actions .cam-act { flex: 1 1 28%; min-width: 96px; }
+.snap-picker { position: absolute; inset: 0; z-index: 12; display: flex; align-items: flex-end; justify-content: center; background: rgba(0,0,0,.5); }
+.snap-picker-card { width: min(520px, 100%); max-height: 70%; display: flex; flex-direction: column; padding: 14px; border-radius: 22px 22px 0 0; background: rgba(18,18,32,.96); color: #fff; }
+.snap-picker-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; font-size: 16px; }
+.snap-picker-list { overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding-bottom: env(safe-area-inset-bottom, 0px); }
+.snap-picker-row { display: flex; justify-content: space-between; align-items: center; border: 0; cursor: pointer; padding: 13px 16px; border-radius: 14px; background: rgba(255,255,255,.1); color: #fff; font-size: 15px; font-weight: 600; text-align: left; }
+.snap-picker-row span { font-size: 12px; opacity: .7; }
+.snap-picker-row:disabled { opacity: .5; }

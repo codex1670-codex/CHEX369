@@ -1,0 +1,40 @@
+/* CHEX SMOOTH — visuals that adapt to the device. perfProfile.js sets <html data-perf="lite|balanced|ultra" data-fps="30|60|120">.
+   'balanced' and 'ultra' keep the full look unchanged; only 'lite' trims the expensive parts, so the app
+   stays fluid on slow phones. Imported before premiumglass.css; it wins by specificity (:root[attr]) and !important. */
+
+:root { --fps: 60; --frame-ms: 16.67ms; }
+
+/* ---- lite: remove the costliest GPU work, keep every colour, layout and transition ---- */
+:root[data-perf="lite"] { --eg-card-blur: 0px; }
+
+/* live blur is the #1 cause of dropped frames on weak GPUs → swap for a slightly more solid pane */
+:root[data-perf="lite"] .glass-card,
+:root[data-perf="lite"] .post-card,
+:root[data-perf="lite"] .nav,
+:root[data-perf="lite"] [class*="glass"],
+:root[data-perf="lite"] [class*="sheet"],
+:root[data-perf="lite"] [class*="modal"] {
+
+
+}
+
+/* decorative infinite loops: drifting orbs, sheen, film grain, spinning frames, glowing pulses */
+:root[data-perf="lite"] .app-bg .orb,
+:root[data-perf="lite"] .app-bg .sheen { animation: none !important; will-change: auto; }
+:root[data-perf="lite"] .app-bg .grain { display: none !important; }
+:root[data-perf="lite"] .pf::before, :root[data-perf="lite"] .pf::after,
+:root[data-perf="lite"] .nav-link.active,
+:root[data-perf="lite"] .dot, :root[data-perf="lite"] .online-pip,
+:root[data-perf="lite"] .streak-dot.today { animation: none !important; }
+:root[data-perf="lite"] .ef-sway, :root[data-perf="lite"] .ef-body { animation: none !important; }
+
+/* ---- 30 FPS battery saver: also stop non-essential motion ---- */
+:root[data-fps="30"] .app-bg .orb, :root[data-fps="30"] .app-bg .sheen { animation: none !important; }
+
+/* ---- ultra @ 120 Hz: keep the moving background on its own compositor layer ---- */
+:root[data-perf="ultra"][data-fps="120"] .app-bg .orb { will-change: transform; }
+
+/* Respect the OS setting everywhere, not just where framer-motion is used */
+@media (prefers-reduced-motion: reduce) {
+  .app-bg .orb, .app-bg .sheen { animation: none !important; }
+}

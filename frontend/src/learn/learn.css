@@ -216,7 +216,7 @@
 .lx-wave.on .lx-bars i { animation: lxBar .55s ease-in-out var(--bd, 0ms) infinite alternate; }
 @keyframes lxBar { from { transform: scaleY(.25); } to { transform: scaleY(1.25); } }
 .lx-wave-lbl { display: flex; justify-content: space-between; margin-top: 8px; font-size: 13px; font-weight: 700; }
-.learn-foot { position: fixed; left: 0; right: 0; bottom: 0; padding: 16px 20px calc(16px + env(safe-area-inset-bottom, 0px)); border-top: 2px solid var(--lx-line); background: rgba(255,255,255,.92); backdrop-filter: blur(14px); animation: lnSlide .25s ease; }
+.learn-foot { position: fixed; left: 0; right: 0; bottom: 0; padding: 16px 20px calc(16px + env(safe-area-inset-bottom, 0px)); border-top: 2px solid var(--lx-line); background: rgba(255,255,255,.92);animation: lnSlide .25s ease; }
 @keyframes lnSlide { from { transform: translateY(100%); } }
 .learn-foot > div { max-width: 640px; margin: 0 auto; display: flex; align-items: center; gap: 14px; }
 .learn-foot.ok { background: var(--ok-bg); } .learn-foot.bad { background: var(--bad-bg); }

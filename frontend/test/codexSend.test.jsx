@@ -17,10 +17,12 @@ beforeEach(() => {
   api.codexAct.mockResolvedValue({ message: 'Done.' });
 });
 
-describe('Codex Ask bar', () => {
-  beforeEach(() => { localStorage.setItem('chex.floatingAi', 'on'); });   // the floating bar is OFF by default, so switch it on for these tests
+const openCodex = () => act(() => { window.dispatchEvent(new CustomEvent('chex:codex-open', { detail: { mode: 'full' } })); });
+
+describe('CHEX AI panel (opened from the Orbit menu)', () => {
   it('has a Send button that is disabled until something is typed, then sends the command', async () => {
     render(<Codex navigate={vi.fn()} goBack={vi.fn()} currentUser={{ id: 'me', username: 'me' }} />);
+    openCodex();
     const send = screen.getByRole('button', { name: 'Send to Codex' });
     expect(send.disabled).toBe(true);
     const input = screen.getByLabelText('Ask Codex');
@@ -35,6 +37,7 @@ describe('Codex Ask bar', () => {
 
   it('pressing Send does not take focus away from the text box (keeps the phone keyboard open)', () => {
     render(<Codex navigate={vi.fn()} goBack={vi.fn()} currentUser={{ id: 'me', username: 'me' }} />);
+    openCodex();
     fireEvent.change(screen.getByLabelText('Ask Codex'), { target: { value: 'hi' } });
     const send = screen.getByRole('button', { name: 'Send to Codex' });
     const notCancelled = fireEvent.mouseDown(send);   // false = preventDefault was called
@@ -42,16 +45,13 @@ describe('Codex Ask bar', () => {
   });
 });
 
-describe('Floating AI bar default', () => {
-  it('is hidden by default, shows when switched on in Settings, and hides again when switched off', async () => {
-    localStorage.removeItem('chex.floatingAi');
+describe('No floating AI bar', () => {
+  it('shows nothing until CHEX AI is opened from the menu, and goes away when closed', async () => {
     render(<Codex navigate={vi.fn()} goBack={vi.fn()} currentUser={{ id: 'me', username: 'me' }} />);
     expect(screen.queryByLabelText('Ask Codex')).toBeNull();
-    const { setFloatingAi } = await import('../src/floatingAi.js');
-    act(() => { setFloatingAi(true); });
+    openCodex();
     expect(await screen.findByLabelText('Ask Codex')).toBeTruthy();
-    act(() => { setFloatingAi(false); });
+    fireEvent.click(screen.getByText('✕'));
     await waitFor(() => expect(screen.queryByLabelText('Ask Codex')).toBeNull());
-    localStorage.removeItem('chex.floatingAi');
   });
 });

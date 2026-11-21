@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
 import { circleAskEnabled } from '../circleAsk/settings.js';
-import { floatingAiEnabled } from '../floatingAi.js';
 import { alertsEnabled, setAlertsEnabled } from '../announce.js';
 import { api } from '../api.js';
 import { requestStartCall } from '../callBus.js';
@@ -327,23 +326,17 @@ async function runCommand(raw, { navigate, currentUser }) {
 export default function Codex({ navigate, goBack, currentUser }) {
   const [open, setOpen] = useState(false); // true = the full panel; false = the small type box
   const [showReply, setShowReply] = useState(false); // small reply square under/over the type box
-  // The floating bar is off until the person switches it on in Settings (default OFF).
-  const [floatOn, setFloatOn] = useState(floatingAiEnabled());
-  // Smart gestures (shake / hold) can summon Codex even while the floating bar is switched off; it goes away when closed.
+  // There is no floating bar any more: CHEX AI lives in the Orbit / ＋ menu and opens as the docked panel.
+  // Menu taps and smart gestures summon it; it goes away when closed.
   const [summoned, setSummoned] = useState(false);
-  const shown = floatOn || summoned;
+  const floatOn = false;
+  const shown = summoned;
   // Circle to Ask is its own opt-in feature (Settings → Circle to Ask); when on, the bar gets a ⭕ shortcut for it.
   const [circleOn, setCircleOn] = useState(circleAskEnabled());
   useEffect(() => {
     const sync = () => setCircleOn(circleAskEnabled());
     window.addEventListener('chex:circle-ask-changed', sync);
     return () => window.removeEventListener('chex:circle-ask-changed', sync);
-  }, []);
-  useEffect(() => {
-    const sync = () => { const on = floatingAiEnabled(); setFloatOn(on); if (!on) { setOpen(false); setShowReply(false); } };
-    window.addEventListener('chex:floating-ai-changed', sync);
-    window.addEventListener('storage', sync);
-    return () => { window.removeEventListener('chex:floating-ai-changed', sync); window.removeEventListener('storage', sync); };
   }, []);
   // Mute: stops the spoken "message from…" / "notification from…" alerts (shared with the ＋ menu).
   const [alertsOn, setAlertsOn] = useState(alertsEnabled());
@@ -420,7 +413,7 @@ export default function Codex({ navigate, goBack, currentUser }) {
   useEffect(() => { logStateRef.current = log; }, [log]);
   useEffect(() => () => { try { recognitionRef.current?.abort(); } catch {} window.speechSynthesis?.cancel(); }, []);
 
-  useEffect(() => { logRef.current?.scrollTo({ top: logRef.current.scrollHeight }); }, [log]);
+  useEffect(() => { logRef.current?.scrollTo?.({ top: logRef.current.scrollHeight }); }, [log]);
   useEffect(() => { api.codexStatus().then(r => setAiConfigured(r.configured)).catch(() => setAiConfigured(false)); }, []);
 
   // Speak a reply in the right voice: the reply's own script if it has one (Tamil reply -> Tamil
@@ -679,17 +672,17 @@ export default function Codex({ navigate, goBack, currentUser }) {
   useEffect(() => { runTextRef.current = runText; });
   // "chex:codex-open" comes from Smart gestures (shake, holding an icon …): show the bar or the full panel, optionally with the mic on.
   const toggleListeningRef = useRef(null);
-  const miniInputRef = useRef(null);
-  useEffect(() => {
+    useEffect(() => {
     const onOpen = (e) => {
-      const { mode = 'mini', talk = false } = e.detail || {};
+      const { mode = 'mini', talk = false, run = '' } = e.detail || {};
       setSummoned(true);
-      setOpen(mode === 'full');
+      setOpen(true);   // always the docked panel, never a floating box
       if (talk) setTimeout(() => toggleListeningRef.current?.(), 350);
-      else if (mode !== 'full') setTimeout(() => miniInputRef.current?.focus?.(), 200);
+      else if (run) setTimeout(() => runTextRef.current?.(run), 450);   // handed over from CHEX AI chat
     };
-    window.addEventListener('chex:codex-open', onOpen);
-    return () => window.removeEventListener('chex:codex-open', onOpen);
+    const onAi = () => { setOpen(false); setSummoned(false); };   // CHEX AI chat took over the side panel
+    window.addEventListener('chex:codex-open', onOpen); window.addEventListener('chex:ai-open', onAi);
+    return () => { window.removeEventListener('chex:codex-open', onOpen); window.removeEventListener('chex:ai-open', onAi); };
   }, []);
 
   // Send button: enabled once there is something to send. Pressing it must NOT steal focus from the
@@ -847,45 +840,10 @@ export default function Codex({ navigate, goBack, currentUser }) {
 
   return (
     <>
-      {shown && !open && (
-        <div className={`codex-mini-wrap ${dragging ? 'dragging' : ''}`} ref={wrapRef} style={pos ? { left: pos.x, bottom: pos.y, top: 'auto' } : undefined}>
-          {replyVisible && (
-            <div className="glass-card codex-mini-reply" role="status">
-              <button className="codex-mini-x" onClick={() => { if (pending) setPending(null); setShowReply(false); }} aria-label="Close reply">✕</button>
-              {replies.map((m, i) => <div key={i} className="codex-mini-msg">{m.text}</div>)}
-              {interactiveJsx}
-            </div>
-          )}
-          <form className={`glass-card codex-mini ${input.trim() ? 'has-text' : ''}`} onSubmit={submit}>
-            <button type="button" className="codex-grip" aria-label="Drag Codex to move it" title="Drag to move" onPointerDown={onGripDown} onPointerMove={onGripMove} onPointerUp={onGripUp} onPointerCancel={onGripUp}>⠿</button>
-            <button type="button" className="codex-mini-btn" onClick={toggleListening} disabled={!!pending || !!uiPrompt} aria-label="Talk to Codex"
-              style={{ background: listening ? 'var(--pink)' : 'transparent' }}>{listening ? '⏹' : '🎙'}</button>
-            <input
-              placeholder={pending || uiPrompt ? 'Answer above…' : agentRunning ? 'Working…' : listening ? 'Listening…' : 'Ask Codex… (type help)'}
-              value={listening && interim ? interim : input} onChange={onMiniChange} disabled={!!pending || !!uiPrompt || agentRunning} aria-label="Ask Codex" ref={miniInputRef}
-              enterKeyHint="send" autoComplete="off" autoCorrect="on" autoCapitalize="sentences"
-            />
-            <button type="submit" className="codex-send" disabled={!canSend} aria-label="Send to Codex" title="Send" onMouseDown={keepFocus} onTouchStart={keepFocus}>➤</button>
-            <select value={voiceLang} onChange={e => setVoiceLang(e.target.value)} aria-label="Voice language" title="Voice language"
-              style={{ background: 'transparent', border: 'none', color: 'var(--text-mid)', fontSize: 11, maxWidth: 52, cursor: 'pointer' }}>
-              <option value="auto">Auto</option><option value="en-US">EN</option><option value="en-IN">EN-IN</option>
-              <option value="ta-IN">TA</option><option value="hi-IN">HI</option><option value="te-IN">TE</option>
-              <option value="kn-IN">KN</option><option value="ml-IN">ML</option><option value="bn-IN">BN</option>
-              <option value="ar-SA">AR</option><option value="es-ES">ES</option><option value="fr-FR">FR</option>
-              <option value="de-DE">DE</option><option value="pt-BR">PT</option><option value="ja-JP">JA</option>
-              <option value="ko-KR">KO</option><option value="ru-RU">RU</option>
-            </select>
-            <button type="button" className="codex-mini-btn codex-bell" onClick={() => setAlertsEnabled(!alertsOn)} aria-label={alertsOn ? 'Mute AI alerts' : 'Unmute AI alerts'} aria-pressed={!alertsOn} title={alertsOn ? 'Mute alerts' : 'Alerts muted — tap to unmute'}>{alertsOn ? '🔔' : '🔕'}</button>
-            {circleOn && <button type="button" className="codex-mini-btn" onClick={() => window.dispatchEvent(new Event('chex:circle-ask-start'))} aria-label="Circle to Ask" title="Circle part of the screen and ask about it">⭕</button>}
-            <button type="button" className="codex-mini-btn" onClick={() => setOpen(true)} aria-label="Open full Codex" title="Open full Codex">⤢</button>
-            {summoned && !floatOn && <button type="button" className="codex-mini-btn" onClick={() => { setSummoned(false); setShowReply(false); }} aria-label="Hide Codex" title="Hide Codex">✕</button>}
-          </form>
-        </div>
-      )}
       {shown && open && (
         <div className="glass-card codex-panel">
           <div className="codex-panel-header">
-            <span className="t">Codex</span>
+            <span className="t">CHEX Commands</span>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <select value={voiceLang} onChange={e => setVoiceLang(e.target.value)} style={{ background: 'var(--surface-hover)', border: '1px solid var(--border-soft)', borderRadius: 6, color: 'var(--text-mid)', fontSize: 11 }}>
                 <option value="auto">Auto</option>
@@ -954,7 +912,7 @@ export default function Codex({ navigate, goBack, currentUser }) {
             <button type="button" onClick={toggleListening} disabled={!!pending || !!uiPrompt} style={{ background: listening ? 'var(--pink)' : 'transparent', border: '1px solid var(--border-soft)', borderRadius: '50%', width: 34, height: 34, color: 'var(--text-hi)', cursor: 'pointer', flexShrink: 0 }}>
               {listening ? '⏹' : '🎙'}
             </button>
-            <input placeholder={pending || uiPrompt ? 'Answer above…' : agentRunning ? 'Working…' : listening ? 'Listening…' : 'Tell Codex what to do…'} value={listening && interim ? interim : input} onChange={e => setInput(e.target.value)} disabled={!!pending || !!uiPrompt || agentRunning}
+            <input placeholder={pending || uiPrompt ? 'Answer above…' : agentRunning ? 'Working…' : listening ? 'Listening…' : 'Tell CHEX AI what to do…'} aria-label="Ask Codex" value={listening && interim ? interim : input} onChange={e => setInput(e.target.value)} disabled={!!pending || !!uiPrompt || agentRunning}
               enterKeyHint="send" autoComplete="off" />
             <button type="submit" className="codex-send" disabled={!canSend} aria-label="Send to Codex" title="Send" onMouseDown={keepFocus} onTouchStart={keepFocus}>➤</button>
           </form>

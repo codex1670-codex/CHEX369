@@ -3,6 +3,8 @@ import { connectSocket } from '../socket.js';
 import { onStartCallRequest } from '../callBus.js';
 import { api } from '../api.js';
 import Avatar from './Avatar.jsx';
+import { FilterEngine } from '../filters/FilterEngine.js';
+import { FILTER_GROUPS, NO_FILTER, isAvailable } from '../filters/faceFilters.js';
 import { captureMedia, rtcConfig, makeOffer, makeAnswer, tuneSenders, startQualityMonitor, keepAwake } from '../callQuality.js';
 
 const FALLBACK_ICE = [{ urls: 'stun:stun.l.google.com:19302' }];
@@ -34,6 +36,25 @@ function startRing() {
   return () => { clearInterval(timer); try { ctx?.close(); } catch { /* ignore */ } };
 }
 
+// Where the other person's voice plays. Browsers that expose output devices (Chrome / Edge / Android) let us pick the
+// loudspeaker or the earpiece / headset; elsewhere we fall back to a loud or quiet volume so the button always does something.
+async function routeAudio(el, speakerOn) {
+  if (!el) return;
+  let routed = false;
+  try {
+    if (el.setSinkId && navigator.mediaDevices?.enumerateDevices) {
+      const outs = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'audiooutput');
+      if (outs.length > 1) {
+        const pick = speakerOn
+          ? (outs.find(d => /speaker/i.test(d.label)) || outs.find(d => d.deviceId === 'default'))
+          : (outs.find(d => /earpiece|handset|receiver/i.test(d.label)) || outs.find(d => /head(phone|set)|bluetooth/i.test(d.label)));
+        if (pick) { await el.setSinkId(pick.deviceId); routed = true; }
+      }
+    }
+  } catch { /* keep the current output */ }
+  el.volume = speakerOn || routed ? 1 : 0.35;
+}
+
 // Real 1-to-1 voice / video calls (WebRTC). The server only passes the setup messages between the two phones;
 // the audio and video travel directly between them (over wifi when both are on the same network).
 // Phases: idle -> ringing-out (I called) | ringing-in (someone is calling me) -> connecting -> active -> idle
@@ -51,6 +72,17 @@ export default function CallLayer() {
   const [needTap, setNeedTap] = useState(false);                     // browser blocked autoplay of the other person's sound
   const [facing, setFacing] = useState('user');
   const [fullscreen, setFullscreen] = useState(false);
+  const [speakerOn, setSpeakerOn] = useState(true);
+  const [torchOn, setTorchOn] = useState(false);
+  const [camCaps, setCamCaps] = useState({ torch: false, zoom: null });
+  const [zoomV, setZoomV] = useState(1);
+  const [filterId, setFilterId] = useState('none');
+  const [showFilters, setShowFilters] = useState(false);
+  const [filterTab, setFilterTab] = useState('face');
+  const [faceStatus, setFaceStatus] = useState('idle');   // idle | loading | ready | error
+  const [faceSeen, setFaceSeen] = useState(true);
+  const engineRef = useRef(null);
+  const previewRef = useRef(null);                        // the filtered picture shown in my small preview
 
   const phaseRef = useRef('idle');
   const callIdRef = useRef(null);
@@ -81,17 +113,30 @@ export default function CallLayer() {
     pcRef.current?.close(); pcRef.current = null;
     localStreamRef.current?.getTracks().forEach(t => t.stop()); localStreamRef.current = null;
     remoteStreamRef.current = null; pendingIceRef.current = []; incomingRef.current = null; callIdRef.current = null;
-    setMuted(false); setCameraOff(false); setSeconds(0); setPeer(null);
+    setMuted(false); setCameraOff(false); setSeconds(0); setPeer(null); setSpeakerOn(true); setTorchOn(false); setZoomV(1);
+    engineRef.current?.stop(); engineRef.current = null; previewRef.current = null; setFilterId('none'); setShowFilters(false); setFaceStatus('idle');
     phaseRef.current = 'idle'; setPhase('idle');
     if (message) setError(message);
   }, []);
 
   // Show the streams on the <video>/<audio> elements as soon as both exist (they only mount once the call screen is up).
   useEffect(() => {
-    if (localVideoRef.current && localStreamRef.current && localVideoRef.current.srcObject !== localStreamRef.current) localVideoRef.current.srcObject = localStreamRef.current;
+    const pv = previewRef.current || localStreamRef.current;
+    if (localVideoRef.current && pv && localVideoRef.current.srcObject !== pv) localVideoRef.current.srcObject = pv;
     const r = remoteMediaRef.current;
     if (r && remoteStreamRef.current && r.srcObject !== remoteStreamRef.current) { r.srcObject = remoteStreamRef.current; r.play?.().then(() => setNeedTap(false)).catch(() => setNeedTap(true)); }
   });
+
+  // Apply the speaker / earpiece choice whenever it changes or the call screen appears.
+  useEffect(() => { if (phase === 'connecting' || phase === 'active') routeAudio(remoteMediaRef.current, speakerOn); }, [speakerOn, phase, callType]);
+  // Flash and zoom depend on what the camera in use can do (re-read after Flip).
+  useEffect(() => {
+    if (callType !== 'video' || phase !== 'active') return;
+    const t = localStreamRef.current?.getVideoTracks()[0];
+    const c = t?.getCapabilities?.() || {};
+    setCamCaps({ torch: !!c.torch, zoom: c.zoom ? { min: c.zoom.min || 1, max: Math.min(c.zoom.max || 4, 8), step: c.zoom.step || 0.1 } : null });
+    setTorchOn(false); setZoomV(1);
+  }, [phase, callType, facing]);
 
   // Ring tone while ringing; call timer while active.
   useEffect(() => {
@@ -295,15 +340,49 @@ export default function CallLayer() {
       const fresh = await captureMedia('video', next);
       const track = fresh.getVideoTracks()[0];
       const sender = pc.getSenders().find(x => x.track?.kind === 'video');
-      if (sender) await sender.replaceTrack(track);      // swaps cameras live — no renegotiation, no break
+      if (engineRef.current) engineRef.current.setSource(track);   // a filter is on: it reads the new camera, the call keeps the filtered track
+      else if (sender) await sender.replaceTrack(track);      // swaps cameras live — no renegotiation, no break
       localStreamRef.current.getVideoTracks().forEach(t => { t.stop(); localStreamRef.current.removeTrack(t); });
       localStreamRef.current.addTrack(track);
       fresh.getAudioTracks().forEach(t => t.stop());
       track.enabled = !cameraOff;
       setFacing(next); force(n => n + 1);
-      if (localVideoRef.current) localVideoRef.current.srcObject = localStreamRef.current;
+      if (localVideoRef.current) localVideoRef.current.srcObject = previewRef.current || localStreamRef.current;
       tuneSenders(pc, 0);
     } catch { /* camera busy or only one camera */ }
+  };
+  // Picking a filter swaps the picture I send for the filtered one (and back to the plain camera for "None").
+  const applyFilter = async (id) => {
+    const cam = localStreamRef.current?.getVideoTracks()[0], pc = pcRef.current;
+    if (!cam) return;
+    setFilterId(id);
+    const sender = pc?.getSenders().find(x => x.track?.kind === 'video');
+    if (id === 'none') {
+      if (!engineRef.current) return;
+      engineRef.current.stop(); engineRef.current = null; previewRef.current = null; setFaceStatus('idle');
+      try { await sender?.replaceTrack(cam); } catch { /* call ended */ }
+      if (localVideoRef.current) localVideoRef.current.srcObject = localStreamRef.current;
+      force(n => n + 1);
+      return;
+    }
+    if (!engineRef.current) {
+      const eng = new FilterEngine({ onStatus: setFaceStatus, onFace: setFaceSeen });
+      const out = eng.start(cam);
+      engineRef.current = eng; previewRef.current = out;
+      try { await sender?.replaceTrack(out.getVideoTracks()[0]); tuneSenders(pc, 0); } catch { /* call ended */ }
+      if (localVideoRef.current) localVideoRef.current.srcObject = out;
+      force(n => n + 1);
+    }
+    engineRef.current.setFilter(id);
+  };
+  const toggleSpeaker = () => setSpeakerOn(v => !v);
+  const toggleTorch = async () => {
+    const t = localStreamRef.current?.getVideoTracks()[0]; if (!t) return;
+    try { await t.applyConstraints({ advanced: [{ torch: !torchOn }] }); setTorchOn(!torchOn); } catch { /* not supported */ }
+  };
+  const changeZoom = (v) => {
+    setZoomV(v);
+    localStreamRef.current?.getVideoTracks()[0]?.applyConstraints({ advanced: [{ zoom: v }] }).catch(() => {});
   };
   const toggleFullscreen = () => {
     const el = rootRef.current; if (!el) return;
@@ -357,6 +436,27 @@ export default function CallLayer() {
             <video ref={localVideoRef} className={`call-local${cameraOff ? ' off' : ''}`} autoPlay playsInline muted />
           )}
 
+          {isVideo && inCall && showFilters && (
+            <div className="call-filters" role="region" aria-label="Face filters" data-testid="call-filters">
+              <div className="cf-tabs" role="tablist">
+                {FILTER_GROUPS.map(([k, label]) => <button key={k} role="tab" aria-selected={filterTab === k} className={filterTab === k ? 'on' : ''} onClick={() => setFilterTab(k)}>{label}</button>)}
+                <button className="cf-close" onClick={() => setShowFilters(false)} aria-label="Close filters">✕</button>
+              </div>
+              {filterId !== 'none' && faceStatus === 'loading' && <div className="cf-note">Loading face tracking…</div>}
+              {faceStatus === 'error' && <div className="cf-note warn">Face tracking couldn’t load. Overlays and looks still work.</div>}
+              {faceStatus === 'ready' && !faceSeen && FILTER_GROUPS[0][2].some(f => f.id === filterId) && <div className="cf-note">Show your face to the camera</div>}
+              <div className="cf-row">
+                <button className={`cf-chip${filterId === 'none' ? ' on' : ''}`} onClick={() => applyFilter('none')} aria-label="No filter"><span>{NO_FILTER.icon}</span><small>None</small></button>
+                {FILTER_GROUPS.find(g => g[0] === filterTab)[2].filter(isAvailable).map(f => (
+                  <button key={f.id} className={`cf-chip${filterId === f.id ? ' on' : ''}`} onClick={() => applyFilter(f.id)} aria-pressed={filterId === f.id} aria-label={f.name}><span>{f.icon}</span><small>{f.name}</small></button>
+                ))}
+              </div>
+            </div>
+          )}
+          {isVideo && inCall && camCaps.zoom && camCaps.zoom.max > camCaps.zoom.min && (
+            <div className="call-zoom" style={showFilters ? { bottom: 'calc(310px + env(safe-area-inset-bottom, 0px))' } : undefined}><span>{zoomV.toFixed(1)}×</span>
+              <input type="range" min={camCaps.zoom.min} max={camCaps.zoom.max} step={camCaps.zoom.step} value={zoomV} onChange={e => changeZoom(Number(e.target.value))} aria-label="Zoom" /></div>
+          )}
           <div className="call-controls">
             {phase === 'ringing-in' ? (
               <>
@@ -366,6 +466,9 @@ export default function CallLayer() {
             ) : (
               <>
                 {inCall && <button className={`call-btn${muted ? ' on' : ''}`} onClick={toggleMute} aria-label={muted ? 'Unmute' : 'Mute'}>{muted ? '🔇' : '🎙'}<small>{muted ? 'Unmute' : 'Mute'}</small></button>}
+                {inCall && <button className={`call-btn${speakerOn ? ' on' : ''}`} onClick={toggleSpeaker} aria-pressed={speakerOn} aria-label={speakerOn ? 'Speaker on' : 'Speaker off'}>{speakerOn ? '🔊' : '🔈'}<small>{speakerOn ? 'Speaker' : 'Earpiece'}</small></button>}
+                {inCall && isVideo && camCaps.torch && <button className={`call-btn${torchOn ? ' on' : ''}`} onClick={toggleTorch} aria-pressed={torchOn} aria-label={torchOn ? 'Flash off' : 'Flash on'}>🔦<small>Flash</small></button>}
+                {inCall && isVideo && <button className={`call-btn${filterId !== 'none' || showFilters ? ' on' : ''}`} onClick={() => setShowFilters(v => !v)} aria-pressed={showFilters} aria-label="Face filters">✨<small>Filters</small></button>}
                 {inCall && isVideo && <button className="call-btn" onClick={flipCamera} aria-label="Flip camera">🔄<small>Flip</small></button>}
                 {inCall && isVideo && document.fullscreenEnabled && <button className="call-btn call-fs" onClick={toggleFullscreen} aria-label="Full screen">{fullscreen ? '🗗' : '⛶'}<small>{fullscreen ? 'Exit' : 'Full'}</small></button>}
                 {inCall && isVideo && <button className={`call-btn${cameraOff ? ' on' : ''}`} onClick={toggleCamera} aria-label="Camera">{cameraOff ? '🚫' : '📷'}<small>{cameraOff ? 'Camera on' : 'Camera off'}</small></button>}

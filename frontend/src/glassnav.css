@@ -32,7 +32,7 @@
     width: auto; border-radius: 30px; border: 1px solid var(--gn-edge);
     padding: 6px; gap: 0; overflow: visible; isolation: isolate;
     background: linear-gradient(135deg, var(--gn-bg), var(--gn-bg-end));
-    -webkit-backdrop-filter: blur(26px) saturate(1.8); backdrop-filter: blur(26px) saturate(1.8);
+
     box-shadow: var(--gn-shadow), inset 0 1px 0 rgba(255, 255, 255, .35), inset 0 -1px 0 rgba(255, 255, 255, .06);
     transition: transform .5s var(--gn-spring), opacity .3s ease;
   }
@@ -87,7 +87,7 @@
 }
 
 /* fallback when backdrop-filter isn't supported: a more solid pill so text stays readable */
-@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+@media all {
   @media (max-width: 800px) {
     :root:root:root .nav-bar-mobile { background: rgba(24, 20, 44, .92); }
     :root[data-theme="light"]:root:root .nav-bar-mobile { background: rgba(255, 253, 246, .96); }
@@ -120,7 +120,7 @@
    Launcher menu (＋ on desktop, ⋯ on phones): premium glass + springy staggered entrance
    ========================================================================== */
 :root:root:root .nav-scrim {
-  background: rgba(10, 8, 24, .28); -webkit-backdrop-filter: blur(5px); backdrop-filter: blur(5px);
+  background: rgba(10, 8, 24, .28);
   animation: gnFade .35s ease both;
 }
 @keyframes gnFade { from { opacity: 0; } to { opacity: 1; } }
@@ -129,7 +129,7 @@
   gap: 4px; padding: 12px; border-radius: 28px; overflow: hidden; isolation: isolate;
   background: linear-gradient(145deg, var(--gn-bg), var(--gn-bg-end));
   border: 1px solid var(--gn-edge);
-  -webkit-backdrop-filter: blur(28px) saturate(1.8); backdrop-filter: blur(28px) saturate(1.8);
+
   box-shadow: var(--gn-shadow), inset 0 1px 0 rgba(255, 255, 255, .4);
   transform-origin: 0 0; animation: gnMenuIn .5s var(--gn-spring) both; will-change: transform, opacity;
 }

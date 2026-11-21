@@ -22,7 +22,7 @@
 /* editor */
 .sim-stage { position: relative; }
 .sim-views { position: absolute; left: 8px; right: 8px; bottom: 8px; display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
-.sim-views button { background: rgba(10, 12, 30, .68); color: #fff; border: 1px solid rgba(255, 255, 255, .25); border-radius: 999px; padding: 5px 12px; font-size: 12px; cursor: pointer; backdrop-filter: blur(6px); }
+.sim-views button { background: rgba(10, 12, 30, .68); color: #fff; border: 1px solid rgba(255, 255, 255, .25); border-radius: 999px; padding: 5px 12px; font-size: 12px; cursor: pointer;}
 .sim-views button.on { background: var(--violet); border-color: var(--violet-bright); }
 .sim-hint { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); font-size: 11px; color: #fff; background: rgba(10, 12, 30, .55); padding: 3px 10px; border-radius: 999px; pointer-events: none; white-space: nowrap; }
 .sim-note { margin: 10px 0 0; font-size: 12.5px; padding: 9px 12px; border-radius: 10px; border: 1px solid var(--border-soft); background: var(--surface); color: var(--text-mid); }

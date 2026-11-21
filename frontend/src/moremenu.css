@@ -4,7 +4,7 @@
   gap: 14px 6px; padding: 14px 10px; border-radius: 30px;
   background: linear-gradient(160deg, rgba(14, 18, 52, .78), rgba(30, 20, 70, .66));
   border: 1px solid rgba(255, 255, 255, .16);
-  -webkit-backdrop-filter: blur(26px) saturate(170%); backdrop-filter: blur(26px) saturate(170%);
+
   box-shadow: 0 24px 60px rgba(0, 0, 0, .5), inset 0 1px 0 rgba(255, 255, 255, .3);
 }
 :root:root:root:root .nav-menu.rail-fab-menu::before { background: radial-gradient(120% 70% at 50% 0%, rgba(160, 140, 255, .22), transparent 60%); }
@@ -42,3 +42,43 @@
   :root:root:root:root .nav-menu.rail-fab-menu button.nav-tile { height: auto; }
 }
 @media (prefers-reduced-motion: reduce) { .nav-menu .nav-tile .ico { transition: none !important; } }
+
+/* ==========================================================================
+   Plain line icons (like the bottom bar) + "blow" animation.
+   No glass ball behind the icon any more: thin outline icons that get blown up
+   like a bubble when the menu opens, then gently breathe.
+   ========================================================================== */
+:root:root:root:root .nav-menu .nav-tile .ico {
+  width: 46px; height: 46px; border-radius: 0; background: none; border: 0; box-shadow: none; color: #fff;
+  display: grid; place-items: center; transform-origin: 50% 60%;
+  animation: mmBlow .75s cubic-bezier(.2, 1.5, .35, 1) backwards, mmBreathe 3.6s ease-in-out 1s infinite;
+  animation-delay: calc(80ms + var(--i, 0) * 45ms), calc(1s + var(--i, 0) * 120ms);
+}
+:root:root:root:root .nav-menu .nav-tile .ico .ob-svg { width: 30px; height: 30px; stroke-width: 1.7; filter: drop-shadow(0 0 0 rgba(160, 200, 255, 0)); }
+:root:root:root:root .nav-menu .nav-tile .ico .coin-logo { width: 30px; height: 30px; }
+/* blown up from nothing: tiny → overshoot → settle, with a soft puff of light */
+@keyframes mmBlow {
+  0%   { opacity: 0; transform: scale(.05) translateY(10px); filter: blur(8px) drop-shadow(0 0 0 rgba(160, 200, 255, 0)); }
+  55%  { opacity: 1; transform: scale(1.32) translateY(-3px); filter: blur(0) drop-shadow(0 0 14px rgba(160, 200, 255, .9)); }
+  78%  { transform: scale(.92); }
+  100% { opacity: 1; transform: none; filter: drop-shadow(0 0 0 rgba(160, 200, 255, 0)); }
+}
+/* then a slow glow that swells like a breath */
+@keyframes mmBreathe {
+  0%, 100% { transform: scale(1); filter: drop-shadow(0 0 0 rgba(160, 200, 255, 0)); }
+  50%      { transform: scale(1.09); filter: drop-shadow(0 0 9px rgba(160, 200, 255, .75)); }
+}
+:root:root:root:root .nav-menu .nav-tile:hover .ico,
+:root:root:root:root .nav-menu .nav-tile:focus-visible .ico {
+  background: none; border: 0; box-shadow: none; animation: mmPuff .5s cubic-bezier(.2, 1.5, .35, 1) both; color: #7ff3e3;
+}
+@keyframes mmPuff { 0% { transform: scale(1); } 45% { transform: scale(1.38); filter: drop-shadow(0 0 16px rgba(38, 224, 201, .95)); } 100% { transform: scale(1.2); filter: drop-shadow(0 0 10px rgba(38, 224, 201, .8)); } }
+:root:root:root:root .nav-menu.rail-fab-menu button.nav-tile:active .ico { transform: scale(.85); animation: none; }
+/* current page: icon fills softly and glows teal (same idea as the bottom bar's active tab) */
+:root:root:root:root .nav-menu .nav-tile.active .ico { background: none; border: 0; box-shadow: none; color: #26e0c9; }
+:root:root:root:root .nav-menu .nav-tile.active .ico .ob-svg { stroke-width: 2; fill: rgba(38, 224, 201, .2); }
+/* CHEX AI tile sparkles a little extra */
+:root:root:root:root .nav-menu .nav-tile[aria-label="CHEX AI"] .ico { color: #c9b8ff; }
+@media (prefers-reduced-motion: reduce) {
+  :root:root:root:root .nav-menu .nav-tile .ico, :root:root:root:root .nav-menu .nav-tile:hover .ico { animation: none !important; }
+}
