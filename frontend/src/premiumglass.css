@@ -564,3 +564,10 @@ box-shadow: inset 0 1px 0 rgba(255, 255, 255, .3), 0 14px 28px -14px rgba(0, 0, 
   :root:root:root:root:root .gx-fullscreen .gm-frame { animation: none; }
 }
 :root[data-3d="off"] .gx-fullscreen::before { display: none; }
+
+
+/* Scroll-time optimization: retain the same glass gradients, rims, shadows and layout.
+   Only expensive card backdrop sampling is briefly reduced during active scrolling;
+   the original blur value returns as soon as scrolling settles. */
+:root[data-chex-scrolling] { --eg-card-blur: 0px; }
+:root[data-chex-scrolling] .app-bg .orb { animation-play-state: paused !important; }

@@ -32,6 +32,7 @@ import ErrorBoundary from './components/ErrorBoundary.jsx';
 import { initKeyboardAware } from './keyboard.js';
 import { applyCompact, startCompactLayer } from './compact.js';
 import { initPerf } from './perf/perfProfile.js';
+import { startScrollPerformance } from './scrollPerformance.js';
 
 // Applied before first paint so there's no flash of the wrong theme.
 applyTheme(getStoredTheme());
@@ -40,7 +41,8 @@ apply3D();
 initKeyboardAware();
 applyCompact();       // compact mode (icons + short text), on unless switched off in Settings
 startCompactLayer();
-initPerf();           // detect screen Hz + device power, pick 60/120 FPS, adapt live (remembered on this device)
+initPerf();
+startScrollPerformance();
 
 const rootEl = document.getElementById('root');
 if (!rootEl) throw new Error('Missing #root element');
